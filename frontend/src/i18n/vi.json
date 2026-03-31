@@ -1,0 +1,96 @@
+{
+  "users": {
+    "title": "Quản lý người dùng",
+    "addUser": "Thêm người dùng",
+    "search": "Tìm kiếm...",
+    "filterRole": "Lọc theo vai trò",
+    "allRoles": "Tất cả vai trò",
+    "showInactive": "Hiển thị bị khóa",
+    "columns": {
+      "stt": "STT",
+      "fullName": "Họ tên",
+      "email": "Email",
+      "role": "Vai trò",
+      "status": "Trạng thái",
+      "createdAt": "Ngày tạo",
+      "actions": "Hành động"
+    },
+    "roles": {
+      "ADMIN": "Quản trị",
+      "ACCOUNTANT": "Kế toán",
+      "VIEWER": "Xem"
+    },
+    "status": {
+      "active": "Hoạt động",
+      "inactive": "Bị khóa"
+    },
+    "empty": "Chưa có người dùng nào",
+    "noResults": "Không tìm thấy người dùng nào",
+    "pagination": {
+      "page": "Trang",
+      "of": "của",
+      "showing": "Hiển thị",
+      "total": "tổng"
+    },
+    "actions": {
+      "view": "Xem chi tiết",
+      "edit": "Sửa",
+      "resetPassword": "Đặt lại mật khẩu",
+      "delete": "Xóa"
+    }
+  },
+  "createUser": {
+    "title": "Thêm người dùng",
+    "fullName": "Họ tên",
+    "email": "Email",
+    "password": "Mật khẩu",
+    "role": "Vai trò",
+    "cancel": "Hủy",
+    "submit": "Tạo người dùng"
+  },
+  "editUser": {
+    "title": "Sửa người dùng",
+    "fullName": "Họ tên",
+    "email": "Email",
+    "role": "Vai trò",
+    "status": "Trạng thái hoạt động",
+    "cancel": "Hủy",
+    "submit": "Lưu thay đổi"
+  },
+  "userDetail": {
+    "title": "Chi tiết người dùng",
+    "fullName": "Họ tên",
+    "email": "Email",
+    "role": "Vai trò",
+    "status": "Trạng thái",
+    "createdAt": "Ngày tạo",
+    "updatedAt": "Ngày cập nhật",
+    "close": "Đóng"
+  },
+  "resetPassword": {
+    "title": "Đặt lại mật khẩu",
+    "newPassword": "Mật khẩu mới",
+    "confirmPassword": "Xác nhận mật khẩu",
+    "cancel": "Hủy",
+    "submit": "Đặt lại mật khẩu",
+    "success": "Đặt lại mật khẩu thành công"
+  },
+  "deleteUser": {
+    "title": "Xóa người dùng",
+    "confirm": "Bạn có chắc muốn xóa người dùng \"{name}\"? Hành động này không thể hoàn tác.",
+    "cancel": "Hủy",
+    "submit": "Xóa"
+  },
+  "validation": {
+    "required": "Trường này là bắt buộc",
+    "email": "Email không hợp lệ",
+    "minLength": "Phải có ít nhất {min} ký tự",
+    "passwordMatch": "Mật khẩu xác nhận không khớp"
+  },
+  "messages": {
+    "createSuccess": "Tạo người dùng thành công",
+    "updateSuccess": "Cập nhật người dùng thành công",
+    "deleteSuccess": "Xóa người dùng thành công",
+    "error": "Đã xảy ra lỗi. Vui lòng thử lại."
+  }
+}

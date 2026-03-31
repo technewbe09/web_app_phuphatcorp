@@ -1,0 +1,96 @@
+{
+  "users": {
+    "title": "User Management",
+    "addUser": "Add User",
+    "search": "Search...",
+    "filterRole": "Filter by role",
+    "allRoles": "All roles",
+    "showInactive": "Show inactive",
+    "columns": {
+      "stt": "#",
+      "fullName": "Full Name",
+      "email": "Email",
+      "role": "Role",
+      "status": "Status",
+      "createdAt": "Created",
+      "actions": "Actions"
+    },
+    "roles": {
+      "ADMIN": "Admin",
+      "ACCOUNTANT": "Accountant",
+      "VIEWER": "Viewer"
+    },
+    "status": {
+      "active": "Active",
+      "inactive": "Inactive"
+    },
+    "empty": "No users found",
+    "noResults": "No users match your search",
+    "pagination": {
+      "page": "Page",
+      "of": "of",
+      "showing": "Showing",
+      "total": "of"
+    },
+    "actions": {
+      "view": "View details",
+      "edit": "Edit",
+      "resetPassword": "Reset password",
+      "delete": "Delete"
+    }
+  },
+  "createUser": {
+    "title": "Add User",
+    "fullName": "Full Name",
+    "email": "Email",
+    "password": "Password",
+    "role": "Role",
+    "cancel": "Cancel",
+    "submit": "Create User"
+  },
+  "editUser": {
+    "title": "Edit User",
+    "fullName": "Full Name",
+    "email": "Email",
+    "role": "Role",
+    "status": "Active Status",
+    "cancel": "Cancel",
+    "submit": "Save Changes"
+  },
+  "userDetail": {
+    "title": "User Details",
+    "fullName": "Full Name",
+    "email": "Email",
+    "role": "Role",
+    "status": "Status",
+    "createdAt": "Created",
+    "updatedAt": "Updated",
+    "close": "Close"
+  },
+  "resetPassword": {
+    "title": "Reset Password",
+    "newPassword": "New Password",
+    "confirmPassword": "Confirm Password",
+    "cancel": "Cancel",
+    "submit": "Reset Password",
+    "success": "Password reset successfully"
+  },
+  "deleteUser": {
+    "title": "Delete User",
+    "confirm": "Are you sure you want to delete user \"{name}\"? This action cannot be undone.",
+    "cancel": "Cancel",
+    "submit": "Delete"
+  },
+  "validation": {
+    "required": "This field is required",
+    "email": "Invalid email address",
+    "minLength": "Must be at least {min} characters",
+    "passwordMatch": "Password confirmation does not match"
+  },
+  "messages": {
+    "createSuccess": "User created successfully",
+    "updateSuccess": "User updated successfully",
+    "deleteSuccess": "User deleted successfully",
+    "error": "An error occurred. Please try again."
+  }
+}
