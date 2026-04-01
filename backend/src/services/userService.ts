@@ -176,6 +176,10 @@ export const userService = {
       throw new ServiceError('LAST_ADMIN', 'Cannot delete the last admin user', 400);
     }
 
+    // Clear FK references before deleting to avoid constraint violations
+    await pool.query('DELETE FROM user_activities WHERE target_user_id = $1 OR actor_id = $2', [id, id]);
+    await pool.query('UPDATE users SET created_by = NULL WHERE created_by = $1', [id]);
+    await pool.query('UPDATE users SET updated_by = NULL WHERE updated_by = $1', [id]);
     await pool.query('DELETE FROM users WHERE id = $1', [id]);
 
     this.logActivity(actorId, id, 'DELETE_USER', {

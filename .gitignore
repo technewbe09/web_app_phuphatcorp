@@ -11,6 +11,7 @@ Thumbs.db
 !.vscode/extensions.json
 .idea/
 *.sw?
+.claude
 
 # Dependencies
 node_modules/

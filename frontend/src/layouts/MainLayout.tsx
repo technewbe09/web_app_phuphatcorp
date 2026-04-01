@@ -1,12 +1,10 @@
 import { Outlet, NavLink, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard,
-  BookOpen,
-  BarChart3,
-  Settings,
   LogOut,
   Calculator,
   Users,
+  Truck,
 } from 'lucide-react';
 import { cn } from '../utils/cn';
 import { useAuth } from '../hooks/useAuth';
@@ -24,9 +22,7 @@ export function MainLayout() {
 
   const baseNavItems = [
     { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
-    { to: '/accounting', icon: BookOpen, label: 'Sổ kế toán' },
-    { to: '/reports', icon: BarChart3, label: 'Báo cáo' },
-    { to: '/settings', icon: Settings, label: 'Cài đặt' },
+    { to: '/delivery-data', icon: Truck, label: 'Xử lý Data Giao Hàng' },
   ];
 
   const adminNavItems = [

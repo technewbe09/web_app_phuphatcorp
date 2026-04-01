@@ -96,6 +96,7 @@ VITE_API_URL=http://localhost:3021/api
 | /accounting | Protected | Placeholder |
 | /reports | Protected | Placeholder |
 | /settings | Protected | Placeholder |
+| /delivery-data | Protected | DeliveryDataPage |
 
 ## Development
 

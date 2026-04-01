@@ -172,7 +172,96 @@ Form tạo mới:
 
 **cn(...classes)** — merge Tailwind classes, resolve conflicts (dùng clsx + tailwind-merge)
 
-## 5. Planned Features (Chưa Implement)
+## 5. Delivery Data Processing (/admin/delivery-data)
+
+**Mục đích:** Upload file Excel ERP giao hàng → phân nhóm theo số tàu/xe + ngày hóa đơn → xuất file output chuẩn.
+
+### 5.1 Flow
+
+```
+User upload file .xlsx ERP (Delivery Report)
+  → DeliveryDataPage (browser-side processing, không qua backend)
+    → processDeliveryData(file: File) [src/utils/processDeliveryData.ts]
+      → Đọc file qua FileReader → ArrayBuffer
+      → XLSX.read() parse workbook
+      → Bỏ qua 4 dòng đầu (metadata ERP), row 5 = header, row 6+ = data
+      → Filter dòng trống
+      → Group theo key = (Số tàu/xe + Ngày HĐ)
+      → Sort mỗi nhóm theo Số HĐ ASC (numeric-aware)
+      → Sort các nhóm theo (Ngày HĐ ASC, Số tàu/xe ASC)
+      → Tính Round(MT) = SUM(HĐ Trọng lượng Net) / 1000 per group
+      → Build output XLSX: header row + data rows + blank separator row giữa các nhóm
+      → Return: { outputBlob, outputFilename, processedRows, groupCount, dateRange, warnings }
+  → User tải file output xuống
+```
+
+### 5.2 Column Mapping (Source → Output)
+
+| Output Column | Source Column Index | Ghi chú |
+|---------------|--------------------|----|
+| Mã nhà cung cấp | 20 | MA_NCC |
+| Số hóa đơn | 32 | SO_HD — dùng để sort ASC trong nhóm |
+| Ngày hóa đơn | 31 | NGAY_HD — dùng làm group key; convert từ Excel serial |
+| Số tàu | 28 | SO_TAU_XE — dùng làm group key |
+| Mã khách hàng | 21 | MA_KH |
+| Tên khách hàng | 22 | TEN_KH |
+| Địa chỉ giao hàng | 15 | DIA_CHI |
+| Mã hàng hóa | 23 | MA_HANG |
+| Tên hàng hóa (Vie) | 16 | TEN_HANG_HOA |
+| Tên hàng hóa (En) | 24 | TEN_HANG_EN |
+| Mã liên hệ giao hàng | 26 | MA_LH_GIAO |
+| Mã DVT | 17 | MA_DVT |
+| Số lượng (DVT bán hàng) | 27 | SO_LUONG |
+| SP Trọng lượng net | 18 | SP_TRONG_LUONG |
+| HĐ Trọng lượng (Net) | 19 | HD_TRONG_LUONG |
+| Round(MT) | — | HD_TRONG_LUONG / 1000 per row, làm tròn 2 chữ số thập phân |
+| CLF | — | Factory col: first row of invoice = SUM(Round(MT)) nếu MA_NCC=2000000001, else 0; other rows = 0; inactive factories = '' |
+| VFM | — | Factory col: MA_NCC=2100000002 |
+| MCC | — | Factory col: MA_NCC=2000000007 |
+| CLV | — | Factory col: MA_NCC không khớp bất kỳ factory nào |
+| NDFC | — | Factory col: MA_NCC=2000000008 |
+| Tài xế | 29 | TAI_XE |
+| Thông tin bổ sung | 33 | THONG_TIN_BS |
+| Slot | 4 | SLOT |
+| Diễn giải | 3 | DIEN_GIAI |
+| Channel | 0 | CHANNEL |
+| SubChannel | 1 | SUB_CHANNEL |
+| SlotNo | 6 | SLOT_NO |
+| user tạo HĐ | 7 | USER_TAO_HD |
+| User tạo PXK | 8 | USER_TAO_PXK |
+| PO number | 9 | PO_NUMBER |
+| Warehouse No | 10 | WAREHOUSE_NO |
+| Warehouse Name | 11 | WAREHOUSE_NAME |
+| Phiếu XK | 12 | MA_PXK |
+| Chứng từ ghi sổ | 13 | SO_CHUNG_TU |
+| Số seri | 14 | SO_SERI |
+| Loại hàng | 25 | LOAI_HANG |
+
+### 5.3 Business Rules
+
+- **BR-001:** Grouping key = Số tàu/xe + Ngày hóa đơn (cùng tàu, cùng ngày = 1 nhóm)
+- **BR-002:** Trong mỗi nhóm, sort rows theo Số HĐ ASC (numeric-aware localeCompare)
+- **BR-003:** Các nhóm sort theo Ngày HĐ ASC, rồi Số tàu/xe ASC
+- **BR-004:** Round(MT) = HD_TRONG_LUONG (col 19) / 1000, làm tròn 2 chữ số thập phân — tính per row (không phải per group)
+- **BR-005:** Output có 1 separator row giữa các nhóm (không có giữa row cuối và end-of-file). Separator row hiển thị SUM tại các cột: Round(MT), CLF, VFM, MCC, CLV, NDFC ('' nếu factory đó không có invoice trong nhóm)
+- **BR-006:** Ngày HĐ là Excel serial number → convert sang DD/MM/YYYY string trong output
+
+### 5.4 Files liên quan
+
+```
+src/utils/processDeliveryData.ts   ← core processing logic (browser, no backend)
+src/pages/admin/DeliveryDataPage.tsx ← UI page (upload zone, result, download)
+```
+
+### 5.5 Access
+
+- Route: `/admin/delivery-data`
+- Guard: AuthGuard + AdminGuard (admin/manager role)
+- Sidebar: "Xử lý Data Giao Hàng" / "Delivery Data Processing"
+
+---
+
+## 6. Planned Features (Chưa Implement)
 
 - [ ] Trang Sổ kế toán (/accounting) — CRUD phiếu thu/chi, nhật ký chứng từ
 - [ ] Trang Báo cáo (/reports) — báo cáo tài chính, biểu đồ doanh thu

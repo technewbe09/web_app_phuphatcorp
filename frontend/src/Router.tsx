@@ -6,6 +6,7 @@ import { LoginPage } from './pages/auth/LoginPage';
 import { RegisterPage } from './pages/auth/RegisterPage';
 import { DashboardPage } from './pages/dashboard/DashboardPage';
 import { UserManagementPage } from './pages/admin/UserManagementPage';
+import { DeliveryDataPage } from './pages/admin/DeliveryDataPage';
 
 function PlaceholderPage({ title }: { title: string }) {
   return (
@@ -34,6 +35,7 @@ export function Router() {
             <Route path="/reports" element={<PlaceholderPage title="Báo cáo" />} />
             <Route path="/settings" element={<PlaceholderPage title="Cài đặt" />} />
             <Route path="/users" element={<UserManagementPage />} />
+            <Route path="/delivery-data" element={<DeliveryDataPage />} />
           </Route>
         </Route>
 

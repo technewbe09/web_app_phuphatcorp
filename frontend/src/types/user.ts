@@ -1,3 +1,11 @@
+export const UserRole = {
+  ADMIN: 'ADMIN',
+  ACCOUNTANT: 'ACCOUNTANT',
+  VIEWER: 'VIEWER',
+} as const;
+
+export type UserRole = (typeof UserRole)[keyof typeof UserRole];
+
 export interface UserPublic {
   id: number;
   email: string;
