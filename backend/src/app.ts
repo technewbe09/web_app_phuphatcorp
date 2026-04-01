@@ -8,9 +8,11 @@ import { errorHandler } from './middleware/errorHandler';
 
 const app = express();
 
+const isProd = process.env.NODE_ENV === 'production';
+
 app.use(
   cors({
-    origin: 'http://localhost:5173',
+    origin: isProd ? 'https://phuphatcorp.scrapetool.cloud' : 'http://localhost:5173',
     credentials: true,
   }),
 );
