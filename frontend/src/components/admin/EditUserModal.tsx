@@ -21,7 +21,7 @@ interface Props {
 const schema = yup.object({
   full_name: yup.string().required('validation.required'),
   role: yup.string().required('validation.required'),
-  is_active: yup.boolean(),
+  is_active: yup.boolean().required(),
 });
 
 type FormData = yup.InferType<typeof schema>;

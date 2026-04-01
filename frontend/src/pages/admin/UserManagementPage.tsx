@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { Plus, Search, Eye, Pencil, Key, Trash } from 'lucide-react';
+import { Plus, Eye, Pencil, Key, Trash } from 'lucide-react';
 import { Card, CardContent } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
@@ -83,7 +83,6 @@ export function UserManagementPage() {
                   setSearch(e.target.value);
                   setPage(1);
                 }}
-                prefix={<Search className="w-4 h-4 text-neutral-400" />}
               />
             </div>
             <div className="w-48">

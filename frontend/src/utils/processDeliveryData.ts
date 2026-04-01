@@ -62,7 +62,6 @@ const FACTORY_BY_NCC: Record<string, string> = {
   '2000000007': 'MCC',
   '2000000008': 'NDFC',
 };
-const FACTORY_COLUMNS = ['CLF', 'VFM', 'MCC', 'CLV', 'NDFC'] as const;
 
 function getFactory(maNcc: string): string {
   return FACTORY_BY_NCC[maNcc] ?? 'CLV';

@@ -1,4 +1,5 @@
-import { useMutation, useQuery, UseQueryOptions } from '@tanstack/react-query';
+import { useMutation, useQuery } from '@tanstack/react-query';
+import type { UseQueryOptions, UseMutationOptions } from '@tanstack/react-query';
 import axiosClient from '../api/axiosClient';
 
 export function useApi<TData, TVariables>(
@@ -6,7 +7,7 @@ export function useApi<TData, TVariables>(
   url: string,
   options?: {
     queryOptions?: UseQueryOptions<TData>;
-    mutationOptions?: Parameters<typeof useMutation<TData, Error, TVariables>>[0]['options'];
+    mutationOptions?: UseMutationOptions<TData, Error, TVariables>;
   }
 ) {
   const queryKey = [method, url];
@@ -25,7 +26,7 @@ export function useApi<TData, TVariables>(
 
   const mutationResult = useMutation<TData, Error, TVariables>({
     mutationFn: (variables) =>
-      axiosClient.request<TData>({ method, url, data: variables }),
+      axiosClient.request<TData>({ method, url, data: variables }).then((r) => r.data),
     ...options?.mutationOptions,
   });
 
