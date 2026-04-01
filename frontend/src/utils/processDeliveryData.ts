@@ -336,6 +336,7 @@ export async function processDeliveryData(file: File): Promise<ProcessResult> {
 
   // ── Step 4: Build output rows ─────────────────────────────────────────────
   const outputRows: (string | number)[][] = [OUTPUT_HEADERS];
+  const separatorRowIndices = new Set<number>();
 
   // Collect all dates for dateRange
   const allDates: string[] = [];
@@ -402,6 +403,7 @@ export async function processDeliveryData(file: File): Promise<ProcessResult> {
       separatorRow[18] = groupFactorySums['MCC'] || '';
       separatorRow[19] = groupFactorySums['CLV'] || '';
       separatorRow[20] = groupFactorySums['NDFC'] || '';
+      separatorRowIndices.add(outputRows.length);
       outputRows.push(separatorRow);
     }
   });
@@ -419,6 +421,11 @@ export async function processDeliveryData(file: File): Promise<ProcessResult> {
       excelRow.eachCell({ includeEmpty: true }, (cell) => {
         cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFFF00' } };
         cell.font = { bold: true };
+      });
+    } else if (separatorRowIndices.has(rowIndex)) {
+      // Gray D9D9D9 background for separator rows
+      excelRow.eachCell({ includeEmpty: true }, (cell) => {
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD9D9D9' } };
       });
     }
   });
