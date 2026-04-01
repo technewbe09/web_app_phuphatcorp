@@ -1,5 +1,6 @@
 [phases.build]
 cmds = ["NODE_OPTIONS='--max-old-space-size=512' npm run build"]
-
+[phases.setup]
+nixPkgs = ["nodejs_20"]
 [start]
 cmd = "npx serve dist -p 3000 -s"
