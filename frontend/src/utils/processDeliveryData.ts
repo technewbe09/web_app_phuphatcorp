@@ -294,6 +294,31 @@ export async function processDeliveryData(file: File): Promise<ProcessResult> {
     throw new Error('File không chứa dữ liệu. Vui lòng kiểm tra lại file Excel.');
   }
 
+  // ── Validate rows — generate specific warnings ────────────────────────────
+  dataRows.forEach((row) => {
+    const soHD     = cell(row, COL.SO_HD);
+    const soTauXe  = cell(row, COL.SO_TAU_XE);
+    const ngayHD   = excelDateToString(row[COL.NGAY_HD] as string | number | null | undefined);
+    const tenKH    = cell(row, COL.TEN_KH);
+
+    // Build a searchable reference string from available identifiers
+    const ref = [
+      soHD     && `HĐ: ${soHD}`,
+      ngayHD   && `Ngày: ${ngayHD}`,
+      tenKH    && `KH: ${tenKH}`,
+    ].filter(Boolean).join(' | ') || '(không có thông tin định danh)';
+
+    if (!soTauXe) {
+      warnings.push(`Thiếu Số tàu/xe — ${ref}`);
+    }
+    if (!row[COL.NGAY_HD] && row[COL.NGAY_HD] !== 0) {
+      warnings.push(`Thiếu Ngày hóa đơn — HĐ: ${soHD || '?'} | Số tàu: ${soTauXe || '?'} | KH: ${tenKH || '?'}`);
+    }
+    if (!soHD) {
+      warnings.push(`Thiếu Số hóa đơn — Số tàu: ${soTauXe || '?'} | Ngày: ${ngayHD || '?'} | KH: ${tenKH || '?'}`);
+    }
+  });
+
   // ── Step 1: Group by (Số tàu/xe + Ngày hóa đơn) ──────────────────────────
   const groupMap = new Map<string, GroupData>();
 
@@ -345,11 +370,6 @@ export async function processDeliveryData(file: File): Promise<ProcessResult> {
     // Collect date string for range
     const dateStr = excelDateToString(group.date as string | number | null | undefined);
     if (dateStr) allDates.push(dateStr);
-
-    // Warn if group has missing vehicle number
-    if (!group.vehicle) {
-      warnings.push(`Nhóm ${groupIndex + 1}: Thiếu số tàu/xe (ngày ${dateStr})`);
-    }
 
     // Pre-calculate SUM(Round(MT)) and factory per invoice within this group
     const invoiceSum = new Map<string, { factory: string; sum: number }>();
