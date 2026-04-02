@@ -286,8 +286,14 @@ export async function processDeliveryData(file: File): Promise<ProcessResult> {
   }
 
   // Skip first 4 rows (metadata), row index 4 is header row, data starts at index 5
-  const dataRows = rawData.slice(5).filter((row) => {
-    return row && row.length > 0 && row.some((c) => c !== null && c !== undefined && c !== '');
+  // Track source row number (1-based, as seen in Excel) alongside each data row
+  const dataRows: RawRow[] = [];
+  const sourceRowNums: number[] = [];
+  rawData.slice(5).forEach((row, i) => {
+    if (row && row.length > 0 && row.some((c) => c !== null && c !== undefined && c !== '')) {
+      dataRows.push(row);
+      sourceRowNums.push(i + 6); // +5 for slice offset, +1 for 1-based Excel row number
+    }
   });
 
   if (dataRows.length === 0) {
@@ -295,27 +301,27 @@ export async function processDeliveryData(file: File): Promise<ProcessResult> {
   }
 
   // ── Validate rows — generate specific warnings ────────────────────────────
-  dataRows.forEach((row) => {
-    const soHD     = cell(row, COL.SO_HD);
-    const soTauXe  = cell(row, COL.SO_TAU_XE);
-    const ngayHD   = excelDateToString(row[COL.NGAY_HD] as string | number | null | undefined);
-    const tenKH    = cell(row, COL.TEN_KH);
-
-    // Build a searchable reference string from available identifiers
-    const ref = [
-      soHD     && `HĐ: ${soHD}`,
-      ngayHD   && `Ngày: ${ngayHD}`,
-      tenKH    && `KH: ${tenKH}`,
-    ].filter(Boolean).join(' | ') || '(không có thông tin định danh)';
+  dataRows.forEach((row, idx) => {
+    const soHD    = cell(row, COL.SO_HD);
+    const soTauXe = cell(row, COL.SO_TAU_XE);
+    const ngayHD  = excelDateToString(row[COL.NGAY_HD] as string | number | null | undefined);
+    const tenKH   = cell(row, COL.TEN_KH);
+    const rowRef  = `[Dòng ${sourceRowNums[idx]}]`;
 
     if (!soTauXe) {
-      warnings.push(`Thiếu Số tàu/xe — ${ref}`);
+      const detail = [soHD && `HĐ: ${soHD}`, ngayHD && `Ngày: ${ngayHD}`, tenKH && `KH: ${tenKH}`]
+        .filter(Boolean).join(' | ');
+      warnings.push(`${rowRef} Thiếu Số tàu/xe${detail ? ` — ${detail}` : ''}`);
     }
     if (!row[COL.NGAY_HD] && row[COL.NGAY_HD] !== 0) {
-      warnings.push(`Thiếu Ngày hóa đơn — HĐ: ${soHD || '?'} | Số tàu: ${soTauXe || '?'} | KH: ${tenKH || '?'}`);
+      const detail = [soHD && `HĐ: ${soHD}`, soTauXe && `Số tàu: ${soTauXe}`, tenKH && `KH: ${tenKH}`]
+        .filter(Boolean).join(' | ');
+      warnings.push(`${rowRef} Thiếu Ngày hóa đơn${detail ? ` — ${detail}` : ''}`);
     }
     if (!soHD) {
-      warnings.push(`Thiếu Số hóa đơn — Số tàu: ${soTauXe || '?'} | Ngày: ${ngayHD || '?'} | KH: ${tenKH || '?'}`);
+      const detail = [soTauXe && `Số tàu: ${soTauXe}`, ngayHD && `Ngày: ${ngayHD}`, tenKH && `KH: ${tenKH}`]
+        .filter(Boolean).join(' | ');
+      warnings.push(`${rowRef} Thiếu Số hóa đơn${detail ? ` — ${detail}` : ''}`);
     }
   });
 
