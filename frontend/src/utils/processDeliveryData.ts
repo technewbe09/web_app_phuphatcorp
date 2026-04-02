@@ -286,13 +286,44 @@ export async function processDeliveryData(file: File): Promise<ProcessResult> {
   }
 
   // Skip first 4 rows (metadata), row index 4 is header row, data starts at index 5
-  const dataRows = rawData.slice(5).filter((row) => {
-    return row && row.length > 0 && row.some((c) => c !== null && c !== undefined && c !== '');
+  // Track source row number (1-based, as seen in Excel) alongside each data row
+  const dataRows: RawRow[] = [];
+  const sourceRowNums: number[] = [];
+  rawData.slice(5).forEach((row, i) => {
+    if (row && row.length > 0 && row.some((c) => c !== null && c !== undefined && c !== '')) {
+      dataRows.push(row);
+      sourceRowNums.push(i + 6); // +5 for slice offset, +1 for 1-based Excel row number
+    }
   });
 
   if (dataRows.length === 0) {
     throw new Error('File không chứa dữ liệu. Vui lòng kiểm tra lại file Excel.');
   }
+
+  // ── Validate rows — generate specific warnings ────────────────────────────
+  dataRows.forEach((row, idx) => {
+    const soHD    = cell(row, COL.SO_HD);
+    const soTauXe = cell(row, COL.SO_TAU_XE);
+    const ngayHD  = excelDateToString(row[COL.NGAY_HD] as string | number | null | undefined);
+    const tenKH   = cell(row, COL.TEN_KH);
+    const rowRef  = `[Dòng ${sourceRowNums[idx]}]`;
+
+    if (!soTauXe) {
+      const detail = [soHD && `HĐ: ${soHD}`, ngayHD && `Ngày: ${ngayHD}`, tenKH && `KH: ${tenKH}`]
+        .filter(Boolean).join(' | ');
+      warnings.push(`${rowRef} Thiếu Số tàu/xe${detail ? ` — ${detail}` : ''}`);
+    }
+    if (!row[COL.NGAY_HD] && row[COL.NGAY_HD] !== 0) {
+      const detail = [soHD && `HĐ: ${soHD}`, soTauXe && `Số tàu: ${soTauXe}`, tenKH && `KH: ${tenKH}`]
+        .filter(Boolean).join(' | ');
+      warnings.push(`${rowRef} Thiếu Ngày hóa đơn${detail ? ` — ${detail}` : ''}`);
+    }
+    if (!soHD) {
+      const detail = [soTauXe && `Số tàu: ${soTauXe}`, ngayHD && `Ngày: ${ngayHD}`, tenKH && `KH: ${tenKH}`]
+        .filter(Boolean).join(' | ');
+      warnings.push(`${rowRef} Thiếu Số hóa đơn${detail ? ` — ${detail}` : ''}`);
+    }
+  });
 
   // ── Step 1: Group by (Số tàu/xe + Ngày hóa đơn) ──────────────────────────
   const groupMap = new Map<string, GroupData>();
@@ -345,11 +376,6 @@ export async function processDeliveryData(file: File): Promise<ProcessResult> {
     // Collect date string for range
     const dateStr = excelDateToString(group.date as string | number | null | undefined);
     if (dateStr) allDates.push(dateStr);
-
-    // Warn if group has missing vehicle number
-    if (!group.vehicle) {
-      warnings.push(`Nhóm ${groupIndex + 1}: Thiếu số tàu/xe (ngày ${dateStr})`);
-    }
 
     // Pre-calculate SUM(Round(MT)) and factory per invoice within this group
     const invoiceSum = new Map<string, { factory: string; sum: number }>();
