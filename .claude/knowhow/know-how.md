@@ -346,5 +346,5 @@ psql -h 72.61.124.36 -p 5443 -U postgres -d test_PhuPhatCorp -f src/migrations/0
 - **API response:** Luôn wrap trong `{ success, message, data }` — frontend authApi unwrap: `response.data.data`
 - **Password:** bcrypt hashSync (salt rounds = 10), KHÔNG bao giờ trả `password_hash` về client
 - **JWT:** Cùng secret cho cả access + refresh token
-- **CORS:** Chỉ cho phép `http://localhost:5173` (frontend dev URL)
+- **CORS:** Dùng `CORS_ORIGIN` env var (default `http://localhost:5173`). Set `CORS_ORIGIN=https://phuphatcorp.scrapetool.cloud` trên prod. Không dùng `NODE_ENV` để quyết định CORS origin.
 - **.env:** KHÔNG commit git
