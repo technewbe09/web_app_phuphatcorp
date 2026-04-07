@@ -6,6 +6,18 @@ description: Ghi lại các bài học kinh nghiệm, bug đã fix, và pitfalls
 
 ## Bugs & Fixes
 
+### CORS block production frontend — NODE_ENV không được đọc đúng
+- **Ngày:** 2026-04-07
+- **Severity:** Critical
+- **Feature liên quan:** Toàn bộ app — Authentication, mọi API calls
+- **Triệu chứng:** `No 'Access-Control-Allow-Origin' header` trên prod — browser block preflight
+- **Root cause:** `app.ts` dùng `NODE_ENV === 'production'` để chọn CORS origin. Trên nhiều platform (Render, Railway, Docker...), biến này không được inject, hoặc `.env` file không được load. Kết quả: `isProd = false` → CORS chỉ cho `localhost:5173` → prod frontend bị block.
+- **Fix:** Xóa `isProd` logic, thay bằng `process.env.CORS_ORIGIN || 'http://localhost:5173'`. Thêm `CORS_ORIGIN=https://phuphatcorp.scrapetool.cloud` vào prod `.env`.
+- **File sửa:** `backend/src/app.ts`
+- **Cần chú ý:** Không dùng `NODE_ENV` để quyết định config runtime như CORS origin, DB URL... Luôn dùng biến env tường minh (`CORS_ORIGIN`, `DATABASE_URL`). NODE_ENV chỉ dùng cho `--NODE_ENV=production` build tools (Webpack, Vite) — không tin vào nó trong runtime Express.
+
+
+
 ### i18n t() — key có dấu chấm bị split nhầm làm path separator
 - **Ngày:** 2026-04-07
 - **Severity:** Medium
