@@ -377,21 +377,18 @@ export async function processDeliveryData(file: File): Promise<ProcessResult> {
     const dateStr = excelDateToString(group.date as string | number | null | undefined);
     if (dateStr) allDates.push(dateStr);
 
-    // Pre-calculate SUM(Round(MT)) and factory per invoice within this group
-    const invoiceSum = new Map<string, { factory: string; sum: number }>();
+    // Pre-calculate SUM(Round(MT)) per (invoice, factory) pair within this group
+    const invoiceFactorySums = new Map<string, number>();
     group.rows.forEach((row) => {
       const invoiceNo = cell(row, COL.SO_HD);
-      const maNcc = cell(row, COL.MA_NCC);
+      const factory = getFactory(cell(row, COL.MA_NCC));
       const roundMT = Math.round((Number(row[COL.HD_TRONG_LUONG]) || 0) / 1000 * 100) / 100;
-      if (!invoiceSum.has(invoiceNo)) {
-        invoiceSum.set(invoiceNo, { factory: getFactory(maNcc), sum: 0 });
-      }
-      const entry = invoiceSum.get(invoiceNo)!;
-      entry.sum = Math.round((entry.sum + roundMT) * 100) / 100;
+      const key = `${invoiceNo}|||${factory}`;
+      invoiceFactorySums.set(key, Math.round(((invoiceFactorySums.get(key) ?? 0) + roundMT) * 100) / 100);
     });
 
-    // Track first-row of each invoice
-    const invoiceSeen = new Set<string>();
+    // Track first-row of each (invoice, factory) pair
+    const invoiceFactorySeen = new Set<string>();
 
     // Accumulate group totals for separator row
     let groupRoundMTSum = 0;
@@ -400,21 +397,23 @@ export async function processDeliveryData(file: File): Promise<ProcessResult> {
     // Add rows
     group.rows.forEach((row) => {
       const invoiceNo = cell(row, COL.SO_HD);
-      const { factory, sum } = invoiceSum.get(invoiceNo)!;
-      const isFirst = !invoiceSeen.has(invoiceNo);
-      if (isFirst) invoiceSeen.add(invoiceNo);
+      const currentFactory = getFactory(cell(row, COL.MA_NCC));
+      const seenKey = `${invoiceNo}|||${currentFactory}`;
+      const isFirstForFactory = !invoiceFactorySeen.has(seenKey);
+      if (isFirstForFactory) invoiceFactorySeen.add(seenKey);
 
       // Build factory column values
       const factoryVals: Record<string, string | number> = {
         CLF: '', VFM: '', MCC: '', CLV: '', NDFC: '',
       };
-      factoryVals[factory] = isFirst ? sum : 0;
+      const factorySum = invoiceFactorySums.get(seenKey)!;
+      factoryVals[currentFactory] = isFirstForFactory ? factorySum : 0;
 
       // Accumulate group totals
       const rowRoundMT = Math.round((Number(row[COL.HD_TRONG_LUONG]) || 0) / 1000 * 100) / 100;
       groupRoundMTSum = Math.round((groupRoundMTSum + rowRoundMT) * 100) / 100;
-      if (isFirst) {
-        groupFactorySums[factory] = Math.round((groupFactorySums[factory] + sum) * 100) / 100;
+      if (isFirstForFactory) {
+        groupFactorySums[currentFactory] = Math.round((groupFactorySums[currentFactory] + factorySum) * 100) / 100;
       }
 
       outputRows.push(mapRowToOutput(row, factoryVals));
