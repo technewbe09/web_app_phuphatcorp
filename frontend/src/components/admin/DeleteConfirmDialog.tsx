@@ -39,14 +39,14 @@ export function DeleteConfirmDialog({ isOpen, onClose, userId, userName, onSucce
     <Modal isOpen={isOpen} onClose={onClose} title={t('deleteUser.title')} size="sm">
       <div className="space-y-4">
         {serverError && (
-          <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
+          <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-sm text-red-700 dark:text-red-400">
             {serverError}
           </div>
         )}
 
         <div className="flex items-start gap-3">
           <AlertTriangle className="w-5 h-5 text-red-500 mt-0.5 flex-shrink-0" />
-          <p className="text-sm text-neutral-700">
+          <p className="text-sm text-neutral-700 dark:text-neutral-300">
             {t('deleteUser.confirm', { name: userName })}
           </p>
         </div>

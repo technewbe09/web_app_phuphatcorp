@@ -7,9 +7,11 @@ interface AuthContextType {
   user: UserPublic | null;
   isAuthenticated: boolean;
   isLoading: boolean;
-  login: (email: string, password: string) => Promise<UserPublic>;
+  login: (username: string, password: string) => Promise<UserPublic>;
   logout: () => void;
   refreshUser: () => Promise<void>;
+  hasPermission: (code: string) => boolean;
+  hasAnyPermission: (codes: string[]) => boolean;
 }
 
 export const AuthContext = createContext<AuthContextType | null>(null);
@@ -43,8 +45,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [user, setUser]);
 
-  const login = async (email: string, password: string): Promise<UserPublic> => {
-    const response = await authApi.login({ email, password });
+  const login = async (username: string, password: string): Promise<UserPublic> => {
+    const response = await authApi.login({ username, password });
     localStorage.setItem('access_token', response.accessToken);
     setUser(response.user);
     return response.user;
@@ -55,9 +57,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     storeLogout();
   };
 
+  const hasPermission = (code: string): boolean => {
+    if (!user) return false;
+    // Fallback: ADMIN role always has all permissions
+    if (user.role === 'ADMIN') return true;
+    return user.permissions?.includes(code) ?? false;
+  };
+
+  const hasAnyPermission = (codes: string[]): boolean =>
+    codes.some((code) => hasPermission(code));
+
   return (
     <AuthContext.Provider
-      value={{ user, isAuthenticated, isLoading, login, logout, refreshUser }}
+      value={{ user, isAuthenticated, isLoading, login, logout, refreshUser, hasPermission, hasAnyPermission }}
     >
       {children}
     </AuthContext.Provider>

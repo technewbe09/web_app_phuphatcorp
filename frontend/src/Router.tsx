@@ -7,6 +7,12 @@ import { RegisterPage } from './pages/auth/RegisterPage';
 import { DashboardPage } from './pages/dashboard/DashboardPage';
 import { UserManagementPage } from './pages/admin/UserManagementPage';
 import { DeliveryDataPage } from './pages/admin/DeliveryDataPage';
+import { TripCodePage } from './pages/admin/vehicle-data/TripCodePage';
+import { VehiclePage } from './pages/admin/vehicle-data/VehiclePage';
+import { DriverPage } from './pages/admin/vehicle-data/DriverPage';
+import { RoleManagementPage } from './pages/admin/RoleManagementPage';
+import { PermissionManagementPage } from './pages/admin/PermissionManagementPage';
+import { SchedulePage } from './pages/dispatch/SchedulePage';
 
 function PlaceholderPage({ title }: { title: string }) {
   return (
@@ -35,7 +41,15 @@ export function Router() {
             <Route path="/reports" element={<PlaceholderPage title="Báo cáo" />} />
             <Route path="/settings" element={<PlaceholderPage title="Cài đặt" />} />
             <Route path="/users" element={<UserManagementPage />} />
+            <Route path="/roles" element={<RoleManagementPage />} />
+            <Route path="/permissions" element={<PermissionManagementPage />} />
             <Route path="/delivery-data" element={<DeliveryDataPage />} />
+            {/* Vehicle Data */}
+            <Route path="/vehicle-data/trip-codes" element={<TripCodePage />} />
+            <Route path="/vehicle-data/vehicles" element={<VehiclePage />} />
+            <Route path="/vehicle-data/drivers" element={<DriverPage />} />
+            {/* Dispatch */}
+            <Route path="/dispatch/schedule" element={<SchedulePage />} />
           </Route>
         </Route>
 

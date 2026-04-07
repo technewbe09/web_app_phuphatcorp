@@ -10,10 +10,9 @@ import { Card, CardContent } from '../../components/ui/Card';
 import { Calculator, AlertCircle } from 'lucide-react';
 
 const schema = yup.object({
-  email: yup
+  username: yup
     .string()
-    .required('Email là bắt buộc')
-    .email('Email không hợp lệ'),
+    .required('Tên đăng nhập là bắt buộc'),
   password: yup
     .string()
     .required('Mật khẩu là bắt buộc')
@@ -40,7 +39,7 @@ export function LoginPage() {
     setServerError('');
     setIsLoading(true);
     try {
-      await login(data.email, data.password);
+      await login(data.username, data.password);
       navigate('/');
     } catch (error: unknown) {
       if (error && typeof error === 'object' && 'response' in error) {
@@ -58,14 +57,14 @@ export function LoginPage() {
     <Card>
       <CardContent className="p-8">
         <div className="flex items-center gap-2 mb-6">
-          <div className="w-8 h-8 bg-neutral-800 rounded-lg flex items-center justify-center">
-            <Calculator className="w-5 h-5 text-white" />
+          <div className="w-8 h-8 bg-neutral-800 dark:bg-neutral-200 rounded-lg flex items-center justify-center">
+            <Calculator className="w-5 h-5 text-white dark:text-neutral-900" />
           </div>
-          <span className="text-xl font-semibold text-neutral-900">Đăng nhập</span>
+          <span className="text-xl font-semibold text-neutral-900 dark:text-neutral-100">Đăng nhập</span>
         </div>
 
         {serverError && (
-          <div className="flex items-center gap-2 p-3 mb-4 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
+          <div className="flex items-center gap-2 p-3 mb-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-sm text-red-700 dark:text-red-400">
             <AlertCircle className="w-4 h-4 flex-shrink-0" />
             {serverError}
           </div>
@@ -73,12 +72,12 @@ export function LoginPage() {
 
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
           <Input
-            label="Email"
-            type="email"
-            id="email"
-            placeholder="email@example.com"
-            error={errors.email?.message}
-            {...register('email')}
+            label="Tên đăng nhập"
+            type="text"
+            id="username"
+            placeholder="Nhập tên đăng nhập"
+            error={errors.username?.message}
+            {...register('username')}
           />
           <Input
             label="Mật khẩu"
@@ -93,9 +92,9 @@ export function LoginPage() {
           </Button>
         </form>
 
-        <p className="mt-6 text-center text-sm text-neutral-600">
+        <p className="mt-6 text-center text-sm text-neutral-600 dark:text-neutral-400">
           Chưa có tài khoản?{' '}
-          <Link to="/register" className="text-neutral-900 font-medium hover:underline">
+          <Link to="/register" className="text-neutral-900 dark:text-neutral-100 font-medium hover:underline">
             Đăng ký
           </Link>
         </p>

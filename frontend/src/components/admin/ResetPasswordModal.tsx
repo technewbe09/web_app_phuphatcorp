@@ -74,17 +74,17 @@ export function ResetPasswordModal({ isOpen, onClose, userId, userName, onSucces
     <Modal isOpen={isOpen} onClose={handleClose} title={t('resetPassword.title')} size="sm">
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
         {serverError && (
-          <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
+          <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-sm text-red-700 dark:text-red-400">
             {serverError}
           </div>
         )}
         {success && (
-          <div className="p-3 bg-green-50 border border-green-200 rounded-lg text-sm text-green-700">
+          <div className="p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg text-sm text-green-700 dark:text-green-400">
             {success}
           </div>
         )}
 
-        <p className="text-sm text-neutral-600">
+        <p className="text-sm text-neutral-600 dark:text-neutral-400">
           Đặt lại mật khẩu cho <strong>{userName}</strong>
         </p>
 

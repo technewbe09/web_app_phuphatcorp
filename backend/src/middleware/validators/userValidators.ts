@@ -7,10 +7,16 @@ export const createUserSchema: ValidationChain[] = [
   body('password')
     .isLength({ min: 6 })
     .withMessage('Mật khẩu phải có ít nhất 6 ký tự'),
+  // Support both legacy role (string) and new role_id (number)
   body('role')
     .optional()
     .isIn(Object.values(UserRole))
     .withMessage('Vai trò không hợp lệ'),
+  body('role_id')
+    .optional()
+    .isInt({ min: 1 })
+    .toInt()
+    .withMessage('role_id phải là số nguyên dương'),
 ];
 
 export const updateUserSchema: ValidationChain[] = [
@@ -19,6 +25,11 @@ export const updateUserSchema: ValidationChain[] = [
     .optional()
     .isIn(Object.values(UserRole))
     .withMessage('Vai trò không hợp lệ'),
+  body('role_id')
+    .optional()
+    .isInt({ min: 1 })
+    .toInt()
+    .withMessage('role_id phải là số nguyên dương'),
   body('is_active').optional().isBoolean().withMessage('Trạng thái không hợp lệ'),
 ];
 

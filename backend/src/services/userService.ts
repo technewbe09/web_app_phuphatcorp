@@ -19,12 +19,14 @@ export interface CreateUserData {
   password: string;
   full_name: string;
   role?: UserRole;
+  role_id?: number;
   created_by: number;
 }
 
 export interface UpdateUserData {
   full_name?: string;
   role?: UserRole;
+  role_id?: number;
   is_active?: boolean;
   updated_by: number;
   actor_id: number;
@@ -46,10 +48,13 @@ export interface UserWithMeta {
 interface UserRow {
   id: number;
   email: string;
+  username: string;
   password_hash?: string;
   full_name: string;
   role: UserRole;
-  is_active?: boolean;
+  role_id?: number | null;
+  role_name?: string | null;
+  is_active: boolean;
   created_at?: Date;
   updated_at?: Date;
 }
@@ -58,8 +63,12 @@ function toPublicUser(row: UserRow): UserPublic {
   return {
     id: row.id,
     email: row.email,
+    username: row.username,
     full_name: row.full_name,
     role: row.role,
+    role_id: row.role_id ?? null,
+    role_name: row.role_name ?? undefined,
+    is_active: row.is_active,
   };
 }
 
@@ -73,14 +82,36 @@ export const userService = {
       throw new ServiceError('EMAIL_EXISTS', 'Email already registered', 409);
     }
 
+    // Validate role_id is active if provided
+    let resolvedRoleId: number | null = data.role_id ?? null;
+    if (resolvedRoleId) {
+      const roleCheck = await pool.query<{ is_active: boolean }>(
+        'SELECT is_active FROM roles WHERE id = $1',
+        [resolvedRoleId],
+      );
+      if (!roleCheck.rows[0]) throw new ServiceError('ROLE_NOT_FOUND', 'Vai trò không tồn tại', 404);
+      if (!roleCheck.rows[0].is_active) {
+        throw new ServiceError('ROLE_INACTIVE', 'Vai trò không hoạt động, không thể gán cho người dùng', 400);
+      }
+    }
+
+    // Resolve legacy role to role_id if no role_id provided
+    if (!resolvedRoleId && data.role) {
+      const roleByCode = await pool.query<{ id: number }>(
+        'SELECT id FROM roles WHERE code = $1',
+        [data.role],
+      );
+      if (roleByCode.rows[0]) resolvedRoleId = roleByCode.rows[0].id;
+    }
+
     const passwordHash = hashPassword(data.password);
     const role = data.role || UserRole.VIEWER;
 
     const result = await pool.query<UserRow>(
-      `INSERT INTO users (email, password_hash, full_name, role, created_by)
-       VALUES ($1, $2, $3, $4, $5)
-       RETURNING id, email, full_name, role`,
-      [data.email.toLowerCase(), passwordHash, data.full_name, role, data.created_by],
+      `INSERT INTO users (email, password_hash, full_name, role, role_id, created_by)
+       VALUES ($1, $2, $3, $4, $5, $6)
+       RETURNING id, email, full_name, role, role_id, is_active`,
+      [data.email.toLowerCase(), passwordHash, data.full_name, role, resolvedRoleId, data.created_by],
     );
 
     const user = result.rows[0];
@@ -94,7 +125,7 @@ export const userService = {
 
   async updateUser(id: number, data: UpdateUserData): Promise<UserPublic> {
     const existingResult = await pool.query<UserRow>(
-      'SELECT id, email, full_name, role, is_active FROM users WHERE id = $1',
+      'SELECT id, email, full_name, role, role_id, is_active FROM users WHERE id = $1',
       [id],
     );
     if (existingResult.rows.length === 0) {
@@ -103,12 +134,16 @@ export const userService = {
 
     const oldUser = existingResult.rows[0];
 
-    if (data.actor_id === id && data.role !== undefined && data.role !== oldUser.role) {
-      throw new ServiceError(
-        'CANNOT_CHANGE_OWNER_ROLE',
-        'Cannot change your own role',
-        403,
+    // Validate new role_id if provided
+    if (data.role_id !== undefined) {
+      const roleCheck = await pool.query<{ is_active: boolean }>(
+        'SELECT is_active FROM roles WHERE id = $1',
+        [data.role_id],
       );
+      if (!roleCheck.rows[0]) throw new ServiceError('ROLE_NOT_FOUND', 'Vai trò không tồn tại', 404);
+      if (!roleCheck.rows[0].is_active) {
+        throw new ServiceError('ROLE_INACTIVE', 'Vai trò không hoạt động, không thể gán cho người dùng', 400);
+      }
     }
 
     const updates: string[] = [];
@@ -123,6 +158,19 @@ export const userService = {
       updates.push(`role = $${paramIndex++}`);
       values.push(data.role);
     }
+    if (data.role_id !== undefined) {
+      updates.push(`role_id = $${paramIndex++}`);
+      values.push(data.role_id);
+      // Sync legacy role column from roles table
+      const roleCodeResult = await pool.query<{ code: string }>(
+        'SELECT code FROM roles WHERE id = $1',
+        [data.role_id],
+      );
+      if (roleCodeResult.rows[0]) {
+        updates.push(`role = $${paramIndex++}`);
+        values.push(roleCodeResult.rows[0].code);
+      }
+    }
     if (data.is_active !== undefined) {
       updates.push(`is_active = $${paramIndex++}`);
       values.push(data.is_active);
@@ -132,21 +180,23 @@ export const userService = {
     values.push(data.updated_by);
     updates.push(`updated_at = CURRENT_TIMESTAMP`);
 
-    if (updates.length === 0) {
+    if (updates.length === 2) {
+      // Only updated_by and updated_at — nothing changed
       return toPublicUser(oldUser);
     }
 
     values.push(id);
     const result = await pool.query<UserRow>(
-      `UPDATE users SET ${updates.join(', ')} WHERE id = $${paramIndex} RETURNING id, email, full_name, role`,
+      `UPDATE users SET ${updates.join(', ')} WHERE id = $${paramIndex}
+       RETURNING id, email, full_name, role, role_id, is_active`,
       values,
     );
 
     const updatedUser = result.rows[0];
 
     this.logActivity(data.updated_by, id, 'UPDATE_USER', {
-      old: { full_name: oldUser.full_name, role: oldUser.role, is_active: oldUser.is_active },
-      new: { full_name: updatedUser.full_name, role: updatedUser.role },
+      old: { full_name: oldUser.full_name, role: oldUser.role, role_id: oldUser.role_id, is_active: oldUser.is_active },
+      new: { full_name: updatedUser.full_name, role: updatedUser.role, role_id: updatedUser.role_id },
     });
 
     return toPublicUser(updatedUser);
@@ -213,31 +263,34 @@ export const userService = {
     let paramIndex = 1;
 
     if (params.search) {
-      conditions.push(`(full_name ILIKE $${paramIndex} OR email ILIKE $${paramIndex})`);
+      conditions.push(`(u.full_name ILIKE $${paramIndex} OR u.email ILIKE $${paramIndex})`);
       values.push(`%${params.search}%`);
       paramIndex++;
     }
     if (params.role) {
-      conditions.push(`role = $${paramIndex++}`);
+      conditions.push(`u.role = $${paramIndex++}`);
       values.push(params.role);
     }
     if (params.is_active !== undefined) {
-      conditions.push(`is_active = $${paramIndex++}`);
+      conditions.push(`u.is_active = $${paramIndex++}`);
       values.push(params.is_active);
     }
 
     const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
 
     const countResult = await pool.query<{ count: string }>(
-      `SELECT COUNT(*) as count FROM users ${whereClause}`,
+      `SELECT COUNT(*) as count FROM users u ${whereClause}`,
       values,
     );
     const total = parseInt(countResult.rows[0].count, 10);
 
     const result = await pool.query<UserRow>(
-      `SELECT id, email, full_name, role, is_active, created_at, updated_at
-       FROM users ${whereClause}
-       ORDER BY id ASC
+      `SELECT u.id, u.email, u.full_name, u.role, u.role_id, u.is_active,
+              r.name AS role_name, u.created_at, u.updated_at
+       FROM users u
+       LEFT JOIN roles r ON r.id = u.role_id
+       ${whereClause}
+       ORDER BY u.id ASC
        LIMIT $${paramIndex++} OFFSET $${paramIndex}`,
       [...values, limit, offset],
     );
@@ -257,7 +310,10 @@ export const userService = {
 
   async getUserById(id: number): Promise<UserPublic | null> {
     const result = await pool.query<UserRow>(
-      'SELECT id, email, full_name, role FROM users WHERE id = $1',
+      `SELECT u.id, u.email, u.full_name, u.role, u.role_id, u.is_active, r.name AS role_name
+       FROM users u
+       LEFT JOIN roles r ON r.id = u.role_id
+       WHERE u.id = $1`,
       [id],
     );
     return result.rows[0] ? toPublicUser(result.rows[0]) : null;

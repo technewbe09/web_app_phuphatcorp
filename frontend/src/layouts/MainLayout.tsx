@@ -1,19 +1,45 @@
-import { Outlet, NavLink, useNavigate } from 'react-router-dom';
+import { useState } from 'react';
+import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard,
   LogOut,
   Calculator,
   Users,
   Truck,
+  ChevronLeft,
+  ChevronRight,
+  Car,
+  ChevronDown,
+  ChevronUp,
+  Route,
+  Shield,
+  Lock,
+  Settings,
+  CalendarRange,
 } from 'lucide-react';
 import { cn } from '../utils/cn';
 import { useAuth } from '../hooks/useAuth';
 import { useI18n } from '../i18n/useI18n';
+import { ThemeToggle } from '../components/ui/ThemeToggle';
+
+const USER_SETTINGS_ROUTES = ['/users', '/roles', '/permissions'];
+const DISPATCH_ROUTES = ['/dispatch'];
 
 export function MainLayout() {
-  const { user, logout } = useAuth();
+  const { user, logout, hasPermission, hasAnyPermission } = useAuth();
   const { t } = useI18n();
   const navigate = useNavigate();
+  const location = useLocation();
+  const [isCollapsed, setIsCollapsed] = useState(false);
+  const [vehicleDataOpen, setVehicleDataOpen] = useState(
+    location.pathname.startsWith('/vehicle-data'),
+  );
+  const [dispatchOpen, setDispatchOpen] = useState(
+    DISPATCH_ROUTES.some((p) => location.pathname.startsWith(p)),
+  );
+  const [userSettingsOpen, setUserSettingsOpen] = useState(
+    USER_SETTINGS_ROUTES.some((p) => location.pathname.startsWith(p)),
+  );
 
   const handleLogout = () => {
     logout();
@@ -25,68 +51,270 @@ export function MainLayout() {
     { to: '/delivery-data', icon: Truck, label: 'Xử lý Data Giao Hàng' },
   ];
 
-  const adminNavItems = [
-    { to: '/users', icon: Users, label: t('users.title') },
+  const vehicleDataSubItems = [
+    { to: '/vehicle-data/trip-codes', icon: Route, label: t('vehicleData.tripCodes') },
+    { to: '/vehicle-data/vehicles', icon: Car, label: t('vehicleData.vehicles') },
+    { to: '/vehicle-data/drivers', icon: Users, label: t('vehicleData.drivers') },
   ];
 
-  const navItems = user?.role === 'ADMIN' ? [...baseNavItems, ...adminNavItems] : baseNavItems;
+  const dispatchSubItems = [
+    { to: '/dispatch/schedule', icon: CalendarRange, label: t('dispatch.schedule.title' as never) },
+  ];
+
+  const showUserSettings = hasAnyPermission(['users.view', 'roles.view', 'permissions.manage'])
+    || user?.role === 'ADMIN';
+
+  const showVehicleData = hasAnyPermission(['transport.view', 'transport.manage'])
+    || user?.role === 'ADMIN';
+
+  const showDispatch = hasAnyPermission(['dispatch.view', 'dispatch.manage'])
+    || user?.role === 'ADMIN';
+
+  const userSettingsSubItems = [
+    hasPermission('users.view') || user?.role === 'ADMIN'
+      ? { to: '/users', icon: Users, label: t('sidebar.userManagement') }
+      : null,
+    hasPermission('roles.view') || user?.role === 'ADMIN'
+      ? { to: '/roles', icon: Shield, label: t('sidebar.roleManagement') }
+      : null,
+    hasPermission('permissions.manage') || user?.role === 'ADMIN'
+      ? { to: '/permissions', icon: Lock, label: t('sidebar.permissionManagement') }
+      : null,
+  ].filter(Boolean) as { to: string; icon: typeof Users; label: string }[];
+
+  const isUserSettingsActive = USER_SETTINGS_ROUTES.some((p) =>
+    location.pathname.startsWith(p),
+  );
+  const isDispatchActive = DISPATCH_ROUTES.some((p) => location.pathname.startsWith(p));
+
+  const renderSubGroup = (
+    label: string,
+    icon: React.ElementType,
+    subItems: { to: string; icon: React.ElementType; label: string }[],
+    isOpen: boolean,
+    onToggle: () => void,
+    isActive: boolean,
+  ) => {
+    const Icon = icon;
+    if (!isCollapsed) {
+      return (
+        <div>
+          <button
+            onClick={onToggle}
+            className={cn(
+              'w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors',
+              isActive
+                ? 'bg-neutral-100 dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100'
+                : 'text-neutral-600 dark:text-neutral-400 hover:bg-neutral-50 dark:hover:bg-neutral-800 hover:text-neutral-900 dark:hover:text-neutral-100',
+            )}
+          >
+            <Icon className="w-5 h-5 flex-shrink-0" />
+            <span className="flex-1 text-left">{label}</span>
+            {isOpen ? (
+              <ChevronUp className="w-4 h-4 flex-shrink-0" />
+            ) : (
+              <ChevronDown className="w-4 h-4 flex-shrink-0" />
+            )}
+          </button>
+          {isOpen && (
+            <div className="ml-4 mt-1 space-y-0.5 border-l border-neutral-200 dark:border-neutral-700 pl-3">
+              {subItems.map((item) => (
+                <NavLink
+                  key={item.to}
+                  to={item.to}
+                  className={({ isActive: a }) =>
+                    cn(
+                      'flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors',
+                      a
+                        ? 'bg-neutral-100 dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100'
+                        : 'text-neutral-600 dark:text-neutral-400 hover:bg-neutral-50 dark:hover:bg-neutral-800 hover:text-neutral-900 dark:hover:text-neutral-100',
+                    )
+                  }
+                >
+                  <item.icon className="w-4 h-4 flex-shrink-0" />
+                  {item.label}
+                </NavLink>
+              ))}
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    // Collapsed: show subItems as icon-only links
+    return subItems.map((item) => (
+      <NavLink
+        key={item.to}
+        to={item.to}
+        title={item.label}
+        className={({ isActive: a }) =>
+          cn(
+            'flex items-center justify-center px-2 py-2.5 rounded-lg text-sm font-medium transition-colors',
+            a
+              ? 'bg-neutral-100 dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100'
+              : 'text-neutral-600 dark:text-neutral-400 hover:bg-neutral-50 dark:hover:bg-neutral-800 hover:text-neutral-900 dark:hover:text-neutral-100',
+          )
+        }
+      >
+        <item.icon className="w-5 h-5 flex-shrink-0" />
+      </NavLink>
+    ));
+  };
 
   return (
-    <div className="flex h-screen bg-neutral-50">
+    <div className="flex h-screen bg-neutral-50 dark:bg-neutral-950">
       {/* Sidebar */}
-      <aside className="w-64 bg-white border-r border-neutral-200 flex flex-col">
-        {/* Logo */}
-        <div className="flex items-center gap-3 px-6 py-5 border-b border-neutral-200">
-          <div className="w-8 h-8 bg-neutral-800 rounded-lg flex items-center justify-center">
-            <Calculator className="w-5 h-5 text-white" />
+      <aside
+        className={cn(
+          'bg-white dark:bg-neutral-900 border-r border-neutral-200 dark:border-neutral-800 flex flex-col transition-all duration-200 ease-in-out',
+          isCollapsed ? 'w-16' : 'w-64',
+        )}
+      >
+        {/* Logo + toggle */}
+        <div
+          className={cn(
+            'flex items-center border-b border-neutral-200 dark:border-neutral-800 px-3 py-5',
+            isCollapsed ? 'justify-center' : 'justify-between px-6',
+          )}
+        >
+          <div className={cn('flex items-center gap-3', isCollapsed && 'justify-center')}>
+            <div className="w-8 h-8 bg-neutral-800 dark:bg-neutral-200 rounded-lg flex items-center justify-center flex-shrink-0">
+              <Calculator className="w-5 h-5 text-white dark:text-neutral-900" />
+            </div>
+            {!isCollapsed && (
+              <span className="text-lg font-semibold text-neutral-900 dark:text-neutral-100 whitespace-nowrap">
+                PhuPhatCorp
+              </span>
+            )}
           </div>
-          <span className="text-lg font-semibold text-neutral-900">PhuPhatCorp</span>
+          {!isCollapsed && (
+            <button
+              onClick={() => setIsCollapsed(true)}
+              className="p-1 text-neutral-400 dark:text-neutral-500 hover:text-neutral-600 dark:hover:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800 rounded-lg transition-colors"
+              title={t('sidebar.collapse')}
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+          )}
         </div>
 
+        {/* Expand button when collapsed */}
+        {isCollapsed && (
+          <div className="flex justify-center px-3 py-2 border-b border-neutral-200 dark:border-neutral-800">
+            <button
+              onClick={() => setIsCollapsed(false)}
+              className="p-1 text-neutral-400 dark:text-neutral-500 hover:text-neutral-600 dark:hover:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800 rounded-lg transition-colors"
+              title={t('sidebar.expand')}
+            >
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
+        )}
+
         {/* Nav */}
-        <nav className="flex-1 px-3 py-4 space-y-1">
-          {navItems.map((item) => (
+        <nav className={cn('flex-1 py-4 space-y-1 overflow-y-auto', isCollapsed ? 'px-2' : 'px-3')}>
+          {baseNavItems.map((item) => (
             <NavLink
               key={item.to}
               to={item.to}
               end={item.to === '/'}
+              title={isCollapsed ? item.label : undefined}
               className={({ isActive }) =>
                 cn(
-                  'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors',
+                  'flex items-center rounded-lg text-sm font-medium transition-colors',
+                  isCollapsed ? 'justify-center px-2 py-2.5' : 'gap-3 px-3 py-2.5',
                   isActive
-                    ? 'bg-neutral-100 text-neutral-900'
-                    : 'text-neutral-600 hover:bg-neutral-50 hover:text-neutral-900'
+                    ? 'bg-neutral-100 dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100'
+                    : 'text-neutral-600 dark:text-neutral-400 hover:bg-neutral-50 dark:hover:bg-neutral-800 hover:text-neutral-900 dark:hover:text-neutral-100',
                 )
               }
             >
-              <item.icon className="w-5 h-5" />
-              {item.label}
+              <item.icon className="w-5 h-5 flex-shrink-0" />
+              {!isCollapsed && item.label}
             </NavLink>
           ))}
+
+          {/* Vehicle Data collapsible group */}
+          {showVehicleData && renderSubGroup(
+            t('vehicleData.menuTitle'),
+            Car,
+            vehicleDataSubItems,
+            vehicleDataOpen,
+            () => setVehicleDataOpen((o) => !o),
+            location.pathname.startsWith('/vehicle-data'),
+          )}
+
+          {/* Điều hành vận tải collapsible group */}
+          {showDispatch && renderSubGroup(
+            t('dispatch.menuTitle' as never),
+            Truck,
+            dispatchSubItems,
+            dispatchOpen,
+            () => setDispatchOpen((o) => !o),
+            isDispatchActive,
+          )}
+
+          {/* Thiết lập người dùng collapsible group */}
+          {showUserSettings &&
+            renderSubGroup(
+              t('sidebar.userSettings'),
+              Settings,
+              userSettingsSubItems,
+              userSettingsOpen,
+              () => setUserSettingsOpen((o) => !o),
+              isUserSettingsActive,
+            )}
         </nav>
 
         {/* User */}
-        <div className="px-4 py-4 border-t border-neutral-200">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 bg-neutral-200 rounded-full flex items-center justify-center text-sm font-medium text-neutral-600">
+        <div
+          className={cn(
+            'py-4 border-t border-neutral-200 dark:border-neutral-800',
+            isCollapsed ? 'px-2' : 'px-4',
+          )}
+        >
+          {isCollapsed ? (
+            <div className="flex flex-col items-center gap-2">
+              <ThemeToggle />
+              <div
+                className="w-8 h-8 bg-neutral-200 dark:bg-neutral-700 rounded-full flex items-center justify-center text-sm font-medium text-neutral-600 dark:text-neutral-300"
+                title={user?.full_name || 'User'}
+              >
                 {user?.full_name?.charAt(0).toUpperCase() || 'U'}
               </div>
-              <div className="min-w-0">
-                <p className="text-sm font-medium text-neutral-900 truncate">
-                  {user?.full_name || 'User'}
-                </p>
-                <p className="text-xs text-neutral-500 truncate">{user?.email}</p>
+              <button
+                onClick={handleLogout}
+                className="p-1.5 text-neutral-400 dark:text-neutral-500 hover:text-neutral-600 dark:hover:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800 rounded-lg transition-colors"
+                title={t('sidebar.logout')}
+              >
+                <LogOut className="w-4 h-4" />
+              </button>
+            </div>
+          ) : (
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-8 h-8 bg-neutral-200 dark:bg-neutral-700 rounded-full flex items-center justify-center text-sm font-medium text-neutral-600 dark:text-neutral-300 flex-shrink-0">
+                  {user?.full_name?.charAt(0).toUpperCase() || 'U'}
+                </div>
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-neutral-900 dark:text-neutral-100 truncate">
+                    {user?.full_name || 'User'}
+                  </p>
+                  <p className="text-xs text-neutral-500 dark:text-neutral-500 truncate">{user?.email}</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-1 flex-shrink-0">
+                <ThemeToggle />
+                <button
+                  onClick={handleLogout}
+                  className="p-1.5 text-neutral-400 dark:text-neutral-500 hover:text-neutral-600 dark:hover:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800 rounded-lg transition-colors"
+                  title={t('sidebar.logout')}
+                >
+                  <LogOut className="w-4 h-4" />
+                </button>
               </div>
             </div>
-            <button
-              onClick={handleLogout}
-              className="p-1.5 text-neutral-400 hover:text-neutral-600 hover:bg-neutral-100 rounded-lg transition-colors"
-              title="Đăng xuất"
-            >
-              <LogOut className="w-4 h-4" />
-            </button>
-          </div>
+          )}
         </div>
       </aside>
 

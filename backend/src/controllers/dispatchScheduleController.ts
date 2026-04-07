@@ -1,0 +1,133 @@
+import { Response } from 'express';
+import { body, param, query, ValidationChain } from 'express-validator';
+import { dispatchScheduleService, UpdateDispatchScheduleData } from '../services/dispatchScheduleService';
+import { sendSuccess, sendError } from '../utils/response';
+import { AuthRequest } from '../middleware/auth';
+
+export const dispatchListQuerySchema: ValidationChain[] = [
+  query('date')
+    .notEmpty()
+    .withMessage('date là bắt buộc')
+    .matches(/^\d{4}-\d{2}-\d{2}$/)
+    .withMessage('date phải có định dạng YYYY-MM-DD'),
+];
+
+export const dispatchCreateSchema: ValidationChain[] = [
+  body('ngay')
+    .notEmpty()
+    .withMessage('Ngày là bắt buộc')
+    .matches(/^\d{4}-\d{2}-\d{2}$/)
+    .withMessage('Ngày phải có định dạng YYYY-MM-DD'),
+  body('loai_tuyen')
+    .notEmpty()
+    .withMessage('Loại tuyến là bắt buộc')
+    .isIn(['Tuyến cố định', 'Tuyến ngoài'])
+    .withMessage("Loại tuyến phải là 'Tuyến cố định' hoặc 'Tuyến ngoài'"),
+  body('loai_xe')
+    .notEmpty()
+    .withMessage('Loại xe là bắt buộc')
+    .isIn(['Xe lớn', 'Xe nhỏ'])
+    .withMessage("Loại xe phải là 'Xe lớn' hoặc 'Xe nhỏ'"),
+  body('xe_type')
+    .notEmpty()
+    .withMessage('Loại sở hữu là bắt buộc')
+    .isIn(['Xe nhà', 'Xe ngoài'])
+    .withMessage("Loại sở hữu phải là 'Xe nhà' hoặc 'Xe ngoài'"),
+  body('bien_so')
+    .notEmpty()
+    .withMessage('Biển số là bắt buộc')
+    .isLength({ max: 50 })
+    .withMessage('Biển số tối đa 50 ký tự'),
+  body('tai_xe').optional({ nullable: true }).isString().isLength({ max: 200 }),
+  body('ma_chuyen').optional({ nullable: true }).isString().isLength({ max: 100 }),
+  body('diem_nhan').notEmpty().withMessage('Điểm nhận là bắt buộc'),
+  body('diem_tra').notEmpty().withMessage('Điểm trả là bắt buộc'),
+  body('gio_nhan')
+    .notEmpty()
+    .withMessage('Giờ nhận là bắt buộc')
+    .matches(/^\d{2}:\d{2}(:\d{2})?$/)
+    .withMessage('Giờ nhận phải có định dạng HH:MM'),
+  body('ghi_chu').optional({ nullable: true }).isString(),
+  body('vehicle_id').optional({ nullable: true }).isInt({ min: 1 }),
+  body('trip_code_id').optional({ nullable: true }).isInt({ min: 1 }),
+];
+
+export const dispatchUpdateSchema: ValidationChain[] = [
+  param('id').isInt({ min: 1 }).withMessage('ID không hợp lệ'),
+  body('bien_so')
+    .notEmpty()
+    .withMessage('Biển số là bắt buộc')
+    .isLength({ max: 50 })
+    .withMessage('Biển số tối đa 50 ký tự'),
+  body('tai_xe').optional({ nullable: true }).isString().isLength({ max: 200 }),
+  body('ma_chuyen').optional({ nullable: true }).isString().isLength({ max: 100 }),
+  body('diem_nhan').notEmpty().withMessage('Điểm nhận là bắt buộc'),
+  body('diem_tra').notEmpty().withMessage('Điểm trả là bắt buộc'),
+  body('gio_nhan')
+    .notEmpty()
+    .withMessage('Giờ nhận là bắt buộc')
+    .matches(/^\d{2}:\d{2}(:\d{2})?$/)
+    .withMessage('Giờ nhận phải có định dạng HH:MM'),
+  body('ghi_chu').optional({ nullable: true }).isString(),
+  body('vehicle_id').optional({ nullable: true }).isInt({ min: 1 }),
+  body('trip_code_id').optional({ nullable: true }).isInt({ min: 1 }),
+];
+
+export const dispatchDeleteSchema: ValidationChain[] = [
+  param('id').isInt({ min: 1 }).withMessage('ID không hợp lệ'),
+];
+
+export const dispatchScheduleController = {
+  async list(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      const date = req.query.date as string;
+      const data = await dispatchScheduleService.listByDate(date);
+      sendSuccess(res, data, 'Danh sách lịch điều phối');
+    } catch (err) {
+      const error = err instanceof Error ? err.message : 'Unknown error';
+      sendError(res, 'Không thể tải danh sách lịch điều phối', 500, error);
+    }
+  },
+
+  async create(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      const userId = req.user?.userId ?? null;
+      const schedule = await dispatchScheduleService.create(req.body, userId);
+      sendSuccess(res, schedule, 'Tạo chuyến xe thành công', 201);
+    } catch (err) {
+      const error = err instanceof Error ? err.message : 'Unknown error';
+      sendError(res, 'Không thể tạo chuyến xe', 500, error);
+    }
+  },
+
+  async update(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      const id = parseInt(req.params.id, 10);
+      const data: UpdateDispatchScheduleData = req.body;
+      const schedule = await dispatchScheduleService.update(id, data);
+      if (!schedule) {
+        sendError(res, 'Không tìm thấy chuyến xe', 404);
+        return;
+      }
+      sendSuccess(res, schedule, 'Cập nhật chuyến xe thành công');
+    } catch (err) {
+      const error = err instanceof Error ? err.message : 'Unknown error';
+      sendError(res, 'Không thể cập nhật chuyến xe', 500, error);
+    }
+  },
+
+  async remove(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      const id = parseInt(req.params.id, 10);
+      const deleted = await dispatchScheduleService.remove(id);
+      if (!deleted) {
+        sendError(res, 'Không tìm thấy chuyến xe', 404);
+        return;
+      }
+      sendSuccess(res, null, 'Đã xóa chuyến xe');
+    } catch (err) {
+      const error = err instanceof Error ? err.message : 'Unknown error';
+      sendError(res, 'Không thể xóa chuyến xe', 500, error);
+    }
+  },
+};

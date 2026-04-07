@@ -170,6 +170,7 @@ VITE_API_URL=http://localhost:3021/api
 |--------|------|-------------|
 | id | SERIAL | PRIMARY KEY |
 | email | VARCHAR(255) | UNIQUE, NOT NULL |
+| username | VARCHAR(100) | UNIQUE, NOT NULL |
 | password_hash | VARCHAR(255) | NOT NULL |
 | full_name | VARCHAR(255) | NOT NULL |
 | role | VARCHAR(50) | NOT NULL, DEFAULT 'VIEWER' |
@@ -180,7 +181,7 @@ VITE_API_URL=http://localhost:3021/api
 | created_at | TIMESTAMP | DEFAULT CURRENT_TIMESTAMP |
 | updated_at | TIMESTAMP | DEFAULT CURRENT_TIMESTAMP |
 
-**Indexes:** `idx_users_role`, `idx_users_is_active`
+**Indexes:** `idx_users_role`, `idx_users_is_active`, `idx_users_username`
 
 ### user_activities
 | Column | Type | Constraints |
@@ -210,8 +211,8 @@ Base URL: `/api`
 
 | Method | Path | Auth | Body | Response |
 |--------|------|------|------|----------|
-| POST | /auth/register | No | `{ email, password, full_name, role? }` | `{ success, message, data: { user, accessToken } }` |
-| POST | /auth/login | No | `{ email, password }` | `{ success, message, data: { user, accessToken } }` + httpOnly cookie `refreshToken` |
+| POST | /auth/register | No | `{ username, email, password, full_name, role? }` | `{ success, message, data: { user, accessToken } }` |
+| POST | /auth/login | No | `{ username, password }` | `{ success, message, data: { user, accessToken } }` + httpOnly cookie `refreshToken` |
 | POST | /auth/refresh | Cookie | — | `{ success, message, data: { accessToken } }` |
 | POST | /auth/logout | No | — | `{ success, message }` + clear cookie |
 | GET | /auth/me | JWT | — | `{ success, message, data: user }` |
@@ -232,6 +233,15 @@ Base URL: `/api`
 | Method | Path | Auth | Response |
 |--------|------|------|----------|
 | GET | /health | No | `{ status: 'ok', timestamp }` |
+
+### Dispatch Schedules — /dispatch-schedules
+
+| Method | Path | Auth | Body/Query | Response |
+|--------|------|------|------------|----------|
+| GET | /dispatch-schedules | JWT | query: `date=YYYY-MM-DD` (required) | `{ success, data: { xe_nho: DispatchSchedule[], xe_lon: DispatchSchedule[], tuyen_ngoai: DispatchSchedule[] } }` |
+| POST | /dispatch-schedules | JWT | `{ ngay, loai_tuyen, loai_xe, xe_type, bien_so, tai_xe?, ma_chuyen?, diem_nhan, diem_tra, gio_nhan, ghi_chu?, vehicle_id?, trip_code_id? }` | `{ success, data: DispatchSchedule }` |
+| PUT | /dispatch-schedules/:id | JWT + dispatch.manage | `{ bien_so, tai_xe?, ma_chuyen?, diem_nhan, diem_tra, gio_nhan, ghi_chu?, vehicle_id?, trip_code_id? }` | `{ success, data: DispatchSchedule }` |
+| DELETE | /dispatch-schedules/:id | JWT + dispatch.manage | — | `{ success, message }` |
 
 ### Response Format Convention
 
@@ -267,6 +277,11 @@ Base URL: `/api`
 | /accounting | MainLayout | Protected | Placeholder |
 | /reports | MainLayout | Protected | Placeholder |
 | /settings | MainLayout | Protected | Placeholder |
+| /delivery-data | MainLayout | Protected | DeliveryDataPage |
+| /vehicle-data/trip-codes | MainLayout | Protected | TripCodePage |
+| /vehicle-data/vehicles | MainLayout | Protected | VehiclePage |
+| /vehicle-data/drivers | MainLayout | Protected | DriverPage |
+| /dispatch/schedule | MainLayout | Protected | SchedulePage (Bảng điều phối xe) |
 | * | — | — | Navigate to / |
 
 **Router pattern:** Dùng `BrowserRouter` + JSX `<Routes>` (KHÔNG dùng `createBrowserRouter` vì gây lỗi React context với AuthProvider).
@@ -276,7 +291,7 @@ Base URL: `/api`
 ## 10. Authentication Flow
 
 ### Login
-1. User gửi `{ email, password }` → `POST /api/auth/login`
+1. User gửi `{ username, password }` → `POST /api/auth/login`
 2. Backend: tìm user, so sánh bcrypt hash → sinh accessToken (15m) + refreshToken (7d)
 3. Backend trả: `{ user, accessToken }` trong body + `refreshToken` trong httpOnly cookie
 4. Frontend lưu `accessToken` vào localStorage, set user vào Zustand store

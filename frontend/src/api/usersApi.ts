@@ -6,11 +6,13 @@ export interface CreateUserRequest {
   password: string;
   full_name: string;
   role?: string;
+  role_id?: number;
 }
 
 export interface UpdateUserRequest {
   full_name?: string;
   role?: string;
+  role_id?: number;
   is_active?: boolean;
 }
 

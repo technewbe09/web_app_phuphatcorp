@@ -14,21 +14,21 @@ Table.displayName = 'Table';
 
 export const TableHeader = forwardRef<HTMLTableSectionElement, HTMLAttributes<HTMLTableSectionElement>>(
   ({ className, ...props }, ref) => (
-    <thead ref={ref} className={cn('bg-neutral-50 border-b border-neutral-200', className)} {...props} />
+    <thead ref={ref} className={cn('bg-neutral-50 dark:bg-neutral-800 border-b border-neutral-200 dark:border-neutral-700', className)} {...props} />
   )
 );
 TableHeader.displayName = 'TableHeader';
 
 export const TableBody = forwardRef<HTMLTableSectionElement, HTMLAttributes<HTMLTableSectionElement>>(
   ({ className, ...props }, ref) => (
-    <tbody ref={ref} className={cn('divide-y divide-neutral-200', className)} {...props} />
+    <tbody ref={ref} className={cn('divide-y divide-neutral-200 dark:divide-neutral-700', className)} {...props} />
   )
 );
 TableBody.displayName = 'TableBody';
 
 export const TableRow = forwardRef<HTMLTableRowElement, HTMLAttributes<HTMLTableRowElement>>(
   ({ className, ...props }, ref) => (
-    <tr ref={ref} className={cn('hover:bg-neutral-50 transition-colors', className)} {...props} />
+    <tr ref={ref} className={cn('hover:bg-neutral-50 dark:hover:bg-neutral-800 transition-colors', className)} {...props} />
   )
 );
 TableRow.displayName = 'TableRow';
@@ -37,7 +37,7 @@ export const TableHead = forwardRef<HTMLTableCellElement, HTMLAttributes<HTMLTab
   ({ className, ...props }, ref) => (
     <th
       ref={ref}
-      className={cn('px-4 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider', className)}
+      className={cn('px-4 py-3 text-left text-xs font-medium text-neutral-500 dark:text-neutral-300 uppercase tracking-wider', className)}
       {...props}
     />
   )
@@ -46,7 +46,7 @@ TableHead.displayName = 'TableHead';
 
 export const TableCell = forwardRef<HTMLTableCellElement, HTMLAttributes<HTMLTableCellElement>>(
   ({ className, ...props }, ref) => (
-    <td ref={ref} className={cn('px-4 py-3 text-neutral-900', className)} {...props} />
+    <td ref={ref} className={cn('px-4 py-3 text-neutral-900 dark:text-neutral-100', className)} {...props} />
   )
 );
 TableCell.displayName = 'TableCell';

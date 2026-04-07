@@ -6,6 +6,26 @@ description: Ghi lại các bài học kinh nghiệm, bug đã fix, và pitfalls
 
 ## Bugs & Fixes
 
+### i18n t() — key có dấu chấm bị split nhầm làm path separator
+- **Ngày:** 2026-04-07
+- **Severity:** Medium
+- **Feature liên quan:** Permission Management — permission matrix
+- **Triệu chứng:** UI hiển thị key thô `permissions.permCodes.dashboard.view` thay vì tên dễ đọc
+- **Root cause:** Hàm `t()` trong `i18n.tsx` split key theo `.` để traverse JSON. Khi perm.code có dấu chấm (`dashboard.view`), key `permissions.permCodes.dashboard.view` bị traverse thành 4 cấp → không tìm thấy → trả về key string (truthy, nên `|| fallback` không kích hoạt).
+- **Fix:** Đổi JSON keys trong `permCodes` từ `"dashboard.view"` → `"dashboard_view"` (dùng `_`). Trong component gọi `perm.code.replace(/\./g, '_')` trước khi dùng làm i18n key.
+- **Cần chú ý:** Không bao giờ đặt i18n key có dấu chấm nằm trong giá trị interpolation (`${variable}`). Nếu giá trị có dấu chấm tự nhiên (code, enum), phải normalize trước khi dùng làm key.
+
+### i18n import type — Vite SyntaxError cho interface export
+- **Ngày:** 2026-04-07
+- **Severity:** High
+- **Feature liên quan:** RBAC — rolesApi, permissionsApi, useRoles
+- **Triệu chứng:** `Uncaught SyntaxError: The requested module does not provide an export named 'Role'`
+- **Root cause:** TypeScript interface chỉ tồn tại ở compile-time. Vite/esbuild strip interfaces ra khỏi JS output. Nếu dùng `import { Role }` (không phải `import type`), JS runtime cố import một export không tồn tại.
+- **Fix:** Dùng `import type { Role }` cho type-only imports. Nếu import cả value lẫn type từ cùng 1 file: tách thành 2 dòng — `import { valueExport }` và `import type { TypeExport }`.
+- **Cần chú ý:** Vite + esbuild strict hơn tsc về type imports. Luôn dùng `import type` cho interface/type-only imports trong dự án này.
+
+---
+
 ### createBrowserRouter + AuthProvider — React Context lỗi
 
 - **Ngày:** 2026-03-30
@@ -18,8 +38,7 @@ description: Ghi lại các bài học kinh nghiệm, bug đã fix, và pitfalls
 
 ### AuthProvider chứa useNavigate()
 
-- **Ngày:** 2026-03-30
-- **Vấn đề:** AuthProvider gọi `useNavigate()` trong `login()` và `logout()` → crash vì AuthProvider render trước Router mount.
+- **Ngày:** 2026-03-30 → crash vì AuthProvider render trước Router mount.
 - **Nguyên nhân:** React hooks for navigation yêu cầu Router context đã mounted. AuthProvider là một context consumer/producer nằm ở top-level — không có guarantee về thứ tự mount.
 - **Fix:** Tách biệt — AuthContext chỉ quản lý state (login/logout/setUser), không chứa navigation. Page components tự gọi `useNavigate()` sau khi auth action hoàn tất.
 - **Prevention:** Quy tắc: Context = State management, Page = Navigation/Behavior. Không mix hai concerns trong cùng component.
@@ -170,6 +189,19 @@ description: Ghi lại các bài học kinh nghiệm, bug đã fix, và pitfalls
 - **Fix:** Giữ `xlsx` để đọc file input. Dùng `exceljs` để tạo và ghi file output — `cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFFF00' } }` hoạt động đúng.
 - **File sửa:** `frontend/src/utils/processDeliveryData.ts` — Step 5 dùng `exceljs.Workbook` thay vì `XLSX.utils.book_new()`
 - **Cần chú ý:** `xlsx` community edition chỉ đọc styles từ file có sẵn, không ghi styles mới. Khi cần output Excel có formatting (màu sắc, bold, border...) → luôn dùng `exceljs`. Tên biến `buffer` bị trùng với biến đọc file input — đặt tên là `outBuffer`.
+
+---
+
+### 403 Forbidden trên GET endpoints — requirePermission vs "Tất cả authenticated users"
+
+- **Ngày:** 2026-04-07
+- **Severity:** High
+- **Feature liên quan:** Bảng điều phối xe — GET /api/vehicles, /api/trip-codes, /api/dispatch-schedules
+- **Triệu chứng:** Vào trang /dispatch/schedule → 3 requests đều trả 403. User đã đăng nhập bình thường.
+- **Root cause:** Route guards dùng `requirePermission('transport.view')` / `requirePermission('dispatch.view')` trên các GET endpoints. Permission codes này không có trong JWT của user (hoặc không được assign cho role). Spec ghi "Access: Tất cả authenticated users" nhưng code lại enforce permission-based access.
+- **Fix:** Xóa `requirePermission(...)` khỏi 3 GET routes (`vehicles.ts:16`, `tripCodes.ts:16`, `dispatchSchedules.ts:15`). Write endpoints (POST/PUT/DELETE) vẫn giữ `requirePermission` vì đó là các action thay đổi data.
+- **Regression test:** Backend build + 33 tests pass sau khi sửa.
+- **Cần chú ý:** Khi tính năng mới spec là "tất cả authenticated users có thể xem", không thêm `requirePermission` vào GET route. Chỉ thêm `requirePermission` vào write endpoints. `authenticateToken` (đã ở `router.use()`) là đủ để bảo vệ read access.
 
 ---
 

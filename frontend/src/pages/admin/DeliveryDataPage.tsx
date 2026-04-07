@@ -80,8 +80,8 @@ export function DeliveryDataPage() {
     <div className="p-8 max-w-3xl">
       {/* Header */}
       <div className="mb-6">
-        <h1 className="text-2xl font-semibold text-neutral-900">Xử lý Data Giao Hàng</h1>
-        <p className="text-sm text-neutral-500 mt-1">
+        <h1 className="text-2xl font-semibold text-neutral-900 dark:text-neutral-100">Xử lý Data Giao Hàng</h1>
+        <p className="text-sm text-neutral-500 dark:text-neutral-400 mt-1">
           Upload file Excel ERP giao hàng để phân nhóm và xuất file chuẩn.
         </p>
       </div>
@@ -94,10 +94,10 @@ export function DeliveryDataPage() {
               className={cn(
                 'border-2 border-dashed rounded-lg p-10 text-center transition-colors cursor-pointer',
                 pageState === 'processing'
-                  ? 'border-neutral-200 bg-neutral-50 pointer-events-none'
+                  ? 'border-neutral-200 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-800/50 pointer-events-none'
                   : isDragOver
-                    ? 'border-neutral-800 bg-neutral-50'
-                    : 'border-neutral-300 hover:border-neutral-400 hover:bg-neutral-50'
+                    ? 'border-neutral-800 dark:border-neutral-300 bg-neutral-50 dark:bg-neutral-800/50'
+                    : 'border-neutral-300 dark:border-neutral-700 hover:border-neutral-400 dark:hover:border-neutral-500 hover:bg-neutral-50 dark:hover:bg-neutral-800/30'
               )}
               onDragOver={(e) => {
                 e.preventDefault();
@@ -120,28 +120,28 @@ export function DeliveryDataPage() {
 
               {pageState === 'processing' ? (
                 <div className="flex flex-col items-center gap-3">
-                  <Loader2 className="w-10 h-10 text-neutral-600 animate-spin" />
-                  <p className="text-base font-medium text-neutral-700">Đang xử lý...</p>
-                  <p className="text-sm text-neutral-500">Vui lòng đợi trong giây lát</p>
+                  <Loader2 className="w-10 h-10 text-neutral-600 dark:text-neutral-400 animate-spin" />
+                  <p className="text-base font-medium text-neutral-700 dark:text-neutral-300">Đang xử lý...</p>
+                  <p className="text-sm text-neutral-500 dark:text-neutral-400">Vui lòng đợi trong giây lát</p>
                 </div>
               ) : (
                 <>
                   <FileSpreadsheet
                     className={cn(
                       'w-10 h-10 mx-auto mb-3',
-                      isDragOver ? 'text-neutral-800' : 'text-neutral-400'
+                      isDragOver ? 'text-neutral-800 dark:text-neutral-200' : 'text-neutral-400 dark:text-neutral-500'
                     )}
                   />
-                  <p className="text-base font-medium text-neutral-700 mb-1">
+                  <p className="text-base font-medium text-neutral-700 dark:text-neutral-300 mb-1">
                     Kéo thả file Excel vào đây
                   </p>
-                  <p className="text-sm text-neutral-500 mb-4">hoặc click để chọn file</p>
+                  <p className="text-sm text-neutral-500 dark:text-neutral-400 mb-4">hoặc click để chọn file</p>
 
                   {selectedFile ? (
                     <>
-                      <div className="flex items-center justify-center gap-2 mb-4 px-4 py-2 bg-neutral-100 rounded-lg w-fit mx-auto">
-                        <FileSpreadsheet className="w-4 h-4 text-neutral-700 shrink-0" />
-                        <span className="text-sm font-medium text-neutral-800 truncate max-w-xs">
+                      <div className="flex items-center justify-center gap-2 mb-4 px-4 py-2 bg-neutral-100 dark:bg-neutral-700 rounded-lg w-fit mx-auto">
+                        <FileSpreadsheet className="w-4 h-4 text-neutral-700 dark:text-neutral-300 shrink-0" />
+                        <span className="text-sm font-medium text-neutral-800 dark:text-neutral-200 truncate max-w-xs">
                           {selectedFile.name}
                         </span>
                       </div>
@@ -170,19 +170,19 @@ export function DeliveryDataPage() {
                       </div>
                     </>
                   ) : (
-                    <p className="text-sm text-neutral-400">Hỗ trợ file .xlsx</p>
+                    <p className="text-sm text-neutral-400 dark:text-neutral-500">Hỗ trợ file .xlsx</p>
                   )}
                 </>
               )}
             </div>
 
             {pageState === 'error' && errorMessage && (
-              <div className="mt-4 p-4 bg-red-50 border border-red-200 rounded-lg">
+              <div className="mt-4 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
                 <div className="flex items-start gap-2">
-                  <AlertTriangle className="w-4 h-4 text-red-600 mt-0.5 shrink-0" />
+                  <AlertTriangle className="w-4 h-4 text-red-600 dark:text-red-400 mt-0.5 shrink-0" />
                   <div>
-                    <p className="text-sm font-medium text-red-800">Lỗi xử lý</p>
-                    <p className="text-sm text-red-600 mt-0.5">{errorMessage}</p>
+                    <p className="text-sm font-medium text-red-800 dark:text-red-300">Lỗi xử lý</p>
+                    <p className="text-sm text-red-600 dark:text-red-400 mt-0.5">{errorMessage}</p>
                   </div>
                 </div>
               </div>
@@ -205,38 +205,38 @@ export function DeliveryDataPage() {
           <Card>
             <CardHeader>
               <div className="flex items-center gap-2">
-                <CheckCircle2 className="w-5 h-5 text-green-500" />
-                <h2 className="text-base font-semibold text-neutral-900">Xử lý thành công</h2>
+                <CheckCircle2 className="w-5 h-5 text-green-500 dark:text-green-400" />
+                <h2 className="text-base font-semibold text-neutral-900 dark:text-neutral-100">Xử lý thành công</h2>
               </div>
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-                <div className="p-3 rounded-lg bg-neutral-50 border border-neutral-200">
-                  <p className="text-xs text-neutral-500 mb-1">Số dòng</p>
-                  <p className="text-xl font-semibold text-neutral-900">
+                <div className="p-3 rounded-lg bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700">
+                  <p className="text-xs text-neutral-500 dark:text-neutral-400 mb-1">Số dòng</p>
+                  <p className="text-xl font-semibold text-neutral-900 dark:text-neutral-100">
                     {result.processedRows.toLocaleString()}
                   </p>
                 </div>
-                <div className="p-3 rounded-lg bg-neutral-50 border border-neutral-200">
-                  <p className="text-xs text-neutral-500 mb-1">Số nhóm</p>
-                  <p className="text-xl font-semibold text-neutral-900">
+                <div className="p-3 rounded-lg bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700">
+                  <p className="text-xs text-neutral-500 dark:text-neutral-400 mb-1">Số nhóm</p>
+                  <p className="text-xl font-semibold text-neutral-900 dark:text-neutral-100">
                     {result.groupCount.toLocaleString()}
                   </p>
                 </div>
-                <div className="p-3 rounded-lg bg-neutral-50 border border-neutral-200 col-span-2">
-                  <p className="text-xs text-neutral-500 mb-1">Khoảng ngày</p>
-                  <p className="text-sm font-medium text-neutral-900">
+                <div className="p-3 rounded-lg bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 col-span-2">
+                  <p className="text-xs text-neutral-500 dark:text-neutral-400 mb-1">Khoảng ngày</p>
+                  <p className="text-sm font-medium text-neutral-900 dark:text-neutral-100">
                     {result.dateRange.from} → {result.dateRange.to}
                   </p>
                 </div>
               </div>
 
-              <div className="flex items-center justify-between p-4 bg-neutral-50 rounded-lg border border-neutral-200">
+              <div className="flex items-center justify-between p-4 bg-neutral-50 dark:bg-neutral-800 rounded-lg border border-neutral-200 dark:border-neutral-700">
                 <div className="flex items-center gap-3">
-                  <FileSpreadsheet className="w-8 h-8 text-green-600 shrink-0" />
+                  <FileSpreadsheet className="w-8 h-8 text-green-600 dark:text-green-400 shrink-0" />
                   <div>
-                    <p className="text-sm font-medium text-neutral-900">{result.outputFilename}</p>
-                    <p className="text-xs text-neutral-500">Sẵn sàng tải xuống</p>
+                    <p className="text-sm font-medium text-neutral-900 dark:text-neutral-100">{result.outputFilename}</p>
+                    <p className="text-xs text-neutral-500 dark:text-neutral-400">Sẵn sàng tải xuống</p>
                   </div>
                 </div>
                 <Button onClick={handleDownload} className="gap-2">
@@ -253,10 +253,10 @@ export function DeliveryDataPage() {
                 <div className="flex items-start gap-2">
                   <AlertTriangle className="w-4 h-4 text-yellow-500 mt-0.5 shrink-0" />
                   <div>
-                    <p className="text-sm font-medium text-neutral-800">Cảnh báo</p>
+                    <p className="text-sm font-medium text-neutral-800 dark:text-neutral-200">Cảnh báo</p>
                     <ul className="mt-1 space-y-0.5">
                       {result.warnings.map((w, i) => (
-                        <li key={i} className="text-sm text-neutral-600">{w}</li>
+                        <li key={i} className="text-sm text-neutral-600 dark:text-neutral-400">{w}</li>
                       ))}
                     </ul>
                   </div>

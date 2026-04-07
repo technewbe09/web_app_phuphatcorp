@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { usersController } from '../controllers/usersController';
-import { authenticateToken, authorizeRoles } from '../middleware/auth';
+import { authenticateToken, requirePermission } from '../middleware/auth';
 import { validate } from '../middleware/validate';
 import {
   createUserSchema,
@@ -9,30 +9,27 @@ import {
   paginationSchema,
   idParamSchema,
 } from '../middleware/validators/userValidators';
-import { UserRole } from '../types/user';
 
 const router = Router();
 
-// All routes require authentication + ADMIN role
 router.use(authenticateToken);
-router.use(authorizeRoles(UserRole.ADMIN));
 
-// GET /users - List users with pagination/filter
-router.get('/', ...validate(paginationSchema), usersController.getUsers);
+// GET /users - List users (requires users.view)
+router.get('/', requirePermission('users.view'), ...validate(paginationSchema), usersController.getUsers);
 
-// GET /users/:id - Get single user
-router.get('/:id', ...validate(idParamSchema), usersController.getUserById);
+// GET /users/:id - Get single user (requires users.view)
+router.get('/:id', requirePermission('users.view'), ...validate(idParamSchema), usersController.getUserById);
 
-// POST /users - Create new user
-router.post('/', ...validate(createUserSchema), usersController.createUser);
+// POST /users - Create new user (requires users.manage)
+router.post('/', requirePermission('users.manage'), ...validate(createUserSchema), usersController.createUser);
 
-// PUT /users/:id - Update user
-router.put('/:id', ...validate([...idParamSchema, ...updateUserSchema]), usersController.updateUser);
+// PUT /users/:id - Update user (requires users.manage)
+router.put('/:id', requirePermission('users.manage'), ...validate([...idParamSchema, ...updateUserSchema]), usersController.updateUser);
 
-// DELETE /users/:id - Delete user
-router.delete('/:id', ...validate(idParamSchema), usersController.deleteUser);
+// DELETE /users/:id - Delete user (requires users.manage)
+router.delete('/:id', requirePermission('users.manage'), ...validate(idParamSchema), usersController.deleteUser);
 
-// PATCH /users/:id/password - Reset password
-router.patch('/:id/password', ...validate([...idParamSchema, ...resetPasswordSchema]), usersController.resetPassword);
+// PATCH /users/:id/password - Reset password (requires users.manage)
+router.patch('/:id/password', requirePermission('users.manage'), ...validate([...idParamSchema, ...resetPasswordSchema]), usersController.resetPassword);
 
 export default router;

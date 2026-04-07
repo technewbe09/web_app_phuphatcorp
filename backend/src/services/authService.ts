@@ -4,9 +4,56 @@ import { User, UserPublic, UserRole } from '../types/user';
 
 export interface CreateUserData {
   email: string;
+  username: string;
   password: string;
   full_name: string;
   role?: UserRole;
+}
+
+async function loadUserWithPermissions(userId: number): Promise<UserPublic | null> {
+  const result = await pool.query<UserPublic & {
+    permissions: string | null;
+    role_name: string | null;
+    role_is_active: boolean | null;
+  }>(
+    `SELECT
+       u.id, u.email, u.username, u.full_name, u.role, u.role_id, u.is_active,
+       r.name AS role_name,
+       r.is_active AS role_is_active,
+       COALESCE(
+         json_agg(p.code) FILTER (WHERE p.code IS NOT NULL),
+         '[]'
+       )::text AS permissions
+     FROM users u
+     LEFT JOIN roles r ON r.id = u.role_id
+     LEFT JOIN role_permissions rp ON rp.role_id = r.id
+     LEFT JOIN permissions p ON p.id = rp.permission_id
+     WHERE u.id = $1
+     GROUP BY u.id, r.id`,
+    [userId],
+  );
+
+  if (!result.rows[0]) return null;
+  const row = result.rows[0];
+
+  let permissions: string[] = [];
+  try {
+    permissions = JSON.parse(row.permissions ?? '[]');
+  } catch {
+    permissions = [];
+  }
+
+  return {
+    id: row.id,
+    email: row.email,
+    username: row.username,
+    full_name: row.full_name,
+    role: row.role as UserRole,
+    role_id: row.role_id,
+    is_active: row.is_active,
+    role_name: row.role_name ?? undefined,
+    permissions,
+  };
 }
 
 export const authService = {
@@ -23,17 +70,21 @@ export const authService = {
     const role = data.role || UserRole.VIEWER;
 
     const result = await pool.query<User>(
-      `INSERT INTO users (email, password_hash, full_name, role)
-       VALUES ($1, $2, $3, $4)
-       RETURNING id, email, full_name, role`,
-      [data.email, passwordHash, data.full_name, role],
+      `INSERT INTO users (email, username, password_hash, full_name, role)
+       VALUES ($1, $2, $3, $4, $5)
+       RETURNING id, email, username, full_name, role`,
+      [data.email, data.username, passwordHash, data.full_name, role],
     );
     const row = result.rows[0];
     return {
       id: row.id,
       email: row.email,
+      username: row.username,
       full_name: row.full_name,
       role: row.role as UserRole,
+      role_id: null,
+      is_active: true,
+      permissions: [],
     };
   },
 
@@ -45,11 +96,15 @@ export const authService = {
     return result.rows[0] || null;
   },
 
-  async findUserById(id: number): Promise<UserPublic | null> {
-    const result = await pool.query<UserPublic>(
-      'SELECT id, email, full_name, role FROM users WHERE id = $1',
-      [id],
+  async findUserByUsername(username: string): Promise<User | null> {
+    const result = await pool.query<User>(
+      'SELECT * FROM users WHERE username = $1',
+      [username],
     );
     return result.rows[0] || null;
+  },
+
+  async findUserById(id: number): Promise<UserPublic | null> {
+    return loadUserWithPermissions(id);
   },
 };

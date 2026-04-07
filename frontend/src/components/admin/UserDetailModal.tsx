@@ -48,9 +48,9 @@ export function UserDetailModal({ isOpen, onClose, userId }: Props) {
 function DetailRow({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div className="flex justify-between items-center">
-      <span className="text-sm text-neutral-500">{label}</span>
+      <span className="text-sm text-neutral-500 dark:text-neutral-400">{label}</span>
       {typeof value === 'string' ? (
-        <span className="text-sm font-medium text-neutral-900">{value}</span>
+        <span className="text-sm font-medium text-neutral-900 dark:text-neutral-100">{value}</span>
       ) : (
         value
       )}

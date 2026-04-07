@@ -64,7 +64,7 @@ export function UserManagementPage() {
     <div className="p-6 space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold text-neutral-900">{t('users.title')}</h1>
+        <h1 className="text-2xl font-semibold text-neutral-900 dark:text-neutral-100">{t('users.title')}</h1>
         <Button onClick={() => setModal({ type: 'create' })}>
           <Plus className="w-4 h-4 mr-2" />
           {t('users.addUser')}
@@ -95,7 +95,7 @@ export function UserManagementPage() {
                 }}
               />
             </div>
-            <label className="flex items-center gap-2 text-sm text-neutral-600">
+            <label className="flex items-center gap-2 text-sm text-neutral-600 dark:text-neutral-400">
               <input
                 type="checkbox"
                 checked={showInactive}
@@ -103,7 +103,7 @@ export function UserManagementPage() {
                   setShowInactive(e.target.checked);
                   setPage(1);
                 }}
-                className="w-4 h-4 rounded border-neutral-300"
+                className="w-4 h-4 rounded border-neutral-300 dark:border-neutral-600"
               />
               {t('users.showInactive')}
             </label>
@@ -116,14 +116,14 @@ export function UserManagementPage() {
         <CardContent className="p-0">
           {isLoading ? (
             <div className="flex items-center justify-center py-12">
-              <div className="w-8 h-8 border-2 border-neutral-200 border-t-neutral-800 rounded-full animate-spin" />
+              <div className="w-8 h-8 border-2 border-neutral-200 dark:border-neutral-700 border-t-neutral-800 dark:border-t-neutral-200 rounded-full animate-spin" />
             </div>
           ) : error ? (
             <div className="flex items-center justify-center py-12">
-              <p className="text-red-600">{t('messages.error')}</p>
+              <p className="text-red-600 dark:text-red-400">{t('messages.error')}</p>
             </div>
           ) : displayedUsers.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-12 text-neutral-500">
+            <div className="flex flex-col items-center justify-center py-12 text-neutral-500 dark:text-neutral-400">
               <p>{search ? t('users.noResults') : t('users.empty')}</p>
             </div>
           ) : (
@@ -142,26 +142,26 @@ export function UserManagementPage() {
                 <TableBody>
                   {displayedUsers.map((user, index) => (
                     <TableRow key={user.id}>
-                      <TableCell className="text-neutral-500">
+                      <TableCell className="text-neutral-500 dark:text-neutral-400">
                         {(page - 1) * limit + index + 1}
                       </TableCell>
-                      <TableCell className="font-medium text-neutral-900">
+                      <TableCell className="font-medium text-neutral-900 dark:text-neutral-100">
                         {user.full_name}
                       </TableCell>
-                      <TableCell className="text-neutral-600">{user.email}</TableCell>
+                      <TableCell className="text-neutral-600 dark:text-neutral-400">{user.email}</TableCell>
                       <TableCell>
                         <Badge variant={user.role === 'ADMIN' ? 'warning' : user.role === 'ACCOUNTANT' ? 'info' : 'default'}>
                           {t(`users.roles.${user.role}`)}
                         </Badge>
                       </TableCell>
-                      <TableCell className="text-neutral-500 text-sm">
+                      <TableCell className="text-neutral-500 dark:text-neutral-400 text-sm">
                         {meta?.page !== undefined ? '' : ''}
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-1">
                           <button
                             onClick={() => setModal({ type: 'detail', userId: user.id })}
-                            className="p-1.5 text-neutral-400 hover:text-neutral-600 hover:bg-neutral-100 rounded transition-colors"
+                            className="p-1.5 text-neutral-400 dark:text-neutral-500 hover:text-neutral-600 dark:hover:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800 rounded transition-colors"
                             title={t('users.actions.view')}
                           >
                             <Eye className="w-4 h-4" />
@@ -170,21 +170,21 @@ export function UserManagementPage() {
                             <>
                               <button
                                 onClick={() => setModal({ type: 'edit', user })}
-                                className="p-1.5 text-neutral-400 hover:text-neutral-600 hover:bg-neutral-100 rounded transition-colors"
+                                className="p-1.5 text-neutral-400 dark:text-neutral-500 hover:text-neutral-600 dark:hover:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800 rounded transition-colors"
                                 title={t('users.actions.edit')}
                               >
                                 <Pencil className="w-4 h-4" />
                               </button>
                               <button
                                 onClick={() => setModal({ type: 'reset', user })}
-                                className="p-1.5 text-neutral-400 hover:text-neutral-600 hover:bg-neutral-100 rounded transition-colors"
+                                className="p-1.5 text-neutral-400 dark:text-neutral-500 hover:text-neutral-600 dark:hover:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800 rounded transition-colors"
                                 title={t('users.actions.resetPassword')}
                               >
                                 <Key className="w-4 h-4" />
                               </button>
                               <button
                                 onClick={() => setModal({ type: 'delete', user })}
-                                className="p-1.5 text-neutral-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                                className="p-1.5 text-neutral-400 dark:text-neutral-500 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors"
                                 title={t('users.actions.delete')}
                               >
                                 <Trash className="w-4 h-4" />
@@ -205,7 +205,7 @@ export function UserManagementPage() {
       {/* Pagination */}
       {meta && meta.totalPages > 1 && (
         <div className="flex items-center justify-between">
-          <p className="text-sm text-neutral-500">
+          <p className="text-sm text-neutral-500 dark:text-neutral-400">
             {t('users.pagination.showing')} {(page - 1) * limit + 1}–{Math.min(page * limit, meta.total)} {t('users.pagination.of')} {meta.total}
           </p>
           <div className="flex gap-2">
@@ -217,7 +217,7 @@ export function UserManagementPage() {
             >
               ←
             </Button>
-            <span className="flex items-center px-3 text-sm text-neutral-600">
+            <span className="flex items-center px-3 text-sm text-neutral-600 dark:text-neutral-400">
               {t('users.pagination.page')} {page} {t('users.pagination.of')} {meta.totalPages}
             </span>
             <Button

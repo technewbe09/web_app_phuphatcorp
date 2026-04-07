@@ -1,0 +1,271 @@
+import { useState, useMemo } from 'react';
+import { Plus, Upload, Pencil, Trash2, AlertTriangle, RefreshCw } from 'lucide-react';
+import { Card, CardContent } from '../../../components/ui/Card';
+import { Button } from '../../../components/ui/Button';
+import { Input } from '../../../components/ui/Input';
+import { Modal } from '../../../components/ui/Modal';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../../components/ui/Table';
+import { useGetVehicles, useDeleteVehicle } from '../../../hooks/useVehicles';
+import { VehicleFormModal } from '../../../components/vehicle-data/VehicleFormModal';
+import { VehicleUploadModal } from '../../../components/vehicle-data/VehicleUploadModal';
+import { formatDateTime } from '../../../utils/format';
+import type { Vehicle } from '../../../api/vehicleApi';
+
+type ModalState =
+  | { type: 'create' }
+  | { type: 'edit'; row: Vehicle }
+  | { type: 'delete'; row: Vehicle }
+  | { type: 'upload' }
+  | null;
+
+interface Toast {
+  id: number;
+  message: string;
+  variant: 'success' | 'error';
+}
+
+const LOAI_BADGE: Record<string, string> = {
+  'Xe lớn': 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
+  'Xe nhỏ': 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400',
+};
+
+export function VehiclePage() {
+  const { data, isLoading, isError, refetch } = useGetVehicles();
+  const deleteVehicle = useDeleteVehicle();
+
+  const [modal, setModal] = useState<ModalState>(null);
+  const [search, setSearch] = useState('');
+  const [toasts, setToasts] = useState<Toast[]>([]);
+  const [deleteError, setDeleteError] = useState('');
+
+  const showToast = (message: string, variant: 'success' | 'error' = 'success') => {
+    const id = Date.now();
+    setToasts((prev) => [...prev, { id, message, variant }]);
+    setTimeout(() => setToasts((prev) => prev.filter((t) => t.id !== id)), 4000);
+  };
+
+  const filteredRows = useMemo(() => {
+    if (!data) return [];
+    const q = search.toLowerCase();
+    if (!q) return data;
+    return data.filter((row) => row.bien_so.toLowerCase().includes(q));
+  }, [data, search]);
+
+  const closeModal = () => {
+    setModal(null);
+    setDeleteError('');
+  };
+
+  const handleDelete = async () => {
+    if (modal?.type !== 'delete') return;
+    setDeleteError('');
+    try {
+      await deleteVehicle.mutateAsync(modal.row.id);
+      showToast('Đã xóa xe!');
+      closeModal();
+    } catch (err: unknown) {
+      if (err && typeof err === 'object' && 'response' in err) {
+        const e = err as { response?: { data?: { message?: string } } };
+        setDeleteError(e.response?.data?.message || 'Đã xảy ra lỗi. Vui lòng thử lại.');
+      } else {
+        setDeleteError('Đã xảy ra lỗi. Vui lòng thử lại.');
+      }
+    }
+  };
+
+  return (
+    <div className="p-6 space-y-6">
+      {/* Toast notifications */}
+      <div className="fixed top-4 right-4 z-[100] space-y-2 pointer-events-none">
+        {toasts.map((t) => (
+          <div
+            key={t.id}
+            className={`px-4 py-3 rounded-lg shadow-lg text-sm font-medium max-w-xs pointer-events-auto transition-all ${
+              t.variant === 'success'
+                ? 'bg-neutral-900 dark:bg-neutral-100 text-white dark:text-neutral-900'
+                : 'bg-red-600 text-white'
+            }`}
+          >
+            {t.message}
+          </div>
+        ))}
+      </div>
+
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-semibold text-neutral-900 dark:text-neutral-100">Dữ liệu xe</h1>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={() => setModal({ type: 'upload' })}>
+            <Upload className="w-4 h-4 mr-2" />
+            Upload Excel
+          </Button>
+          <Button onClick={() => setModal({ type: 'create' })}>
+            <Plus className="w-4 h-4 mr-2" />
+            Tạo mới
+          </Button>
+        </div>
+      </div>
+
+      {/* Search */}
+      <Card>
+        <CardContent className="p-4">
+          <Input
+            placeholder="Tìm theo Biển số..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </CardContent>
+      </Card>
+
+      {/* Table */}
+      <Card>
+        <CardContent className="p-0">
+          {isLoading ? (
+            <div className="p-6 space-y-3">
+              {Array.from({ length: 5 }).map((_, i) => (
+                <div key={i} className="h-10 bg-neutral-100 dark:bg-neutral-800 rounded animate-pulse" />
+              ))}
+            </div>
+          ) : isError ? (
+            <div className="flex flex-col items-center justify-center py-16 gap-3 text-neutral-500 dark:text-neutral-400">
+              <AlertTriangle className="w-8 h-8 text-red-400" />
+              <p className="text-sm">Không thể tải dữ liệu.</p>
+              <Button variant="outline" size="sm" onClick={() => refetch()}>
+                <RefreshCw className="w-4 h-4 mr-2" />
+                Thử lại
+              </Button>
+            </div>
+          ) : filteredRows.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-16 gap-3 text-neutral-500 dark:text-neutral-400">
+              <p className="text-sm">
+                {search
+                  ? 'Không tìm thấy xe nào phù hợp.'
+                  : 'Chưa có dữ liệu. Nhấn "Tạo mới" để bắt đầu.'}
+              </p>
+              {!search && (
+                <Button size="sm" onClick={() => setModal({ type: 'create' })}>
+                  <Plus className="w-4 h-4 mr-2" />
+                  Tạo mới
+                </Button>
+              )}
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-36">Biển số</TableHead>
+                    <TableHead className="w-40">Loại</TableHead>
+                    <TableHead>Tài xế</TableHead>
+                    <TableHead className="w-44">Start Date</TableHead>
+                    <TableHead className="w-24">Thao tác</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredRows.map((row) => (
+                    <TableRow key={row.id}>
+                      <TableCell className="font-medium text-neutral-900 dark:text-neutral-100">
+                        {row.bien_so}
+                      </TableCell>
+                      <TableCell>
+                        <span
+                          className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
+                            LOAI_BADGE[row.loai] ?? 'bg-neutral-100 text-neutral-500 dark:bg-neutral-800 dark:text-neutral-400'
+                          }`}
+                        >
+                          {row.loai}
+                        </span>
+                      </TableCell>
+                      <TableCell
+                        className="text-neutral-500 dark:text-neutral-400 max-w-[16rem] truncate"
+                        title={row.tai_xe?.join(', ') || undefined}
+                      >
+                        {row.tai_xe && row.tai_xe.length > 0 ? row.tai_xe.join(', ') : '—'}
+                      </TableCell>
+                      <TableCell className="text-neutral-500 dark:text-neutral-400 text-sm">
+                        {formatDateTime(row.start_date)}
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-1">
+                          <button
+                            onClick={() => setModal({ type: 'edit', row })}
+                            className="p-1.5 text-neutral-400 dark:text-neutral-500 hover:text-neutral-600 dark:hover:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800 rounded transition-colors"
+                            title="Sửa"
+                          >
+                            <Pencil className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => setModal({ type: 'delete', row })}
+                            className="p-1.5 text-neutral-400 dark:text-neutral-500 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors"
+                            title="Xóa"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Create / Edit modal */}
+      <VehicleFormModal
+        isOpen={modal?.type === 'create' || modal?.type === 'edit'}
+        onClose={closeModal}
+        onSuccess={(msg) => showToast(msg)}
+        editRow={modal?.type === 'edit' ? modal.row : null}
+      />
+
+      {/* Upload modal */}
+      <VehicleUploadModal
+        isOpen={modal?.type === 'upload'}
+        onClose={closeModal}
+        onSuccess={(msg) => showToast(msg)}
+      />
+
+      {/* Delete confirm dialog */}
+      <Modal
+        isOpen={modal?.type === 'delete'}
+        onClose={closeModal}
+        title="Xác nhận xóa"
+        size="sm"
+      >
+        <div className="space-y-4">
+          {deleteError && (
+            <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-sm text-red-700 dark:text-red-400">
+              {deleteError}
+            </div>
+          )}
+          <div className="flex items-start gap-3">
+            <AlertTriangle className="w-5 h-5 text-red-500 mt-0.5 shrink-0" />
+            <p className="text-sm text-neutral-700 dark:text-neutral-300">
+              Bạn có chắc muốn xóa xe{' '}
+              <span className="font-semibold">
+                "{modal?.type === 'delete' ? modal.row.bien_so : ''}"
+              </span>
+              ?{' '}
+              <br />
+              Hành động này sẽ chuyển trạng thái thành "Deactive".
+            </p>
+          </div>
+          <div className="flex justify-end gap-3">
+            <Button variant="outline" onClick={closeModal}>
+              Hủy
+            </Button>
+            <Button
+              variant="danger"
+              isLoading={deleteVehicle.isPending}
+              onClick={handleDelete}
+            >
+              Xác nhận
+            </Button>
+          </div>
+        </div>
+      </Modal>
+    </div>
+  );
+}

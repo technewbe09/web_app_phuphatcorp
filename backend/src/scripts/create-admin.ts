@@ -15,16 +15,17 @@ async function createAdmin() {
   const hash = await bcrypt.hash(password, 10);
 
   const result = await pool.query(
-    `INSERT INTO users (email, password_hash, full_name, role)
-     VALUES ($1, $2, $3, $4)
+    `INSERT INTO users (email, username, password_hash, full_name, role)
+     VALUES ($1, $2, $3, $4, $5)
      ON CONFLICT (email) DO UPDATE SET password_hash = EXCLUDED.password_hash, full_name = EXCLUDED.full_name, role = EXCLUDED.role
-     RETURNING id, email, full_name, role`,
-    ['admin@phuphatcorp.com', hash, 'Quản trị viên', 'ADMIN']
+     RETURNING id, email, username, full_name, role`,
+    ['admin@phuphatcorp.com', 'admin', hash, 'Quản trị viên', 'ADMIN']
   );
 
   console.log('Admin user created/updated:');
   console.log(result.rows[0]);
   console.log(`\nEmail: admin@phuphatcorp.com`);
+  console.log(`Username: admin`);
   console.log(`Password: ${password}`);
 
   await pool.end();

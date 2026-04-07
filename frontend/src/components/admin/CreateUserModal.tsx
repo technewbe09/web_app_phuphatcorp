@@ -8,7 +8,7 @@ import { Select } from '../ui/Select';
 import { Button } from '../ui/Button';
 import { useCreateUser } from '../../hooks/useUsers';
 import { useI18n } from '../../i18n/useI18n';
-import { UserRole } from '../../types/user';
+import { useRoles } from '../../hooks/useRoles';
 
 interface Props {
   isOpen: boolean;
@@ -20,21 +20,19 @@ const schema = yup.object({
   full_name: yup.string().required('validation.required'),
   email: yup.string().required('validation.required').email('validation.email'),
   password: yup.string().required('validation.required').min(6, 'validation.minLength'),
-  role: yup.string().required('validation.required'),
+  role_id: yup.string().required('validation.required'),
 });
 
 type FormData = yup.InferType<typeof schema>;
 
-const roleOptions = [
-  { value: UserRole.VIEWER, label: 'users.roles.VIEWER' },
-  { value: UserRole.ACCOUNTANT, label: 'users.roles.ACCOUNTANT' },
-  { value: UserRole.ADMIN, label: 'users.roles.ADMIN' },
-];
-
 export function CreateUserModal({ isOpen, onClose, onSuccess }: Props) {
   const { t } = useI18n();
   const createUser = useCreateUser();
+  const { data: roles } = useRoles();
   const [serverError, setServerError] = useState('');
+
+  const activeRoles = roles?.filter((r) => r.is_active) ?? [];
+  const roleOptions = activeRoles.map((r) => ({ value: String(r.id), label: r.name }));
 
   const {
     register,
@@ -43,7 +41,6 @@ export function CreateUserModal({ isOpen, onClose, onSuccess }: Props) {
     formState: { errors },
   } = useForm<FormData>({
     resolver: yupResolver(schema),
-    defaultValues: { role: UserRole.VIEWER },
   });
 
   const onSubmit = async (data: FormData) => {
@@ -53,7 +50,7 @@ export function CreateUserModal({ isOpen, onClose, onSuccess }: Props) {
         full_name: data.full_name,
         email: data.email,
         password: data.password,
-        role: data.role,
+        role_id: parseInt(data.role_id, 10),
       });
       reset();
       onSuccess?.();
@@ -78,7 +75,7 @@ export function CreateUserModal({ isOpen, onClose, onSuccess }: Props) {
     <Modal isOpen={isOpen} onClose={handleClose} title={t('createUser.title')} size="md">
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
         {serverError && (
-          <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
+          <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-sm text-red-700 dark:text-red-400">
             {serverError}
           </div>
         )}
@@ -106,8 +103,8 @@ export function CreateUserModal({ isOpen, onClose, onSuccess }: Props) {
         <Select
           label={t('createUser.role')}
           options={roleOptions}
-          error={errors.role?.message ? t(errors.role.message) : undefined}
-          {...register('role')}
+          error={errors.role_id?.message ? t(errors.role_id.message) : undefined}
+          {...register('role_id')}
         />
 
         <div className="flex justify-end gap-3 pt-2">

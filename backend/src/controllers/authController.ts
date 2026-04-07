@@ -1,12 +1,17 @@
 import { Request, Response } from 'express';
 import { body, ValidationChain } from 'express-validator';
 import { authService } from '../services/authService';
-import { generateAccessToken, generateRefreshToken } from '../utils/jwt';
+import { generateAccessToken, generateRefreshToken, verifyToken } from '../utils/jwt';
 import { sendSuccess, sendError } from '../utils/response';
 import { AuthRequest } from '../middleware/auth';
 import { UserRole } from '../types/user';
+import { pool } from '../config/database';
 
 export const registerSchema: ValidationChain[] = [
+  body('username')
+    .notEmpty().withMessage('Username is required')
+    .isLength({ min: 3, max: 50 }).withMessage('Username must be 3-50 characters')
+    .matches(/^[a-zA-Z0-9_]+$/).withMessage('Username can only contain letters, numbers, and underscores'),
   body('email').isEmail().withMessage('Valid email is required'),
   body('password')
     .isLength({ min: 6 })
@@ -19,31 +24,40 @@ export const registerSchema: ValidationChain[] = [
 ];
 
 export const loginSchema: ValidationChain[] = [
-  body('email').isEmail().withMessage('Valid email is required'),
+  body('username').notEmpty().withMessage('Username is required'),
   body('password').notEmpty().withMessage('Password is required'),
 ];
+
+function setRefreshCookie(res: Response, token: string): void {
+  res.cookie('refreshToken', token, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    maxAge: 7 * 24 * 60 * 60 * 1000,
+  });
+}
 
 export const authController = {
   async register(req: Request, res: Response): Promise<void> {
     try {
-      const { email, password, full_name, role } = req.body;
+      const { username, email, password, full_name, role } = req.body;
 
-      const existing = await authService.findUserByEmail(email);
-      if (existing) {
+      const existingUsername = await authService.findUserByUsername(username);
+      if (existingUsername) {
+        sendError(res, 'Username already taken', 409);
+        return;
+      }
+
+      const existingEmail = await authService.findUserByEmail(email);
+      if (existingEmail) {
         sendError(res, 'Email already registered', 409);
         return;
       }
 
-      const user = await authService.createUser({ email, password, full_name, role });
+      const user = await authService.createUser({ username, email, password, full_name, role });
       const accessToken = generateAccessToken(user);
       const refreshToken = generateRefreshToken(user);
-
-      res.cookie('refreshToken', refreshToken, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'lax',
-        maxAge: 7 * 24 * 60 * 60 * 1000,
-      });
+      setRefreshCookie(res, refreshToken);
 
       sendSuccess(res, { user, accessToken }, 'Registration successful', 201);
     } catch (err) {
@@ -54,9 +68,9 @@ export const authController = {
 
   async login(req: Request, res: Response): Promise<void> {
     try {
-      const { email, password } = req.body;
+      const { username, password } = req.body;
 
-      const user = await authService.findUserByEmail(email);
+      const user = await authService.findUserByUsername(username);
       if (!user) {
         sendError(res, 'Invalid credentials', 401);
         return;
@@ -68,22 +82,16 @@ export const authController = {
         return;
       }
 
-      const userPublic = {
-        id: user.id,
-        email: user.email,
-        full_name: user.full_name,
-        role: user.role,
-      };
+      // Load full user data with permissions
+      const userPublic = await authService.findUserById(user.id);
+      if (!userPublic) {
+        sendError(res, 'User not found', 404);
+        return;
+      }
 
       const accessToken = generateAccessToken(userPublic);
       const refreshToken = generateRefreshToken(userPublic);
-
-      res.cookie('refreshToken', refreshToken, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'lax',
-        maxAge: 7 * 24 * 60 * 60 * 1000,
-      });
+      setRefreshCookie(res, refreshToken);
 
       sendSuccess(res, { user: userPublic, accessToken }, 'Login successful');
     } catch (err) {
@@ -100,7 +108,6 @@ export const authController = {
         return;
       }
 
-      const { verifyToken } = await import('../utils/jwt');
       const payload = verifyToken(refreshToken);
 
       const user = await authService.findUserById(payload.userId);
@@ -109,15 +116,22 @@ export const authController = {
         return;
       }
 
+      // Deny refresh if role has been deactivated
+      if (user.role_id) {
+        const roleCheck = await pool.query<{ is_active: boolean }>(
+          'SELECT is_active FROM roles WHERE id = $1',
+          [user.role_id],
+        );
+        if (!roleCheck.rows[0]?.is_active) {
+          res.clearCookie('refreshToken');
+          sendError(res, 'Vai trò của bạn đã bị thu hồi. Vui lòng liên hệ admin.', 403);
+          return;
+        }
+      }
+
       const newAccessToken = generateAccessToken(user);
       const newRefreshToken = generateRefreshToken(user);
-
-      res.cookie('refreshToken', newRefreshToken, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'lax',
-        maxAge: 7 * 24 * 60 * 60 * 1000,
-      });
+      setRefreshCookie(res, newRefreshToken);
 
       sendSuccess(res, { accessToken: newAccessToken }, 'Token refreshed');
     } catch {
