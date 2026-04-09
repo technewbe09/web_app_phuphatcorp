@@ -104,7 +104,8 @@
       "permissions": "Quyền hạn",
       "reports": "Báo cáo",
       "transport": "Vận tải",
-      "dispatch": "Điều hành vận tải"
+      "dispatch": "Điều hành vận tải",
+      "accounting_data": "Dữ liệu kế toán"
     },
     "permCodes": {
       "dashboard_view": "Xem Dashboard",
@@ -119,7 +120,9 @@
       "transport_view": "Xem dữ liệu vận tải",
       "transport_manage": "Quản lý dữ liệu vận tải",
       "dispatch_view": "Xem bảng điều phối",
-      "dispatch_manage": "Điều phối xe"
+      "dispatch_manage": "Điều phối xe",
+      "accounting_data_view": "Xem dữ liệu kế toán",
+      "accounting_data_manage": "Quản lý dữ liệu kế toán"
     }
   },
   "createUser": {
@@ -175,6 +178,77 @@
     "updateSuccess": "Cập nhật người dùng thành công",
     "deleteSuccess": "Xóa người dùng thành công",
     "error": "Đã xảy ra lỗi. Vui lòng thử lại."
+  },
+  "accountingData": {
+    "menuTitle": "Quản lý dữ liệu kế toán",
+    "weightAdjustment": "Điều chỉnh trọng lượng"
+  },
+  "weightAdjustment": {
+    "pageTitle": "Điều chỉnh trọng lượng",
+    "addNew": "Tạo mới",
+    "uploadExcel": "Upload Excel",
+    "search": "Tìm theo Mã hàng hoặc Tên hàng...",
+    "columns": {
+      "maHang": "Mã hàng hóa",
+      "tenHang": "Tên hàng hóa",
+      "giaTriCu": "Giá trị cũ",
+      "giaTriDieuChinh": "Giá trị điều chỉnh",
+      "version": "Version",
+      "actionType": "Hành động",
+      "actionBy": "Người thực hiện",
+      "startDate": "Ngày hiệu lực",
+      "actions": "Thao tác"
+    },
+    "actionTypes": {
+      "create": "Tạo mới",
+      "update": "Cập nhật",
+      "upload": "Upload"
+    },
+    "form": {
+      "createTitle": "Thêm điều chỉnh trọng lượng",
+      "editTitle": "Sửa điều chỉnh trọng lượng",
+      "maHang": "Mã hàng hóa",
+      "tenHang": "Tên hàng hóa",
+      "giaTriCu": "Giá trị cũ",
+      "giaTriDieuChinh": "Giá trị điều chỉnh",
+      "cancel": "Hủy",
+      "save": "Lưu",
+      "saving": "Đang lưu..."
+    },
+    "upload": {
+      "title": "Upload Excel — Điều chỉnh trọng lượng",
+      "dropzone": "Kéo thả file hoặc click để chọn",
+      "accepts": "Chấp nhận: .xlsx",
+      "preview": "{count} bản ghi",
+      "import": "Import",
+      "importing": "Đang import...",
+      "errorTableRow": "Dòng",
+      "errorTableMaHang": "Mã hàng",
+      "errorTableReason": "Lý do"
+    },
+    "delete": {
+      "title": "Xác nhận xóa",
+      "confirm": "Bạn có chắc muốn xóa bản ghi Mã hàng: \"{maHang}\"? Hành động này sẽ deactivate bản ghi.",
+      "cancel": "Hủy",
+      "submit": "Xác nhận"
+    },
+    "empty": "Chưa có dữ liệu. Nhấn \"Tạo mới\" để bắt đầu.",
+    "emptySearch": "Không tìm thấy kết quả phù hợp.",
+    "loadError": "Không thể tải dữ liệu.",
+    "retry": "Thử lại",
+    "createSuccess": "Thêm thành công!",
+    "updateSuccess": "Cập nhật thành công!",
+    "deleteSuccess": "Đã xóa bản ghi.",
+    "uploadSuccess": "Đã import {count} bản ghi.",
+    "duplicateError": "Mã hàng hóa đã tồn tại",
+    "validation": {
+      "maHangRequired": "Mã hàng hóa là bắt buộc",
+      "maHangMaxLength": "Tối đa 100 ký tự",
+      "tenHangRequired": "Tên hàng hóa là bắt buộc",
+      "tenHangMaxLength": "Tối đa 255 ký tự",
+      "giaTriDieuChinhRequired": "Giá trị điều chỉnh là bắt buộc",
+      "giaTriMin": "Giá trị phải >= 0"
+    }
   },
   "vehicleData": {
     "menuTitle": "Quản lý dữ liệu xe",

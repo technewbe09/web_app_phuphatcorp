@@ -10,9 +10,76 @@ import {
 import { Button } from '../../components/ui/Button';
 import { Card, CardContent, CardHeader } from '../../components/ui/Card';
 import { cn } from '../../utils/cn';
-import { processDeliveryData, type ProcessResult } from '../../utils/processDeliveryData';
+import {
+  parseDeliveryFile,
+  processDeliveryDataFromRows,
+  type ProcessResult,
+  type ParsedFileData,
+  type RawRow,
+  COL,
+  cell,
+} from '../../utils/processDeliveryData';
+import { weightAdjustmentApi, type WeightAdjustment } from '../../api/weightAdjustmentApi';
+import {
+  WeightAdjustmentConfirmDialog,
+  type AdjustmentRow,
+} from '../../components/delivery-data/WeightAdjustmentConfirmDialog';
 
-type PageState = 'idle' | 'processing' | 'success' | 'error';
+type PageState = 'idle' | 'verifying' | 'awaiting_confirmation' | 'processing' | 'success' | 'error';
+
+function buildAdjustments(
+  rawRows: RawRow[],
+  sourceRowNums: number[],
+  masterMap: Map<string, WeightAdjustment>
+): AdjustmentRow[] {
+  const result: AdjustmentRow[] = [];
+  rawRows.forEach((row, idx) => {
+    const maHang = cell(row, COL.MA_HANG);
+    const master = masterMap.get(maHang);
+    if (!master) return;
+
+    const tenHangFile = cell(row, COL.TEN_HANG_HOA);
+    const spTrongLuongGoc = Number(row[COL.SP_TRONG_LUONG]) || 0;
+
+    const nameMatches = tenHangFile.trim() === master.ten_hang.trim();
+    if (nameMatches) {
+      // Use gia_tri_cu — only if it's not null
+      if (master.gia_tri_cu === null || master.gia_tri_cu === undefined) return;
+      result.push({
+        rawRowIndex: idx,
+        sourceRowNum: sourceRowNums[idx],
+        maHang,
+        tenHangFile,
+        tenHangMaster: master.ten_hang,
+        spTrongLuongGoc,
+        giaTriApDung: master.gia_tri_cu,
+        lyDo: 'gia_tri_cu',
+      });
+    } else {
+      result.push({
+        rawRowIndex: idx,
+        sourceRowNum: sourceRowNums[idx],
+        maHang,
+        tenHangFile,
+        tenHangMaster: master.ten_hang,
+        spTrongLuongGoc,
+        giaTriApDung: master.gia_tri_dieu_chinh,
+        lyDo: 'gia_tri_dieu_chinh',
+      });
+    }
+  });
+  return result;
+}
+
+function applyAdjustments(rawRows: RawRow[], adjustments: AdjustmentRow[]): RawRow[] {
+  const modified = rawRows.map((row) => [...row] as RawRow);
+  for (const adj of adjustments) {
+    modified[adj.rawRowIndex][COL.SP_TRONG_LUONG] = adj.giaTriApDung;
+    const soLuong = Number(modified[adj.rawRowIndex][COL.SO_LUONG]) || 0;
+    modified[adj.rawRowIndex][COL.HD_TRONG_LUONG] = soLuong * adj.giaTriApDung;
+  }
+  return modified;
+}
 
 export function DeliveryDataPage() {
   const [pageState, setPageState] = useState<PageState>('idle');
@@ -20,6 +87,8 @@ export function DeliveryDataPage() {
   const [isDragOver, setIsDragOver] = useState(false);
   const [result, setResult] = useState<ProcessResult | null>(null);
   const [errorMessage, setErrorMessage] = useState<string>('');
+  const [parsedFileData, setParsedFileData] = useState<ParsedFileData | null>(null);
+  const [adjustments, setAdjustments] = useState<AdjustmentRow[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileChange = useCallback((file: File) => {
@@ -41,12 +110,10 @@ export function DeliveryDataPage() {
     [handleFileChange]
   );
 
-  const handleProcess = useCallback(async () => {
-    if (!selectedFile) return;
+  const runProcess = useCallback(async (rows: RawRow[], nums: number[]) => {
     setPageState('processing');
-    setErrorMessage('');
     try {
-      const processResult = await processDeliveryData(selectedFile);
+      const processResult = await processDeliveryDataFromRows(rows, nums);
       setResult(processResult);
       setPageState('success');
     } catch (err) {
@@ -54,7 +121,42 @@ export function DeliveryDataPage() {
       setErrorMessage(msg);
       setPageState('error');
     }
-  }, [selectedFile]);
+  }, []);
+
+  const handleProcess = useCallback(async () => {
+    if (!selectedFile) return;
+    setPageState('verifying');
+    setErrorMessage('');
+    try {
+      const parsed = await parseDeliveryFile(selectedFile);
+      const masterdata = await weightAdjustmentApi.fetchAll();
+      const masterMap = new Map(masterdata.map((m) => [m.ma_hang, m]));
+      const found = buildAdjustments(parsed.rawRows, parsed.sourceRowNums, masterMap);
+
+      if (found.length === 0) {
+        await runProcess(parsed.rawRows, parsed.sourceRowNums);
+      } else {
+        setParsedFileData(parsed);
+        setAdjustments(found);
+        setPageState('awaiting_confirmation');
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Lỗi kiểm tra dữ liệu. Vui lòng thử lại.';
+      setErrorMessage(msg);
+      setPageState('error');
+    }
+  }, [selectedFile, runProcess]);
+
+  const handleConfirmAdjustments = useCallback(async () => {
+    if (!parsedFileData) return;
+    const modifiedRows = applyAdjustments(parsedFileData.rawRows, adjustments);
+    await runProcess(modifiedRows, parsedFileData.sourceRowNums);
+  }, [parsedFileData, adjustments, runProcess]);
+
+  const handleSkipAdjustments = useCallback(async () => {
+    if (!parsedFileData) return;
+    await runProcess(parsedFileData.rawRows, parsedFileData.sourceRowNums);
+  }, [parsedFileData, runProcess]);
 
   const handleDownload = useCallback(() => {
     if (!result) return;
@@ -73,8 +175,13 @@ export function DeliveryDataPage() {
     setSelectedFile(null);
     setResult(null);
     setErrorMessage('');
+    setParsedFileData(null);
+    setAdjustments([]);
     if (fileInputRef.current) fileInputRef.current.value = '';
   }, []);
+
+  const isSpinnerState = pageState === 'verifying' || pageState === 'processing';
+  const spinnerText = pageState === 'verifying' ? 'Đang kiểm tra dữ liệu...' : 'Đang xử lý...';
 
   return (
     <div className="p-8 max-w-3xl">
@@ -87,13 +194,13 @@ export function DeliveryDataPage() {
       </div>
 
       {/* Upload Zone */}
-      {(pageState === 'idle' || pageState === 'processing' || pageState === 'error') && (
+      {(pageState === 'idle' || isSpinnerState || pageState === 'error' || pageState === 'awaiting_confirmation') && (
         <Card>
           <CardContent className="pt-6">
             <div
               className={cn(
                 'border-2 border-dashed rounded-lg p-10 text-center transition-colors cursor-pointer',
-                pageState === 'processing'
+                isSpinnerState || pageState === 'awaiting_confirmation'
                   ? 'border-neutral-200 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-800/50 pointer-events-none'
                   : isDragOver
                     ? 'border-neutral-800 dark:border-neutral-300 bg-neutral-50 dark:bg-neutral-800/50'
@@ -101,11 +208,11 @@ export function DeliveryDataPage() {
               )}
               onDragOver={(e) => {
                 e.preventDefault();
-                if (pageState !== 'processing') setIsDragOver(true);
+                if (!isSpinnerState && pageState !== 'awaiting_confirmation') setIsDragOver(true);
               }}
               onDragLeave={() => setIsDragOver(false)}
               onDrop={handleDrop}
-              onClick={() => pageState !== 'processing' && fileInputRef.current?.click()}
+              onClick={() => !isSpinnerState && pageState !== 'awaiting_confirmation' && fileInputRef.current?.click()}
             >
               <input
                 ref={fileInputRef}
@@ -118,10 +225,10 @@ export function DeliveryDataPage() {
                 }}
               />
 
-              {pageState === 'processing' ? (
+              {isSpinnerState ? (
                 <div className="flex flex-col items-center gap-3">
                   <Loader2 className="w-10 h-10 text-neutral-600 dark:text-neutral-400 animate-spin" />
-                  <p className="text-base font-medium text-neutral-700 dark:text-neutral-300">Đang xử lý...</p>
+                  <p className="text-base font-medium text-neutral-700 dark:text-neutral-300">{spinnerText}</p>
                   <p className="text-sm text-neutral-500 dark:text-neutral-400">Vui lòng đợi trong giây lát</p>
                 </div>
               ) : (
@@ -198,6 +305,14 @@ export function DeliveryDataPage() {
           </CardContent>
         </Card>
       )}
+
+      {/* Weight Adjustment Confirmation Dialog */}
+      <WeightAdjustmentConfirmDialog
+        isOpen={pageState === 'awaiting_confirmation'}
+        adjustments={adjustments}
+        onConfirm={handleConfirmAdjustments}
+        onSkip={handleSkipAdjustments}
+      />
 
       {/* Success Result */}
       {pageState === 'success' && result && (

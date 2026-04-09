@@ -13,6 +13,7 @@ import { DriverPage } from './pages/admin/vehicle-data/DriverPage';
 import { RoleManagementPage } from './pages/admin/RoleManagementPage';
 import { PermissionManagementPage } from './pages/admin/PermissionManagementPage';
 import { SchedulePage } from './pages/dispatch/SchedulePage';
+import { WeightAdjustmentPage } from './pages/admin/accounting-data/WeightAdjustmentPage';
 
 function PlaceholderPage({ title }: { title: string }) {
   return (
@@ -50,6 +51,8 @@ export function Router() {
             <Route path="/vehicle-data/drivers" element={<DriverPage />} />
             {/* Dispatch */}
             <Route path="/dispatch/schedule" element={<SchedulePage />} />
+            {/* Accounting Data */}
+            <Route path="/accounting-data/weight-adjustments" element={<WeightAdjustmentPage />} />
           </Route>
         </Route>
 

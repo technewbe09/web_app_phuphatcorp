@@ -6,6 +6,19 @@ description: Ghi lại các bài học kinh nghiệm, bug đã fix, và pitfalls
 
 ## Bugs & Fixes
 
+### CORS block local dev khi .env config cho prod — Single origin limitation
+- **Ngày:** 2026-04-08
+- **Severity:** Critical
+- **Feature liên quan:** Toàn bộ app — Authentication, mọi API calls
+- **Triệu chứng:** Local frontend (`http://localhost:5173`) bị block CORS với error "Access-Control-Allow-Origin header has a value 'https://phuphatcorp.scrapetool.cloud' that is not equal to the supplied origin". Developer không thể test local khi backend config cho prod.
+- **Root cause:** `app.ts` dùng `process.env.CORS_ORIGIN || 'http://localhost:5173'` (single string). Khi `.env` set `CORS_ORIGIN=https://phuphatcorp.scrapetool.cloud` để serve prod → override default local origin → chỉ prod được phép, local bị reject. CORS middleware của express chỉ accept **1 origin duy nhất** khi config là string, không support multiple origins.
+- **Fix:** Thay `origin: string` bằng `origin: function(origin, callback)` để validate dynamic. Whitelist hardcoded: `['http://localhost:5173', 'http://localhost:5174', 'https://phuphatcorp.scrapetool.cloud']`. Function check `allowedOrigins.includes(origin)` → accept/reject. Requests không có origin header (curl, mobile apps) được phép (no-origin check).
+- **File sửa:** `backend/src/app.ts:11-26` — thay CORS config
+- **Regression test:** curl OPTIONS với 3 origins → localhost:5173 ✅, prod ✅, evil.com ❌
+- **Cần chú ý:** Khi cần support multiple origins, không dùng array trực tiếp (`origin: [...]`) vì không flexible. Dùng function validator để có thể log/debug origin nào bị reject. Whitelist nên include cả backup ports (`localhost:5174`) để tránh conflict khi port 5173 bị chiếm. Không nên dùng `CORS_ORIGIN` env var nữa vì logic đã chuyển sang whitelist cứng — dễ maintain và tránh misconfigure giữa env.
+
+---
+
 ### CORS block production frontend — NODE_ENV không được đọc đúng
 - **Ngày:** 2026-04-07
 - **Severity:** Critical

@@ -262,7 +262,9 @@ User upload file .xlsx ERP (Delivery Report)
 | Số lượng (DVT bán hàng) | 27 | SO_LUONG |
 | SP Trọng lượng net | 18 | SP_TRONG_LUONG |
 | HĐ Trọng lượng (Net) | 19 | HD_TRONG_LUONG |
-| Round(MT) | — | HD_TRONG_LUONG / 1000 per row, làm tròn 2 chữ số thập phân |
+| Round(MT) | — | HD_TRONG_LUONG / 1000 per row, làm tròn 3 chữ số thập phân |
+| Col1 (không tiêu đề) | — | Dòng đầu tiên của khối = tổng Round(MT) khối; các dòng còn lại = 0 |
+| Col2 (không tiêu đề) | — | Tất cả dòng trong khối = tổng Round(MT) khối |
 | CLF | — | Factory col: first row of invoice = SUM(Round(MT)) nếu MA_NCC=2000000001, else 0; other rows = 0; inactive factories = '' |
 | VFM | — | Factory col: MA_NCC=2100000002 |
 | MCC | — | Factory col: MA_NCC=2000000007 |
@@ -294,11 +296,35 @@ User upload file .xlsx ERP (Delivery Report)
 - **BR-005:** Output có 1 separator row giữa các nhóm (không có giữa row cuối và end-of-file). Separator row hiển thị SUM tại các cột: Round(MT), CLF, VFM, MCC, CLV, NDFC ('' nếu factory đó không có invoice trong nhóm)
 - **BR-006:** Ngày HĐ là Excel serial number → convert sang DD/MM/YYYY string trong output
 
-### 5.4 Files liên quan
+### 5.4 Verify trọng lượng (Weight Adjustment Check)
+
+Trước khi xử lý chính, hệ thống tự động kiểm tra từng dòng với masterdata "điều chỉnh trọng lượng":
 
 ```
-src/utils/processDeliveryData.ts   ← core processing logic (browser, no backend)
-src/pages/admin/DeliveryDataPage.tsx ← UI page (upload zone, result, download)
+User click "Xử lý"
+  → [verifying] parse file + fetch /api/weight-adjustments
+  → So sánh từng dòng:
+      - MA_HANG (col 23) có trong masterdata?
+        - Có: so sánh TEN_HANG_HOA (col 16) với masterdata.ten_hang
+          - Trùng tên → dùng gia_tri_cu thay thế SP_TRONG_LUONG (col 18)
+          - Khác tên → dùng gia_tri_dieu_chinh thay thế SP_TRONG_LUONG (col 18)
+          - Sau đó: HD_TRONG_LUONG (col 19) = SO_LUONG (col 27) × SP_TRONG_LUONG mới
+          - Nếu MA_HANG khớp + tên trùng + gia_tri_cu = NULL → bỏ qua dòng này
+        - Không: giữ nguyên
+  → Không có thay đổi → xử lý trực tiếp
+  → Có thay đổi → hiện WeightAdjustmentConfirmDialog
+      - Xác nhận → áp dụng → xử lý
+      - Bỏ qua   → xử lý nguyên gốc
+```
+
+### 5.5 Files liên quan
+
+```
+src/utils/processDeliveryData.ts   ← exports: parseDeliveryFile(), processDeliveryDataFromRows(),
+                                      processDeliveryData() (wrapper), COL, RawRow, ParsedFileData
+src/pages/admin/DeliveryDataPage.tsx ← UI page với verify flow
+src/components/delivery-data/WeightAdjustmentConfirmDialog.tsx ← modal xác nhận điều chỉnh
+src/api/weightAdjustmentApi.ts     ← fetchAll() dùng để load masterdata
 ```
 
 ### 5.5 Access
@@ -448,7 +474,73 @@ frontend/src/pages/admin/vehicle-data/DriverPage.tsx
 
 ---
 
-## 6. Planned Features (Chưa Implement)
+## 11. Quản lý dữ liệu kế toán
+
+### 11.1 Điều chỉnh trọng lượng (/accounting-data/weight-adjustments)
+
+**Mục đích:** Masterdata điều chỉnh trọng lượng hàng hóa — cho phép lưu giá trị cũ và giá trị điều chỉnh theo từng mã hàng, có tracking version đầy đủ.
+
+**Data model — bảng `weight_adjustments`:**
+```sql
+weight_adjustments (
+  id SERIAL PK,
+  ma_hang VARCHAR(100) NOT NULL,          -- Mã hàng hóa
+  ten_hang VARCHAR(255) NOT NULL,          -- Tên hàng hóa
+  gia_tri_cu NUMERIC(15,3),               -- Giá trị cũ, nullable
+  gia_tri_dieu_chinh NUMERIC(15,3) NOT NULL, -- Giá trị điều chỉnh
+  status VARCHAR(20) DEFAULT 'active',    -- 'active' | 'deactive'
+  version INTEGER DEFAULT 1,              -- tăng mỗi lần soft-update
+  start_date TIMESTAMPTZ DEFAULT NOW(),   -- khi version này có hiệu lực
+  end_date TIMESTAMPTZ,                   -- null nếu vẫn active
+  action_type VARCHAR(20),                -- 'create' | 'update' | 'delete' | 'upload'
+  action_by INTEGER FK→users.id,          -- user thực hiện
+  action_by_name VARCHAR(255),            -- denormalized full_name
+  created_at TIMESTAMPTZ, updated_at TIMESTAMPTZ
+)
+```
+
+**Business Rules:**
+- BR-001: `ma_hang` UNIQUE trong active rows
+- BR-002: Soft-update: deactivate row cũ + INSERT mới với `version+1`, `action_type=update`
+- BR-003: Soft-delete: UPDATE `status=deactive`, `action_type=delete`
+- BR-004: Create: version=1, action_type=create
+- BR-005: Upload: fail-fast (in-file + DB duplicate check), action_type=upload
+- BR-006: `gia_tri_cu` nullable (lần đầu nhập có thể không có giá trị cũ)
+- BR-007: `action_by_name` denormalized để bảo toàn lịch sử khi user bị xóa
+
+**API Endpoints:**
+```
+GET    /api/weight-adjustments          → list active rows (accounting_data.view)
+POST   /api/weight-adjustments          → create (accounting_data.manage)
+PUT    /api/weight-adjustments/:id      → soft-update (accounting_data.manage)
+DELETE /api/weight-adjustments/:id      → soft-delete (accounting_data.manage)
+POST   /api/weight-adjustments/upload   → bulk insert fail-fast (accounting_data.manage)
+```
+
+**Permissions:**
+| Code | Role mặc định |
+|------|--------------|
+| accounting_data.view | ADMIN, ACCOUNTANT, VIEWER |
+| accounting_data.manage | ADMIN, ACCOUNTANT |
+
+**Files:**
+```
+backend/src/migrations/009_create_weight_adjustments.sql
+backend/src/services/weightAdjustmentService.ts
+backend/src/controllers/weightAdjustmentController.ts
+backend/src/routes/weightAdjustments.ts
+backend/src/__tests__/weightAdjustmentService.test.ts
+frontend/src/api/weightAdjustmentApi.ts
+frontend/src/hooks/useWeightAdjustments.ts
+frontend/src/pages/admin/accounting-data/WeightAdjustmentPage.tsx
+frontend/src/components/accounting-data/WeightAdjustmentFormModal.tsx
+frontend/src/components/accounting-data/WeightAdjustmentUploadModal.tsx
+```
+
+**Access:** Route `/accounting-data/weight-adjustments`, sidebar menu "Quản lý dữ liệu kế toán" → "Điều chỉnh trọng lượng"
+
+---
+
 
 - [ ] Trang Sổ kế toán (/accounting) — CRUD phiếu thu/chi, nhật ký chứng từ
 - [ ] Trang Báo cáo (/reports) — báo cáo tài chính, biểu đồ doanh thu

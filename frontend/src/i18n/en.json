@@ -104,7 +104,8 @@
       "permissions": "Permissions",
       "reports": "Reports",
       "transport": "Transport",
-      "dispatch": "Transport Operations"
+      "dispatch": "Transport Operations",
+      "accounting_data": "Accounting Data"
     },
     "permCodes": {
       "dashboard_view": "View Dashboard",
@@ -119,7 +120,9 @@
       "transport_view": "View Transport Data",
       "transport_manage": "Manage Transport Data",
       "dispatch_view": "View Dispatch Board",
-      "dispatch_manage": "Manage Dispatch"
+      "dispatch_manage": "Manage Dispatch",
+      "accounting_data_view": "View Accounting Data",
+      "accounting_data_manage": "Manage Accounting Data"
     }
   },
   "createUser": {
@@ -175,6 +178,77 @@
     "updateSuccess": "User updated successfully",
     "deleteSuccess": "User deleted successfully",
     "error": "An error occurred. Please try again."
+  },
+  "accountingData": {
+    "menuTitle": "Accounting Data",
+    "weightAdjustment": "Weight Adjustment"
+  },
+  "weightAdjustment": {
+    "pageTitle": "Weight Adjustment",
+    "addNew": "Add New",
+    "uploadExcel": "Upload Excel",
+    "search": "Search by Product Code or Name...",
+    "columns": {
+      "maHang": "Product Code",
+      "tenHang": "Product Name",
+      "giaTriCu": "Old Value",
+      "giaTriDieuChinh": "Adjusted Value",
+      "version": "Version",
+      "actionType": "Action",
+      "actionBy": "Performed By",
+      "startDate": "Effective Date",
+      "actions": "Actions"
+    },
+    "actionTypes": {
+      "create": "Created",
+      "update": "Updated",
+      "upload": "Uploaded"
+    },
+    "form": {
+      "createTitle": "Add Weight Adjustment",
+      "editTitle": "Edit Weight Adjustment",
+      "maHang": "Product Code",
+      "tenHang": "Product Name",
+      "giaTriCu": "Old Value",
+      "giaTriDieuChinh": "Adjusted Value",
+      "cancel": "Cancel",
+      "save": "Save",
+      "saving": "Saving..."
+    },
+    "upload": {
+      "title": "Upload Excel — Weight Adjustment",
+      "dropzone": "Drag & drop or click to select file",
+      "accepts": "Accepts: .xlsx",
+      "preview": "{count} records",
+      "import": "Import",
+      "importing": "Importing...",
+      "errorTableRow": "Row",
+      "errorTableMaHang": "Product Code",
+      "errorTableReason": "Reason"
+    },
+    "delete": {
+      "title": "Confirm Delete",
+      "confirm": "Are you sure you want to delete record Product Code: \"{maHang}\"? This will deactivate the record.",
+      "cancel": "Cancel",
+      "submit": "Confirm"
+    },
+    "empty": "No data yet. Click \"Add New\" to start.",
+    "emptySearch": "No results found.",
+    "loadError": "Failed to load data.",
+    "retry": "Retry",
+    "createSuccess": "Added successfully!",
+    "updateSuccess": "Updated successfully!",
+    "deleteSuccess": "Record deleted.",
+    "uploadSuccess": "Imported {count} records.",
+    "duplicateError": "Product code already exists",
+    "validation": {
+      "maHangRequired": "Product code is required",
+      "maHangMaxLength": "Maximum 100 characters",
+      "tenHangRequired": "Product name is required",
+      "tenHangMaxLength": "Maximum 255 characters",
+      "giaTriDieuChinhRequired": "Adjusted value is required",
+      "giaTriMin": "Value must be >= 0"
+    }
   },
   "vehicleData": {
     "menuTitle": "Vehicle Data",

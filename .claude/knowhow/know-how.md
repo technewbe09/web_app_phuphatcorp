@@ -282,6 +282,7 @@ Base URL: `/api`
 | /vehicle-data/vehicles | MainLayout | Protected | VehiclePage |
 | /vehicle-data/drivers | MainLayout | Protected | DriverPage |
 | /dispatch/schedule | MainLayout | Protected | SchedulePage (Bảng điều phối xe) |
+| /accounting-data/weight-adjustments | MainLayout | Protected | WeightAdjustmentPage (Điều chỉnh trọng lượng) |
 | * | — | — | Navigate to / |
 
 **Router pattern:** Dùng `BrowserRouter` + JSX `<Routes>` (KHÔNG dùng `createBrowserRouter` vì gây lỗi React context với AuthProvider).
@@ -346,5 +347,5 @@ psql -h 72.61.124.36 -p 5443 -U postgres -d test_PhuPhatCorp -f src/migrations/0
 - **API response:** Luôn wrap trong `{ success, message, data }` — frontend authApi unwrap: `response.data.data`
 - **Password:** bcrypt hashSync (salt rounds = 10), KHÔNG bao giờ trả `password_hash` về client
 - **JWT:** Cùng secret cho cả access + refresh token
-- **CORS:** Dùng `CORS_ORIGIN` env var (default `http://localhost:5173`). Set `CORS_ORIGIN=https://phuphatcorp.scrapetool.cloud` trên prod. Không dùng `NODE_ENV` để quyết định CORS origin.
+- **CORS:** Whitelist hardcoded trong `app.ts` gồm: `localhost:5173`, `localhost:5174`, `phuphatcorp.scrapetool.cloud`. Dùng function validator `origin: (origin, callback)` để support multiple origins. Requests không có origin header (curl, mobile) được phép. Không dùng `CORS_ORIGIN` env var nữa — whitelist cứng dễ maintain hơn.
 - **.env:** KHÔNG commit git
