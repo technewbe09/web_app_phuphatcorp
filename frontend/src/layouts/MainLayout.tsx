@@ -16,6 +16,8 @@ import {
   Lock,
   Settings,
   CalendarRange,
+  BookOpen,
+  Scale,
 } from 'lucide-react';
 import { cn } from '../utils/cn';
 import { useAuth } from '../hooks/useAuth';
@@ -24,6 +26,7 @@ import { ThemeToggle } from '../components/ui/ThemeToggle';
 
 const USER_SETTINGS_ROUTES = ['/users', '/roles', '/permissions'];
 const DISPATCH_ROUTES = ['/dispatch'];
+const ACCOUNTING_DATA_ROUTES = ['/accounting-data'];
 
 export function MainLayout() {
   const { user, logout, hasPermission, hasAnyPermission } = useAuth();
@@ -36,6 +39,9 @@ export function MainLayout() {
   );
   const [dispatchOpen, setDispatchOpen] = useState(
     DISPATCH_ROUTES.some((p) => location.pathname.startsWith(p)),
+  );
+  const [accountingDataOpen, setAccountingDataOpen] = useState(
+    ACCOUNTING_DATA_ROUTES.some((p) => location.pathname.startsWith(p)),
   );
   const [userSettingsOpen, setUserSettingsOpen] = useState(
     USER_SETTINGS_ROUTES.some((p) => location.pathname.startsWith(p)),
@@ -70,6 +76,9 @@ export function MainLayout() {
   const showDispatch = hasAnyPermission(['dispatch.view', 'dispatch.manage'])
     || user?.role === 'ADMIN';
 
+  const showAccountingData = hasAnyPermission(['accounting_data.view', 'accounting_data.manage'])
+    || user?.role === 'ADMIN';
+
   const userSettingsSubItems = [
     hasPermission('users.view') || user?.role === 'ADMIN'
       ? { to: '/users', icon: Users, label: t('sidebar.userManagement') }
@@ -86,6 +95,11 @@ export function MainLayout() {
     location.pathname.startsWith(p),
   );
   const isDispatchActive = DISPATCH_ROUTES.some((p) => location.pathname.startsWith(p));
+  const isAccountingDataActive = ACCOUNTING_DATA_ROUTES.some((p) => location.pathname.startsWith(p));
+
+  const accountingDataSubItems = [
+    { to: '/accounting-data/weight-adjustments', icon: Scale, label: t('accountingData.weightAdjustment' as never) },
+  ];
 
   const renderSubGroup = (
     label: string,
@@ -252,6 +266,16 @@ export function MainLayout() {
             dispatchOpen,
             () => setDispatchOpen((o) => !o),
             isDispatchActive,
+          )}
+
+          {/* Quản lý dữ liệu kế toán collapsible group */}
+          {showAccountingData && renderSubGroup(
+            t('accountingData.menuTitle' as never),
+            BookOpen,
+            accountingDataSubItems,
+            accountingDataOpen,
+            () => setAccountingDataOpen((o) => !o),
+            isAccountingDataActive,
           )}
 
           {/* Thiết lập người dùng collapsible group */}

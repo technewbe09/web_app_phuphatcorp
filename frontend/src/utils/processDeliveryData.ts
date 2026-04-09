@@ -11,14 +11,14 @@
  * 4. Sort each group by Số hóa đơn ascending (numeric-aware)
  * 5. Sort groups by Ngày HĐ ASC then Số tàu/xe ASC
  * 6. Calculate Round(MT) per group = SUM(HĐ-Trọng lượng Net) / 1000 (3 decimal places)
- * 7. Write output Excel with 32 output columns, blank row separator between groups
+ * 7. Write output Excel with output columns, blank row separator between groups
  */
 
 import * as XLSX from 'xlsx';
 import { Workbook } from 'exceljs';
 
 // ─── Column index mapping from source file ────────────────────────────────────
-const COL = {
+export const COL = {
   CHANNEL: 0,
   SUB_CHANNEL: 1,
   DIEN_GIAI_CT: 2,
@@ -90,6 +90,8 @@ const OUTPUT_HEADERS = [
   'MCC',
   'CLV',
   'NDFC',
+  '',
+  '',
   'Tài xế',
   'Thông tin bổ sung',
   'Slot',
@@ -131,6 +133,8 @@ const COL_WIDTHS = [
   { wch: 10 },  // MCC
   { wch: 10 },  // CLV
   { wch: 10 },  // NDFC
+  { wch: 12 },  // Col1 (tổng đầu khối)
+  { wch: 12 },  // Col2 (tổng tất cả dòng)
   { wch: 20 },  // Tài xế
   { wch: 20 },  // Thông tin bổ sung
   { wch: 15 },  // Slot
@@ -150,12 +154,17 @@ const COL_WIDTHS = [
 ];
 
 // ─── Types ────────────────────────────────────────────────────────────────────
-type RawRow = (string | number | boolean | null | undefined)[];
+export type RawRow = (string | number | boolean | null | undefined)[];
 
 interface GroupData {
   vehicle: string;
   date: string | number;
   rows: RawRow[];
+}
+
+export interface ParsedFileData {
+  rawRows: RawRow[];
+  sourceRowNums: number[];
 }
 
 export interface ProcessResult {
@@ -195,7 +204,7 @@ function excelDateToString(value: string | number | null | undefined): string {
 /**
  * Get a cell value safely from a row array.
  */
-function cell(row: RawRow, index: number): string {
+export function cell(row: RawRow, index: number): string {
   const val = row[index];
   if (val === null || val === undefined) return '';
   return String(val);
@@ -206,10 +215,10 @@ function cell(row: RawRow, index: number): string {
  * factoryVals: { CLF, VFM, MCC, CLV, NDFC } — value for the row's factory col,
  *   '' for inactive factory cols.
  */
-function mapRowToOutput(row: RawRow, factoryVals: Record<string, string | number>): (string | number)[] {
-  const roundMT = Math.round((Number(row[COL.HD_TRONG_LUONG]) || 0) / 1000 * 100) / 100;
+function mapRowToOutput(row: RawRow, factoryVals: Record<string, string | number>, isFirstInGroup: boolean, groupRoundMTTotal: number): (string | number)[] {
+  const roundMT = Math.round((Number(row[COL.HD_TRONG_LUONG]) || 0) / 1000 * 1000) / 1000;
   return [
-    cell(row, COL.MA_NCC),
+    cell(row, COL.MA_NCC) || 'CLV',
     cell(row, COL.SO_HD),
     excelDateToString(row[COL.NGAY_HD] as string | number | null | undefined),
     cell(row, COL.SO_TAU_XE).slice(-9),
@@ -230,6 +239,8 @@ function mapRowToOutput(row: RawRow, factoryVals: Record<string, string | number
     factoryVals['MCC'],
     factoryVals['CLV'],
     factoryVals['NDFC'],
+    isFirstInGroup ? groupRoundMTTotal : 0,
+    groupRoundMTTotal,
     cell(row, COL.TAI_XE),
     cell(row, COL.THONG_TIN_BS),
     cell(row, COL.SLOT),
@@ -249,7 +260,7 @@ function mapRowToOutput(row: RawRow, factoryVals: Record<string, string | number
   ];
 }
 
-// ─── Main processing function ─────────────────────────────────────────────────
+// ─── File parsing ─────────────────────────────────────────────────────────────
 
 /**
  * Read a File object as ArrayBuffer via FileReader.
@@ -264,41 +275,53 @@ function readFileAsArrayBuffer(file: File): Promise<ArrayBuffer> {
 }
 
 /**
- * Main entry point: process a delivery data XLSX file.
- * Returns a ProcessResult with the output Blob ready for download.
+ * Parse a delivery XLSX file into raw rows + source row numbers.
+ * Skips the first 4 metadata rows and the header row (row 5).
+ * Filters out empty rows.
+ * Use this when you need to inspect or modify rows before processing.
  */
-export async function processDeliveryData(file: File): Promise<ProcessResult> {
-  const warnings: string[] = [];
-
-  // Read file
+export async function parseDeliveryFile(file: File): Promise<ParsedFileData> {
   const buffer = await readFileAsArrayBuffer(file);
 
-  // Parse workbook
   const wb = XLSX.read(buffer, { type: 'array' });
   const sheetName = wb.SheetNames[0];
   const ws = wb.Sheets[sheetName];
 
-  // Convert to array of arrays
   const rawData = XLSX.utils.sheet_to_json<RawRow>(ws, { header: 1 });
 
   if (rawData.length < 5) {
     throw new Error('File không đủ dữ liệu. Cần ít nhất 5 dòng (4 dòng header + 1 dòng data).');
   }
 
-  // Skip first 4 rows (metadata), row index 4 is header row, data starts at index 5
-  // Track source row number (1-based, as seen in Excel) alongside each data row
-  const dataRows: RawRow[] = [];
+  const rawRows: RawRow[] = [];
   const sourceRowNums: number[] = [];
+
   rawData.slice(5).forEach((row, i) => {
     if (row && row.length > 0 && row.some((c) => c !== null && c !== undefined && c !== '')) {
-      dataRows.push(row);
-      sourceRowNums.push(i + 6); // +5 for slice offset, +1 for 1-based Excel row number
+      rawRows.push(row);
+      sourceRowNums.push(i + 6);
     }
   });
 
-  if (dataRows.length === 0) {
+  if (rawRows.length === 0) {
     throw new Error('File không chứa dữ liệu. Vui lòng kiểm tra lại file Excel.');
   }
+
+  return { rawRows, sourceRowNums };
+}
+
+// ─── Core processing from raw rows ───────────────────────────────────────────
+
+/**
+ * Process delivery data from pre-parsed raw rows.
+ * Use this when you've already called parseDeliveryFile() and optionally
+ * modified the rows (e.g. weight adjustments).
+ */
+export async function processDeliveryDataFromRows(
+  dataRows: RawRow[],
+  sourceRowNums: number[]
+): Promise<ProcessResult> {
+  const warnings: string[] = [];
 
   // ── Validate rows — generate specific warnings ────────────────────────────
   dataRows.forEach((row, idx) => {
@@ -354,14 +377,11 @@ export async function processDeliveryData(file: File): Promise<ProcessResult> {
     const dateB = typeof b.date === 'number' ? b.date : 0;
 
     if (dateA !== dateB) {
-      // Both are numbers → sort numerically
       if (typeof a.date === 'number' && typeof b.date === 'number') {
         return a.date - b.date;
       }
-      // Fall back to string comparison
       return String(a.date).localeCompare(String(b.date));
     }
-    // Same date → sort by vehicle number
     return a.vehicle.localeCompare(b.vehicle);
   });
 
@@ -369,57 +389,53 @@ export async function processDeliveryData(file: File): Promise<ProcessResult> {
   const outputRows: (string | number)[][] = [OUTPUT_HEADERS];
   const separatorRowIndices = new Set<number>();
 
-  // Collect all dates for dateRange
   const allDates: string[] = [];
 
   sortedGroups.forEach((group, groupIndex) => {
-    // Collect date string for range
     const dateStr = excelDateToString(group.date as string | number | null | undefined);
     if (dateStr) allDates.push(dateStr);
 
-    // Pre-calculate SUM(Round(MT)) per (invoice, factory) pair within this group
     const invoiceFactorySums = new Map<string, number>();
     group.rows.forEach((row) => {
       const invoiceNo = cell(row, COL.SO_HD);
       const factory = getFactory(cell(row, COL.MA_NCC));
-      const roundMT = Math.round((Number(row[COL.HD_TRONG_LUONG]) || 0) / 1000 * 100) / 100;
+      const roundMT = Math.round((Number(row[COL.HD_TRONG_LUONG]) || 0) / 1000 * 1000) / 1000;
       const key = `${invoiceNo}|||${factory}`;
-      invoiceFactorySums.set(key, Math.round(((invoiceFactorySums.get(key) ?? 0) + roundMT) * 100) / 100);
+      invoiceFactorySums.set(key, Math.round(((invoiceFactorySums.get(key) ?? 0) + roundMT) * 1000) / 1000);
     });
 
-    // Track first-row of each (invoice, factory) pair
     const invoiceFactorySeen = new Set<string>();
 
-    // Accumulate group totals for separator row
     let groupRoundMTSum = 0;
     const groupFactorySums: Record<string, number> = { CLF: 0, VFM: 0, MCC: 0, CLV: 0, NDFC: 0 };
 
-    // Add rows
-    group.rows.forEach((row) => {
+    const groupRoundMTTotal = group.rows.reduce((sum, row) => {
+      const roundMT = Math.round((Number(row[COL.HD_TRONG_LUONG]) || 0) / 1000 * 1000) / 1000;
+      return Math.round((sum + roundMT) * 1000) / 1000;
+    }, 0);
+
+    group.rows.forEach((row, groupRowIndex) => {
       const invoiceNo = cell(row, COL.SO_HD);
       const currentFactory = getFactory(cell(row, COL.MA_NCC));
       const seenKey = `${invoiceNo}|||${currentFactory}`;
       const isFirstForFactory = !invoiceFactorySeen.has(seenKey);
       if (isFirstForFactory) invoiceFactorySeen.add(seenKey);
 
-      // Build factory column values
       const factoryVals: Record<string, string | number> = {
         CLF: '', VFM: '', MCC: '', CLV: '', NDFC: '',
       };
       const factorySum = invoiceFactorySums.get(seenKey)!;
       factoryVals[currentFactory] = isFirstForFactory ? factorySum : 0;
 
-      // Accumulate group totals
-      const rowRoundMT = Math.round((Number(row[COL.HD_TRONG_LUONG]) || 0) / 1000 * 100) / 100;
-      groupRoundMTSum = Math.round((groupRoundMTSum + rowRoundMT) * 100) / 100;
+      const rowRoundMT = Math.round((Number(row[COL.HD_TRONG_LUONG]) || 0) / 1000 * 1000) / 1000;
+      groupRoundMTSum = Math.round((groupRoundMTSum + rowRoundMT) * 1000) / 1000;
       if (isFirstForFactory) {
-        groupFactorySums[currentFactory] = Math.round((groupFactorySums[currentFactory] + factorySum) * 100) / 100;
+        groupFactorySums[currentFactory] = Math.round((groupFactorySums[currentFactory] + factorySum) * 1000) / 1000;
       }
 
-      outputRows.push(mapRowToOutput(row, factoryVals));
+      outputRows.push(mapRowToOutput(row, factoryVals, groupRowIndex === 0, groupRoundMTTotal));
     });
 
-    // Add separator row after each group (except the last) with group totals
     if (groupIndex < sortedGroups.length - 1) {
       const separatorRow: (string | number)[] = new Array(OUTPUT_HEADERS.length).fill('');
       separatorRow[15] = groupRoundMTSum;
@@ -428,6 +444,8 @@ export async function processDeliveryData(file: File): Promise<ProcessResult> {
       separatorRow[18] = groupFactorySums['MCC'] || '';
       separatorRow[19] = groupFactorySums['CLV'] || '';
       separatorRow[20] = groupFactorySums['NDFC'] || '';
+      separatorRow[21] = groupRoundMTSum;
+      separatorRow[22] = groupRoundMTSum;
       separatorRowIndices.add(outputRows.length);
       outputRows.push(separatorRow);
     }
@@ -442,31 +460,26 @@ export async function processDeliveryData(file: File): Promise<ProcessResult> {
   outputRows.forEach((row, rowIndex) => {
     const excelRow = outWs.addRow(row);
     if (rowIndex === 0) {
-      // Yellow background + bold for header row
       excelRow.eachCell({ includeEmpty: true }, (cell) => {
         cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFFF00' } };
         cell.font = { bold: true };
       });
     } else if (separatorRowIndices.has(rowIndex)) {
-      // Gray D9D9D9 background for separator rows
       excelRow.eachCell({ includeEmpty: true }, (cell) => {
         cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD9D9D9' } };
       });
     }
   });
 
-  // Write as array buffer
   const outBuffer = await outWb.xlsx.writeBuffer();
   const outputBlob = new Blob([outBuffer], {
     type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
   });
 
-  // Build output filename with timestamp
   const now = new Date();
   const ts = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`;
   const outputFilename = `delivery_processed_${ts}.xlsx`;
 
-  // Date range
   const dateRange =
     allDates.length > 0
       ? { from: allDates[0], to: allDates[allDates.length - 1] }
@@ -480,4 +493,16 @@ export async function processDeliveryData(file: File): Promise<ProcessResult> {
     outputBlob,
     outputFilename,
   };
+}
+
+// ─── Convenience wrapper ──────────────────────────────────────────────────────
+
+/**
+ * Main entry point: process a delivery data XLSX file end-to-end.
+ * Returns a ProcessResult with the output Blob ready for download.
+ * For pre-parsed rows (e.g. after weight adjustments), use processDeliveryDataFromRows().
+ */
+export async function processDeliveryData(file: File): Promise<ProcessResult> {
+  const { rawRows, sourceRowNums } = await parseDeliveryFile(file);
+  return processDeliveryDataFromRows(rawRows, sourceRowNums);
 }

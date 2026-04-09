@@ -7,6 +7,7 @@ import driverRoutes from './drivers';
 import roleRoutes from './roles';
 import permissionRoutes from './permissions';
 import dispatchScheduleRoutes from './dispatchSchedules';
+import weightAdjustmentRoutes from './weightAdjustments';
 
 const router = Router();
 
@@ -18,5 +19,6 @@ router.use('/drivers', driverRoutes);
 router.use('/roles', roleRoutes);
 router.use('/permissions', permissionRoutes);
 router.use('/dispatch-schedules', dispatchScheduleRoutes);
+router.use('/weight-adjustments', weightAdjustmentRoutes);
 
 export default router;
