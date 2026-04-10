@@ -389,6 +389,17 @@ export async function processDeliveryDataFromRows(
   const outputRows: (string | number)[][] = [OUTPUT_HEADERS];
   const separatorRowIndices = new Set<number>();
 
+  // Per-factory sheet data: header + data rows + separator row tracking
+  const FACTORY_NAMES = ['CLF', 'VFM', 'MCC', 'CLV', 'NDFC'] as const;
+  type FactoryName = typeof FACTORY_NAMES[number];
+  const factorySheetRows: Record<FactoryName, (string | number)[][]> = {
+    CLF: [OUTPUT_HEADERS], VFM: [OUTPUT_HEADERS], MCC: [OUTPUT_HEADERS],
+    CLV: [OUTPUT_HEADERS], NDFC: [OUTPUT_HEADERS],
+  };
+  const factorySeparatorRowIndices: Record<FactoryName, Set<number>> = {
+    CLF: new Set(), VFM: new Set(), MCC: new Set(), CLV: new Set(), NDFC: new Set(),
+  };
+
   const allDates: string[] = [];
 
   sortedGroups.forEach((group, groupIndex) => {
@@ -414,9 +425,25 @@ export async function processDeliveryDataFromRows(
       return Math.round((sum + roundMT) * 1000) / 1000;
     }, 0);
 
+    // Track per-factory group sums and row counts for sheet con separator rows
+    const factoryGroupRoundMTSums: Record<FactoryName, number> = {
+      CLF: 0, VFM: 0, MCC: 0, CLV: 0, NDFC: 0,
+    };
+    const factoryGroupFactorySums: Record<FactoryName, Record<string, number>> = {
+      CLF: { CLF: 0, VFM: 0, MCC: 0, CLV: 0, NDFC: 0 },
+      VFM: { CLF: 0, VFM: 0, MCC: 0, CLV: 0, NDFC: 0 },
+      MCC: { CLF: 0, VFM: 0, MCC: 0, CLV: 0, NDFC: 0 },
+      CLV: { CLF: 0, VFM: 0, MCC: 0, CLV: 0, NDFC: 0 },
+      NDFC: { CLF: 0, VFM: 0, MCC: 0, CLV: 0, NDFC: 0 },
+    };
+    // Track if each factory sheet has any data row in this group (for conditional separator)
+    const factoryGroupHasRows: Record<FactoryName, boolean> = {
+      CLF: false, VFM: false, MCC: false, CLV: false, NDFC: false,
+    };
+
     group.rows.forEach((row, groupRowIndex) => {
       const invoiceNo = cell(row, COL.SO_HD);
-      const currentFactory = getFactory(cell(row, COL.MA_NCC));
+      const currentFactory = getFactory(cell(row, COL.MA_NCC)) as FactoryName;
       const seenKey = `${invoiceNo}|||${currentFactory}`;
       const isFirstForFactory = !invoiceFactorySeen.has(seenKey);
       if (isFirstForFactory) invoiceFactorySeen.add(seenKey);
@@ -433,7 +460,20 @@ export async function processDeliveryDataFromRows(
         groupFactorySums[currentFactory] = Math.round((groupFactorySums[currentFactory] + factorySum) * 1000) / 1000;
       }
 
-      outputRows.push(mapRowToOutput(row, factoryVals, groupRowIndex === 0, groupRoundMTTotal));
+      const outputRow = mapRowToOutput(row, factoryVals, groupRowIndex === 0, groupRoundMTTotal);
+      outputRows.push(outputRow);
+
+      // Add row to the corresponding factory sheet (factoryVals[factory] !== '')
+      factoryGroupHasRows[currentFactory] = true;
+      factoryGroupRoundMTSums[currentFactory] = Math.round(
+        (factoryGroupRoundMTSums[currentFactory] + rowRoundMT) * 1000
+      ) / 1000;
+      if (isFirstForFactory) {
+        factoryGroupFactorySums[currentFactory][currentFactory] = Math.round(
+          (factoryGroupFactorySums[currentFactory][currentFactory] + factorySum) * 1000
+        ) / 1000;
+      }
+      factorySheetRows[currentFactory].push(outputRow);
     });
 
     if (groupIndex < sortedGroups.length - 1) {
@@ -448,27 +488,59 @@ export async function processDeliveryDataFromRows(
       separatorRow[22] = groupRoundMTSum;
       separatorRowIndices.add(outputRows.length);
       outputRows.push(separatorRow);
+
+      // Add separator rows to each factory sheet that had data rows in this group
+      FACTORY_NAMES.forEach((factory) => {
+        if (factoryGroupHasRows[factory]) {
+          const fSeparatorRow: (string | number)[] = new Array(OUTPUT_HEADERS.length).fill('');
+          const fRoundMTSum = factoryGroupRoundMTSums[factory];
+          fSeparatorRow[15] = fRoundMTSum;
+          fSeparatorRow[16] = factoryGroupFactorySums[factory]['CLF'] || '';
+          fSeparatorRow[17] = factoryGroupFactorySums[factory]['VFM'] || '';
+          fSeparatorRow[18] = factoryGroupFactorySums[factory]['MCC'] || '';
+          fSeparatorRow[19] = factoryGroupFactorySums[factory]['CLV'] || '';
+          fSeparatorRow[20] = factoryGroupFactorySums[factory]['NDFC'] || '';
+          fSeparatorRow[21] = fRoundMTSum;
+          fSeparatorRow[22] = fRoundMTSum;
+          factorySeparatorRowIndices[factory].add(factorySheetRows[factory].length);
+          factorySheetRows[factory].push(fSeparatorRow);
+        }
+      });
     }
   });
 
   // ── Step 5: Build output workbook ─────────────────────────────────────────
   const outWb = new Workbook();
+
+  /** Helper: write rows into a worksheet with header + separator styling */
+  function writeSheetRows(
+    ws: ReturnType<typeof outWb.addWorksheet>,
+    rows: (string | number)[][],
+    sepIndices: Set<number>
+  ) {
+    ws.columns = COL_WIDTHS.map((w) => ({ width: w.wch }));
+    rows.forEach((row, rowIndex) => {
+      const excelRow = ws.addRow(row);
+      if (rowIndex === 0) {
+        excelRow.eachCell({ includeEmpty: true }, (cell) => {
+          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFFF00' } };
+          cell.font = { bold: true };
+        });
+      } else if (sepIndices.has(rowIndex)) {
+        excelRow.eachCell({ includeEmpty: true }, (cell) => {
+          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD9D9D9' } };
+        });
+      }
+    });
+  }
+
   const outWs = outWb.addWorksheet('Processed');
+  writeSheetRows(outWs, outputRows, separatorRowIndices);
 
-  outWs.columns = COL_WIDTHS.map((w) => ({ width: w.wch }));
-
-  outputRows.forEach((row, rowIndex) => {
-    const excelRow = outWs.addRow(row);
-    if (rowIndex === 0) {
-      excelRow.eachCell({ includeEmpty: true }, (cell) => {
-        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFFF00' } };
-        cell.font = { bold: true };
-      });
-    } else if (separatorRowIndices.has(rowIndex)) {
-      excelRow.eachCell({ includeEmpty: true }, (cell) => {
-        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD9D9D9' } };
-      });
-    }
+  // Add per-factory sheets (CLF, VFM, MCC, CLV, NDFC)
+  FACTORY_NAMES.forEach((factory) => {
+    const factoryWs = outWb.addWorksheet(factory);
+    writeSheetRows(factoryWs, factorySheetRows[factory], factorySeparatorRowIndices[factory]);
   });
 
   const outBuffer = await outWb.xlsx.writeBuffer();

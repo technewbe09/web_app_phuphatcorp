@@ -238,7 +238,13 @@ User upload file .xlsx ERP (Delivery Report)
       → Sort mỗi nhóm theo Số HĐ ASC (numeric-aware)
       → Sort các nhóm theo (Ngày HĐ ASC, Số tàu/xe ASC)
       → Tính Round(MT) = SUM(HĐ Trọng lượng Net) / 1000 per group
-      → Build output XLSX: header row + data rows + blank separator row giữa các nhóm
+      → Build output XLSX:
+          Sheet "Processed": tất cả dòng, header row + data rows + separator row màu xám giữa các nhóm
+          Sheet "CLF": chỉ dòng có factoryVals['CLF'] !== '' (kể cả = 0) + separator cùng style
+          Sheet "VFM": chỉ dòng có factoryVals['VFM'] !== ''
+          Sheet "MCC": chỉ dòng có factoryVals['MCC'] !== ''
+          Sheet "CLV": chỉ dòng có factoryVals['CLV'] !== ''
+          Sheet "NDFC": chỉ dòng có factoryVals['NDFC'] !== ''
       → Return: { outputBlob, outputFilename, processedRows, groupCount, dateRange, warnings }
   → User tải file output xuống
 ```
