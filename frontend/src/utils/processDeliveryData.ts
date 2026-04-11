@@ -110,7 +110,101 @@ const OUTPUT_HEADERS = [
   'Loại hàng',
 ];
 
+// ─── Factory sheet headers (41 cols) ──────────────────────────────────────────
+// Chèn 2 cột mới ngay sau Round(MT) (col 15):
+//   Col 16: Tấn/ Chuyến — tổng tấn của factory trong khối, chỉ hiển thị ở dòng đầu khối
+//   Col 17: Tấn/ Hóa đơn — tổng tấn của invoice đó theo factory, chỉ hiển thị ở dòng đầu invoice
+// Các cột CLF/VFM/MCC/CLV/NDFC và sau đó bị đẩy sang phải 2 vị trí (col 18-22, 23-24, 25-40)
+const FACTORY_OUTPUT_HEADERS = [
+  'Mã nhà cung cấp',       // 0
+  'Số hóa đơn',            // 1
+  'Ngày hóa đơn',          // 2
+  'Số tàu',                // 3
+  'Mã khách hàng',         // 4
+  'Tên khách hàng',        // 5
+  'Địa chỉ giao hàng',     // 6
+  'Mã hàng hóa',           // 7
+  'Tên hàng hóa (Vie)',    // 8
+  'Tên hàng hóa (En)',     // 9
+  'Mã liên hệ giao hàng',  // 10
+  'Mã DVT',                // 11
+  'Số lượng (DVT bán hàng)', // 12
+  'SP Trọng lượng net',    // 13
+  'HĐ Trọng lượng (Net)',  // 14
+  'Round(MT)',              // 15
+  'Tấn/ Chuyến',           // 16 ← mới
+  'Tấn/ Hóa đơn',          // 17 ← mới
+  'CLF',                   // 18
+  'VFM',                   // 19
+  'MCC',                   // 20
+  'CLV',                   // 21
+  'NDFC',                  // 22
+  '',                      // 23
+  '',                      // 24
+  'Tài xế',                // 25
+  'Thông tin bổ sung',     // 26
+  'Slot',                  // 27
+  'Diễn giải',             // 28
+  'Channel',               // 29
+  'SubChannel',            // 30
+  'SlotNo',                // 31
+  'user tạo HĐ',           // 32
+  'User tạo PXK',          // 33
+  'PO number',             // 34
+  'Warehouse No',          // 35
+  'Warehouse Name',        // 36
+  'Phiếu XK',              // 37
+  'Chứng từ ghi sổ',       // 38
+  'Số seri',               // 39
+  'Loại hàng',             // 40
+];
+
 // ─── Column widths for output Excel ───────────────────────────────────────────
+// Factory col widths: 41 cols (chèn 2 cột mới ở vị trí 16-17, sau Round(MT))
+const COL_WIDTHS_FACTORY: { wch: number }[] = [
+  { wch: 15 },  // 0  Mã nhà cung cấp
+  { wch: 12 },  // 1  Số hóa đơn
+  { wch: 12 },  // 2  Ngày hóa đơn
+  { wch: 18 },  // 3  Số tàu
+  { wch: 15 },  // 4  Mã khách hàng
+  { wch: 35 },  // 5  Tên khách hàng
+  { wch: 50 },  // 6  Địa chỉ giao hàng
+  { wch: 15 },  // 7  Mã hàng hóa
+  { wch: 35 },  // 8  Tên hàng hóa (Vie)
+  { wch: 35 },  // 9  Tên hàng hóa (En)
+  { wch: 20 },  // 10 Mã liên hệ giao hàng
+  { wch: 10 },  // 11 Mã DVT
+  { wch: 22 },  // 12 Số lượng (DVT bán hàng)
+  { wch: 18 },  // 13 SP Trọng lượng net
+  { wch: 20 },  // 14 HĐ Trọng lượng (Net)
+  { wch: 10 },  // 15 Round(MT)
+  { wch: 14 },  // 16 Tấn/ Chuyến ← mới
+  { wch: 14 },  // 17 Tấn/ Hóa đơn ← mới
+  { wch: 10 },  // 18 CLF
+  { wch: 10 },  // 19 VFM
+  { wch: 10 },  // 20 MCC
+  { wch: 10 },  // 21 CLV
+  { wch: 10 },  // 22 NDFC
+  { wch: 12 },  // 23 Col1 (tổng đầu khối)
+  { wch: 12 },  // 24 Col2 (tổng tất cả dòng)
+  { wch: 20 },  // 25 Tài xế
+  { wch: 20 },  // 26 Thông tin bổ sung
+  { wch: 15 },  // 27 Slot
+  { wch: 35 },  // 28 Diễn giải
+  { wch: 12 },  // 29 Channel
+  { wch: 12 },  // 30 SubChannel
+  { wch: 10 },  // 31 SlotNo
+  { wch: 12 },  // 32 user tạo HĐ
+  { wch: 12 },  // 33 User tạo PXK
+  { wch: 20 },  // 34 PO number
+  { wch: 12 },  // 35 Warehouse No
+  { wch: 25 },  // 36 Warehouse Name
+  { wch: 18 },  // 37 Phiếu XK
+  { wch: 18 },  // 38 Chứng từ ghi sổ
+  { wch: 12 },  // 39 Số seri
+  { wch: 12 },  // 40 Loại hàng
+];
+
 const COL_WIDTHS = [
   { wch: 15 },  // Mã nhà cung cấp
   { wch: 12 },  // Số hóa đơn
@@ -393,8 +487,8 @@ export async function processDeliveryDataFromRows(
   const FACTORY_NAMES = ['CLF', 'VFM', 'MCC', 'CLV', 'NDFC'] as const;
   type FactoryName = typeof FACTORY_NAMES[number];
   const factorySheetRows: Record<FactoryName, (string | number)[][]> = {
-    CLF: [OUTPUT_HEADERS], VFM: [OUTPUT_HEADERS], MCC: [OUTPUT_HEADERS],
-    CLV: [OUTPUT_HEADERS], NDFC: [OUTPUT_HEADERS],
+    CLF: [FACTORY_OUTPUT_HEADERS], VFM: [FACTORY_OUTPUT_HEADERS], MCC: [FACTORY_OUTPUT_HEADERS],
+    CLV: [FACTORY_OUTPUT_HEADERS], NDFC: [FACTORY_OUTPUT_HEADERS],
   };
   const factorySeparatorRowIndices: Record<FactoryName, Set<number>> = {
     CLF: new Set(), VFM: new Set(), MCC: new Set(), CLV: new Set(), NDFC: new Set(),
@@ -440,6 +534,10 @@ export async function processDeliveryDataFromRows(
     const factoryGroupHasRows: Record<FactoryName, boolean> = {
       CLF: false, VFM: false, MCC: false, CLV: false, NDFC: false,
     };
+    // Track row index within each factory's group (to detect first row of group in factory sheet)
+    const factoryGroupRowIndex: Record<FactoryName, number> = {
+      CLF: 0, VFM: 0, MCC: 0, CLV: 0, NDFC: 0,
+    };
 
     group.rows.forEach((row, groupRowIndex) => {
       const invoiceNo = cell(row, COL.SO_HD);
@@ -463,7 +561,7 @@ export async function processDeliveryDataFromRows(
       const outputRow = mapRowToOutput(row, factoryVals, groupRowIndex === 0, groupRoundMTTotal);
       outputRows.push(outputRow);
 
-      // Add row to the corresponding factory sheet (factoryVals[factory] !== '')
+      // ── Build factory sheet row (41 cols = 39 base + Tấn/Chuyến + Tấn/Hóa đơn) ──
       factoryGroupHasRows[currentFactory] = true;
       factoryGroupRoundMTSums[currentFactory] = Math.round(
         (factoryGroupRoundMTSums[currentFactory] + rowRoundMT) * 1000
@@ -473,7 +571,112 @@ export async function processDeliveryDataFromRows(
           (factoryGroupFactorySums[currentFactory][currentFactory] + factorySum) * 1000
         ) / 1000;
       }
+
+      // We'll push to factory sheet after we have factoryGroupRoundMTSums finalised —
+      // but we need a deferred approach since we know totals only after full group scan.
+      // Solution: push now with placeholder, then overwrite dòng đầu khối after group loop.
+      // Instead, track rows and patch after the group.rows.forEach loop.
+      factoryGroupRowIndex[currentFactory] += 1;
       factorySheetRows[currentFactory].push(outputRow);
+    });
+
+    // ── Build factory sheet rows (41 cols, layout theo FACTORY_OUTPUT_HEADERS) ─
+    // Thực hiện sau khi scan xong toàn bộ group để biết đủ factoryGroupRoundMTSums.
+    // Factory row layout (41 cols):
+    //   0-15: giống Process (Mã NCC → Round(MT))
+    //   16: Tấn/ Chuyến  ← chỉ dòng đầu khối
+    //   17: Tấn/ Hóa đơn ← chỉ dòng đầu invoice
+    //   18-22: CLF/VFM/MCC/CLV/NDFC  ← dòng đầu khối = group sums; còn lại = invoice-level
+    //   23-24: Col1/Col2 (tổng đầu khối / tổng tất cả dòng)
+    //   25-40: metadata (Tài xế, Thông tin BS, ...)
+    FACTORY_NAMES.forEach((factory) => {
+      if (!factoryGroupHasRows[factory]) return;
+
+      const groupRowCount = factoryGroupRowIndex[factory];
+      const sheetLen = factorySheetRows[factory].length;
+      const groupStartIdx = sheetLen - groupRowCount;
+
+      const invoiceSeenForFactory = new Set<string>();
+
+      for (let i = groupStartIdx; i < sheetLen; i++) {
+        // processRow = outputRow được push trước đó (39 cols, layout Process)
+        const processRow = factorySheetRows[factory][i] as (string | number)[];
+
+        const isFirstRowOfGroup = (i === groupStartIdx);
+
+        // Tấn/ Chuyến (col 16): chỉ dòng đầu khối
+        const tanChuyen: string | number = isFirstRowOfGroup
+          ? factoryGroupRoundMTSums[factory]
+          : '';
+
+        // Tấn/ Hóa đơn (col 17): dòng đầu mỗi invoice+factory
+        const invoiceNo = String(processRow[1]); // col 1 = Số hóa đơn
+        const invoiceKey = `${invoiceNo}|||${factory}`;
+        const isFirstForInvoice = !invoiceSeenForFactory.has(invoiceKey);
+        if (isFirstForInvoice) invoiceSeenForFactory.add(invoiceKey);
+        const tanHoaDon: string | number = isFirstForInvoice
+          ? (invoiceFactorySums.get(invoiceKey) ?? '')
+          : '';
+
+        // CLF/VFM/MCC/CLV/NDFC: dòng đầu khối = group sums; còn lại giữ nguyên từ processRow
+        const clf  = isFirstRowOfGroup ? (groupFactorySums['CLF']  || '') : processRow[16];
+        const vfm  = isFirstRowOfGroup ? (groupFactorySums['VFM']  || '') : processRow[17];
+        const mcc  = isFirstRowOfGroup ? (groupFactorySums['MCC']  || '') : processRow[18];
+        const clv  = isFirstRowOfGroup ? (groupFactorySums['CLV']  || '') : processRow[19];
+        const ndfc = isFirstRowOfGroup ? (groupFactorySums['NDFC'] || '') : processRow[20];
+
+        // Build factory row: cols 0-15 (giống Process), chèn 16-17, rồi cols 18-40
+        const factoryRow: (string | number)[] = [
+          // 0-15: giống Process
+          processRow[0],  // Mã nhà cung cấp
+          processRow[1],  // Số hóa đơn
+          processRow[2],  // Ngày hóa đơn
+          processRow[3],  // Số tàu
+          processRow[4],  // Mã khách hàng
+          processRow[5],  // Tên khách hàng
+          processRow[6],  // Địa chỉ giao hàng
+          processRow[7],  // Mã hàng hóa
+          processRow[8],  // Tên hàng hóa (Vie)
+          processRow[9],  // Tên hàng hóa (En)
+          processRow[10], // Mã liên hệ giao hàng
+          processRow[11], // Mã DVT
+          processRow[12], // Số lượng (DVT bán hàng)
+          processRow[13], // SP Trọng lượng net
+          processRow[14], // HĐ Trọng lượng (Net)
+          processRow[15], // Round(MT)
+          // 16-17: 2 cột mới
+          tanChuyen,      // Tấn/ Chuyến
+          tanHoaDon,      // Tấn/ Hóa đơn
+          // 18-22: CLF/VFM/MCC/CLV/NDFC (shift từ 16-20 của processRow)
+          clf,
+          vfm,
+          mcc,
+          clv,
+          ndfc,
+          // 23-24: Col1/Col2 (shift từ 21-22 của processRow)
+          processRow[21], // Col1 (tổng đầu khối)
+          processRow[22], // Col2 (tổng tất cả dòng)
+          // 25-40: metadata (shift từ 23-38 của processRow)
+          processRow[23], // Tài xế
+          processRow[24], // Thông tin bổ sung
+          processRow[25], // Slot
+          processRow[26], // Diễn giải
+          processRow[27], // Channel
+          processRow[28], // SubChannel
+          processRow[29], // SlotNo
+          processRow[30], // user tạo HĐ
+          processRow[31], // User tạo PXK
+          processRow[32], // PO number
+          processRow[33], // Warehouse No
+          processRow[34], // Warehouse Name
+          processRow[35], // Phiếu XK
+          processRow[36], // Chứng từ ghi sổ
+          processRow[37], // Số seri
+          processRow[38], // Loại hàng
+        ];
+
+        factorySheetRows[factory][i] = factoryRow;
+      }
     });
 
     if (groupIndex < sortedGroups.length - 1) {
@@ -490,18 +693,22 @@ export async function processDeliveryDataFromRows(
       outputRows.push(separatorRow);
 
       // Add separator rows to each factory sheet that had data rows in this group
+      // Factory separator rows: 41 cols, indices theo FACTORY_OUTPUT_HEADERS
+      // col 15: Round(MT) sum, col 16-17: empty (Tấn/Chuyến & Tấn/Hóa đơn blank on separator)
+      // col 18-22: CLF/VFM/MCC/CLV/NDFC, col 23-24: Col1/Col2
       FACTORY_NAMES.forEach((factory) => {
         if (factoryGroupHasRows[factory]) {
-          const fSeparatorRow: (string | number)[] = new Array(OUTPUT_HEADERS.length).fill('');
+          const fSeparatorRow: (string | number)[] = new Array(FACTORY_OUTPUT_HEADERS.length).fill('');
           const fRoundMTSum = factoryGroupRoundMTSums[factory];
           fSeparatorRow[15] = fRoundMTSum;
-          fSeparatorRow[16] = factoryGroupFactorySums[factory]['CLF'] || '';
-          fSeparatorRow[17] = factoryGroupFactorySums[factory]['VFM'] || '';
-          fSeparatorRow[18] = factoryGroupFactorySums[factory]['MCC'] || '';
-          fSeparatorRow[19] = factoryGroupFactorySums[factory]['CLV'] || '';
-          fSeparatorRow[20] = factoryGroupFactorySums[factory]['NDFC'] || '';
-          fSeparatorRow[21] = fRoundMTSum;
-          fSeparatorRow[22] = fRoundMTSum;
+          // col 16-17 (Tấn/ Chuyến, Tấn/ Hóa đơn): để trống trên separator row
+          fSeparatorRow[18] = groupFactorySums['CLF']  || '';
+          fSeparatorRow[19] = groupFactorySums['VFM']  || '';
+          fSeparatorRow[20] = groupFactorySums['MCC']  || '';
+          fSeparatorRow[21] = groupFactorySums['CLV']  || '';
+          fSeparatorRow[22] = groupFactorySums['NDFC'] || '';
+          fSeparatorRow[23] = fRoundMTSum;
+          fSeparatorRow[24] = fRoundMTSum;
           factorySeparatorRowIndices[factory].add(factorySheetRows[factory].length);
           factorySheetRows[factory].push(fSeparatorRow);
         }
@@ -516,9 +723,10 @@ export async function processDeliveryDataFromRows(
   function writeSheetRows(
     ws: ReturnType<typeof outWb.addWorksheet>,
     rows: (string | number)[][],
-    sepIndices: Set<number>
+    sepIndices: Set<number>,
+    colWidths: { wch: number }[] = COL_WIDTHS
   ) {
-    ws.columns = COL_WIDTHS.map((w) => ({ width: w.wch }));
+    ws.columns = colWidths.map((w) => ({ width: w.wch }));
     rows.forEach((row, rowIndex) => {
       const excelRow = ws.addRow(row);
       if (rowIndex === 0) {
@@ -537,10 +745,10 @@ export async function processDeliveryDataFromRows(
   const outWs = outWb.addWorksheet('Processed');
   writeSheetRows(outWs, outputRows, separatorRowIndices);
 
-  // Add per-factory sheets (CLF, VFM, MCC, CLV, NDFC)
+  // Add per-factory sheets (CLF, VFM, MCC, CLV, NDFC) with factory-specific col widths
   FACTORY_NAMES.forEach((factory) => {
     const factoryWs = outWb.addWorksheet(factory);
-    writeSheetRows(factoryWs, factorySheetRows[factory], factorySeparatorRowIndices[factory]);
+    writeSheetRows(factoryWs, factorySheetRows[factory], factorySeparatorRowIndices[factory], COL_WIDTHS_FACTORY);
   });
 
   const outBuffer = await outWb.xlsx.writeBuffer();

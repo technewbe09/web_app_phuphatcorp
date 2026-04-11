@@ -293,6 +293,16 @@ User upload file .xlsx ERP (Delivery Report)
 | Số seri | 14 | SO_SERI |
 | Loại hàng | 25 | LOAI_HANG |
 
+**Sheets CLF / VFM / MCC / CLV / NDFC (41 cols = 39 + 2 extra):**
+
+Giống sheet Processed, nhưng có thêm logic riêng:
+
+| Khác biệt | Mô tả |
+|------------|-------|
+| Cột CLF/VFM/MCC/CLV/NDFC (col 16-20) — **dòng đầu tiên của khối** | Hiển thị sum của **toàn bộ group** (tất cả factories), giống separator row ở sheet Process. Các dòng còn lại giữ nguyên giá trị invoice-level |
+| Col 39: **Tấn/ Chuyến** | Chỉ hiển thị ở dòng đầu tiên của mỗi khối = tổng tấn của factory tương ứng trong khối đó (sheet VFM → tổng tấn VFM). Các dòng còn lại = '' |
+| Col 40: **Tấn/ Hóa đơn** | Hiển thị ở dòng đầu tiên của mỗi hóa đơn (invoice+factory) = tổng tấn của invoice đó cho factory tương ứng. Các dòng còn lại = '' |
+
 ### 5.3 Business Rules
 
 - **BR-001:** Grouping key = Số tàu/xe + Ngày hóa đơn (cùng tàu, cùng ngày = 1 nhóm)
@@ -301,6 +311,9 @@ User upload file .xlsx ERP (Delivery Report)
 - **BR-004:** Round(MT) = HD_TRONG_LUONG (col 19) / 1000, làm tròn 2 chữ số thập phân — tính per row (không phải per group)
 - **BR-005:** Output có 1 separator row giữa các nhóm (không có giữa row cuối và end-of-file). Separator row hiển thị SUM tại các cột: Round(MT), CLF, VFM, MCC, CLV, NDFC ('' nếu factory đó không có invoice trong nhóm)
 - **BR-006:** Ngày HĐ là Excel serial number → convert sang DD/MM/YYYY string trong output
+- **BR-007:** Factory sheets (CLF/VFM/MCC/CLV/NDFC) — dòng đầu tiên của mỗi khối: cột CLF/VFM/MCC/CLV/NDFC hiển thị sum toàn group (giống separator row ở Process sheet)
+- **BR-008:** Factory sheets — cột "Tấn/ Chuyến" (col 39): chỉ hiển thị ở dòng đầu khối = tổng tấn của factory đó trong khối
+- **BR-009:** Factory sheets — cột "Tấn/ Hóa đơn" (col 40): hiển thị ở dòng đầu tiên của mỗi invoice+factory = tổng tấn invoice đó theo factory đó
 
 ### 5.4 Verify trọng lượng (Weight Adjustment Check)
 
