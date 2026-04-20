@@ -18,6 +18,7 @@ import {
   CalendarRange,
   BookOpen,
   Scale,
+  FileSpreadsheet,
 } from 'lucide-react';
 import { cn } from '../utils/cn';
 import { useAuth } from '../hooks/useAuth';
@@ -27,6 +28,7 @@ import { ThemeToggle } from '../components/ui/ThemeToggle';
 const USER_SETTINGS_ROUTES = ['/users', '/roles', '/permissions'];
 const DISPATCH_ROUTES = ['/dispatch'];
 const ACCOUNTING_DATA_ROUTES = ['/accounting-data'];
+const DELIVERY_DATA_ROUTES = ['/delivery-data'];
 
 export function MainLayout() {
   const { user, logout, hasPermission, hasAnyPermission } = useAuth();
@@ -43,6 +45,9 @@ export function MainLayout() {
   const [accountingDataOpen, setAccountingDataOpen] = useState(
     ACCOUNTING_DATA_ROUTES.some((p) => location.pathname.startsWith(p)),
   );
+  const [deliveryDataOpen, setDeliveryDataOpen] = useState(
+    DELIVERY_DATA_ROUTES.some((p) => location.pathname.startsWith(p)),
+  );
   const [userSettingsOpen, setUserSettingsOpen] = useState(
     USER_SETTINGS_ROUTES.some((p) => location.pathname.startsWith(p)),
   );
@@ -54,13 +59,18 @@ export function MainLayout() {
 
   const baseNavItems = [
     { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
-    { to: '/delivery-data', icon: Truck, label: 'Xử lý Data Giao Hàng' },
+  ];
+
+  const deliveryDataSubItems = [
+    { to: '/delivery-data/5-houses', icon: Truck, label: t('deliveryData.process5Houses' as never) },
+    { to: '/delivery-data/rice', icon: FileSpreadsheet, label: t('deliveryData.processRice' as never) },
   ];
 
   const vehicleDataSubItems = [
     { to: '/vehicle-data/trip-codes', icon: Route, label: t('vehicleData.tripCodes') },
     { to: '/vehicle-data/vehicles', icon: Car, label: t('vehicleData.vehicles') },
     { to: '/vehicle-data/drivers', icon: Users, label: t('vehicleData.drivers') },
+    { to: '/vehicle-data/delivery-schedule', icon: FileSpreadsheet, label: t('vehicleData.deliverySchedule' as never) },
   ];
 
   const dispatchSubItems = [
@@ -96,6 +106,7 @@ export function MainLayout() {
   );
   const isDispatchActive = DISPATCH_ROUTES.some((p) => location.pathname.startsWith(p));
   const isAccountingDataActive = ACCOUNTING_DATA_ROUTES.some((p) => location.pathname.startsWith(p));
+  const isDeliveryDataActive = DELIVERY_DATA_ROUTES.some((p) => location.pathname.startsWith(p));
 
   const accountingDataSubItems = [
     { to: '/accounting-data/weight-adjustments', icon: Scale, label: t('accountingData.weightAdjustment' as never) },
@@ -247,6 +258,16 @@ export function MainLayout() {
               {!isCollapsed && item.label}
             </NavLink>
           ))}
+
+          {/* Delivery Data collapsible group */}
+          {renderSubGroup(
+            t('deliveryData.menuTitle' as never),
+            Truck,
+            deliveryDataSubItems,
+            deliveryDataOpen,
+            () => setDeliveryDataOpen((o) => !o),
+            isDeliveryDataActive,
+          )}
 
           {/* Vehicle Data collapsible group */}
           {showVehicleData && renderSubGroup(

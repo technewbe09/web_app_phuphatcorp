@@ -14,6 +14,8 @@ import { RoleManagementPage } from './pages/admin/RoleManagementPage';
 import { PermissionManagementPage } from './pages/admin/PermissionManagementPage';
 import { SchedulePage } from './pages/dispatch/SchedulePage';
 import { WeightAdjustmentPage } from './pages/admin/accounting-data/WeightAdjustmentPage';
+import { DeliverySchedulePage } from './pages/admin/vehicle-data/DeliverySchedulePage';
+import { RiceDeliveryDataPage } from './pages/admin/RiceDeliveryDataPage';
 
 function PlaceholderPage({ title }: { title: string }) {
   return (
@@ -44,11 +46,14 @@ export function Router() {
             <Route path="/users" element={<UserManagementPage />} />
             <Route path="/roles" element={<RoleManagementPage />} />
             <Route path="/permissions" element={<PermissionManagementPage />} />
-            <Route path="/delivery-data" element={<DeliveryDataPage />} />
+            {/* Delivery Data */}
+            <Route path="/delivery-data/5-houses" element={<DeliveryDataPage />} />
+            <Route path="/delivery-data/rice" element={<RiceDeliveryDataPage />} />
             {/* Vehicle Data */}
             <Route path="/vehicle-data/trip-codes" element={<TripCodePage />} />
             <Route path="/vehicle-data/vehicles" element={<VehiclePage />} />
             <Route path="/vehicle-data/drivers" element={<DriverPage />} />
+            <Route path="/vehicle-data/delivery-schedule" element={<DeliverySchedulePage />} />
             {/* Dispatch */}
             <Route path="/dispatch/schedule" element={<SchedulePage />} />
             {/* Accounting Data */}

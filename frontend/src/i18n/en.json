@@ -250,11 +250,77 @@
       "giaTriMin": "Value must be >= 0"
     }
   },
+  "deliveryData": {
+    "menuTitle": "Delivery Data Processing",
+    "process5Houses": "Process 5 Houses Data",
+    "processRice": "Process Rice Data"
+  },
   "vehicleData": {
     "menuTitle": "Vehicle Data",
     "tripCodes": "Trip Codes",
     "vehicles": "Vehicles",
-    "drivers": "Drivers"
+    "drivers": "Drivers",
+    "deliverySchedule": "Delivery Schedule"
+  },
+  "deliverySchedule": {
+    "title": "Delivery Schedule",
+    "upload": "Upload Excel",
+    "filter": {
+      "fromDate": "From Date",
+      "toDate": "To Date",
+      "search": "Search...",
+      "searchButton": "Search",
+      "fromDatePlaceholder": "YYYY-MM-DD",
+      "toDatePlaceholder": "YYYY-MM-DD",
+      "dateRangeError": "From date must be <= To date"
+    },
+    "table": {
+      "ngay": "Date",
+      "stt": "No.",
+      "noiGiao": "Delivery Point",
+      "tan": "Tons",
+      "soXe": "Vehicle No.",
+      "can": "Weight",
+      "ghiChu": "Note"
+    },
+    "empty": {
+      "title": "No delivery schedule data",
+      "subtitle": "Upload an Excel file to get started",
+      "uploadCta": "Upload Excel"
+    },
+    "error": {
+      "title": "Failed to load data",
+      "retry": "Retry"
+    },
+    "uploadModal": {
+      "title": "Upload Delivery Schedule",
+      "fromDate": "From Date",
+      "toDate": "To Date",
+      "dropzone": "Drag & drop .xlsx file or click to select",
+      "accepts": "Only .xlsx files, max 10MB",
+      "cancel": "Cancel",
+      "submit": "Upload",
+      "submitting": "Uploading..."
+    },
+    "uploadValidation": {
+      "fileRequired": "Please select an Excel file",
+      "fromDateRequired": "From date is required",
+      "toDateRequired": "To date is required",
+      "dateRangeError": "From date must be <= To date",
+      "fileTooBig": "File is too large (max 10MB)",
+      "fileWrongType": "Only .xlsx files are accepted"
+    },
+    "uploadSuccess": "Upload successful: {count} rows",
+    "uploadWarning": "Upload completed with {errors} errors",
+    "uploadError": "Upload failed. Please try again.",
+    "uploadErrorsTitle": "{count} errors found — no records were saved:",
+    "uploadErrorColumns": {
+      "sheet": "Sheet",
+      "row": "Row",
+      "ngay": "Date",
+      "field": "Field",
+      "reason": "Reason"
+    }
   },
   "theme": {
     "toggleToDark": "Switch to dark mode",

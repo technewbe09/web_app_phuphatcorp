@@ -305,8 +305,13 @@ Giống sheet Processed, nhưng có thêm logic riêng:
 
 ### 5.3 Business Rules
 
-- **BR-001:** Grouping key = Số tàu/xe + Ngày hóa đơn (cùng tàu, cùng ngày = 1 nhóm)
-- **BR-002:** Trong mỗi nhóm, sort rows theo Số HĐ ASC (numeric-aware localeCompare)
+- **BR-001:** Grouping key ban đầu = Số tàu/xe + Ngày hóa đơn + Tên khách hàng
+  - Tính SUM(HĐ Trọng lượng) / 1000 của group sơ bộ
+  - Nếu < 13: giữ nguyên group key (Số tàu/xe + Ngày HĐ + Tên KH)
+  - Nếu >= 13: kiểm tra cột "Thông tin bổ sung"
+    - Có từ 2 giá trị trở lên (phân tách bằng dấu phẩy/xuống dòng) → group key = Số tàu/xe + Ngày HĐ + Tên KH + Thông tin bổ sung
+    - Chỉ có 1 giá trị hoặc rỗng → giữ nguyên group key
+- **BR-002:** Trong mỗi nhóm, sort rows theo Số HĐ ASC (numeric-aware localeCompare), sau đó Mã nhà cung cấp ASC (numeric-aware)
 - **BR-003:** Các nhóm sort theo Ngày HĐ ASC, rồi Số tàu/xe ASC
 - **BR-004:** Round(MT) = HD_TRONG_LUONG (col 19) / 1000, làm tròn 2 chữ số thập phân — tính per row (không phải per group)
 - **BR-005:** Output có 1 separator row giữa các nhóm (không có giữa row cuối và end-of-file). Separator row hiển thị SUM tại các cột: Round(MT), CLF, VFM, MCC, CLV, NDFC ('' nếu factory đó không có invoice trong nhóm)

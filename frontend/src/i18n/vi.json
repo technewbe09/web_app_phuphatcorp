@@ -250,11 +250,77 @@
       "giaTriMin": "Giá trị phải >= 0"
     }
   },
+  "deliveryData": {
+    "menuTitle": "Xử lý Data Giao Hàng",
+    "process5Houses": "Xử lý data 5 nhà",
+    "processRice": "Xử lý data gạo"
+  },
   "vehicleData": {
     "menuTitle": "Quản lý dữ liệu xe",
     "tripCodes": "Mã chuyến",
     "vehicles": "Dữ liệu xe",
-    "drivers": "Thông tin tài xế"
+    "drivers": "Thông tin tài xế",
+    "deliverySchedule": "Lịch đi hàng"
+  },
+  "deliverySchedule": {
+    "title": "Lịch đi hàng",
+    "upload": "Upload Excel",
+    "filter": {
+      "fromDate": "Từ ngày",
+      "toDate": "Đến ngày",
+      "search": "Tìm kiếm...",
+      "searchButton": "Tìm kiếm",
+      "fromDatePlaceholder": "YYYY-MM-DD",
+      "toDatePlaceholder": "YYYY-MM-DD",
+      "dateRangeError": "Từ ngày phải <= Đến ngày"
+    },
+    "table": {
+      "ngay": "Ngày",
+      "stt": "STT",
+      "noiGiao": "Nơi giao",
+      "tan": "Tấn",
+      "soXe": "Số xe",
+      "can": "Cân",
+      "ghiChu": "Ghi chú"
+    },
+    "empty": {
+      "title": "Chưa có dữ liệu lịch đi hàng",
+      "subtitle": "Upload file Excel để bắt đầu",
+      "uploadCta": "Upload Excel"
+    },
+    "error": {
+      "title": "Không thể tải dữ liệu",
+      "retry": "Thử lại"
+    },
+    "uploadModal": {
+      "title": "Upload Lịch đi hàng",
+      "fromDate": "Từ ngày",
+      "toDate": "Đến ngày",
+      "dropzone": "Kéo thả file .xlsx hoặc click để chọn",
+      "accepts": "Chỉ chấp nhận file .xlsx, tối đa 10MB",
+      "cancel": "Hủy",
+      "submit": "Upload",
+      "submitting": "Đang upload..."
+    },
+    "uploadValidation": {
+      "fileRequired": "Vui lòng chọn file Excel",
+      "fromDateRequired": "Từ ngày là bắt buộc",
+      "toDateRequired": "Đến ngày là bắt buộc",
+      "dateRangeError": "Từ ngày phải <= Đến ngày",
+      "fileTooBig": "File quá lớn (tối đa 10MB)",
+      "fileWrongType": "Chỉ chấp nhận file .xlsx"
+    },
+    "uploadSuccess": "Upload thành công: {count} dòng dữ liệu",
+    "uploadWarning": "Upload hoàn tất với {errors} lỗi",
+    "uploadError": "Upload thất bại. Vui lòng thử lại.",
+    "uploadErrorsTitle": "Có {count} lỗi trong dữ liệu — không có dòng nào được lưu:",
+    "uploadErrorColumns": {
+      "sheet": "Sheet",
+      "row": "Dòng",
+      "ngay": "Ngày",
+      "field": "Cột",
+      "reason": "Lý do"
+    }
   },
   "theme": {
     "toggleToDark": "Chuyển sang chế độ tối",

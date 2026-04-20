@@ -8,6 +8,10 @@ export const pool = new Pool({
   connectionTimeoutMillis: 5000,
 });
 
+pool.on('connect', (client) => {
+  client.query("SET timezone = 'Asia/Ho_Chi_Minh'");
+});
+
 pool.on('error', (err) => {
   console.error('Unexpected error on idle client', err);
 });

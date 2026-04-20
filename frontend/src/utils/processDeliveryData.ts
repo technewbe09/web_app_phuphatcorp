@@ -7,7 +7,10 @@
  * Logic:
  * 1. Read XLSX file (ArrayBuffer) using xlsx library
  * 2. Skip first 4 rows (company name, address, title, blank) — row 5 = header, row 6+ = data
- * 3. Group rows by (Số tàu/xe + Ngày hóa đơn)
+ * 3. Group rows by (Số tàu/xe + Ngày hóa đơn + Tên khách hàng)
+ *    - Nếu SUM(HĐ Trọng lượng)/1000 < 13: giữ nguyên group key
+ *    - Nếu SUM(HĐ Trọng lượng)/1000 >= 13 và Thông tin bổ sung có từ 2 giá trị trở lên:
+ *      thêm Thông tin bổ sung vào group key
  * 4. Sort each group by Số hóa đơn ascending (numeric-aware)
  * 5. Sort groups by Ngày HĐ ASC then Số tàu/xe ASC
  * 6. Calculate Round(MT) per group = SUM(HĐ-Trọng lượng Net) / 1000 (3 decimal places)
@@ -16,6 +19,10 @@
 
 import * as XLSX from 'xlsx';
 import { Workbook } from 'exceljs';
+
+// ─── Excel number format patterns ─────────────────────────────────────────────
+const NUM_FMT_THOUSAND = '#,##0';         // Integer với thousand separator
+const NUM_FMT_DECIMAL = '#,##0.000';      // Decimal 3 chữ số với thousand separator
 
 // ─── Column index mapping from source file ────────────────────────────────────
 export const COL = {
@@ -247,6 +254,39 @@ const COL_WIDTHS = [
   { wch: 12 },  // Loại hàng
 ];
 
+// ─── Number format column mappings ────────────────────────────────────────────
+// Processed sheet (39 cols)
+const PROCESSED_NUMBER_COLS: Record<number, string> = {
+  12: NUM_FMT_THOUSAND,  // Số lượng
+  13: NUM_FMT_DECIMAL,   // SP Trọng lượng
+  14: NUM_FMT_DECIMAL,   // HĐ Trọng lượng
+  15: NUM_FMT_DECIMAL,   // Round(MT)
+  16: NUM_FMT_DECIMAL,   // CLF
+  17: NUM_FMT_DECIMAL,   // VFM
+  18: NUM_FMT_DECIMAL,   // MCC
+  19: NUM_FMT_DECIMAL,   // CLV
+  20: NUM_FMT_DECIMAL,   // NDFC
+  21: NUM_FMT_DECIMAL,   // Col1
+  22: NUM_FMT_DECIMAL,   // Col2
+};
+
+// Factory sheets (41 cols)
+const FACTORY_NUMBER_COLS: Record<number, string> = {
+  12: NUM_FMT_THOUSAND,  // Số lượng
+  13: NUM_FMT_DECIMAL,   // SP Trọng lượng
+  14: NUM_FMT_DECIMAL,   // HĐ Trọng lượng
+  15: NUM_FMT_DECIMAL,   // Round(MT)
+  16: NUM_FMT_DECIMAL,   // Tấn/Chuyến
+  17: NUM_FMT_DECIMAL,   // Tấn/Hóa đơn
+  18: NUM_FMT_DECIMAL,   // CLF
+  19: NUM_FMT_DECIMAL,   // VFM
+  20: NUM_FMT_DECIMAL,   // MCC
+  21: NUM_FMT_DECIMAL,   // CLV
+  22: NUM_FMT_DECIMAL,   // NDFC
+  23: NUM_FMT_DECIMAL,   // Col1
+  24: NUM_FMT_DECIMAL,   // Col2
+};
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 export type RawRow = (string | number | boolean | null | undefined)[];
 
@@ -442,26 +482,99 @@ export async function processDeliveryDataFromRows(
     }
   });
 
-  // ── Step 1: Group by (Số tàu/xe + Ngày hóa đơn) ──────────────────────────
-  const groupMap = new Map<string, GroupData>();
+  // ── Step 1: Group by (Số tàu/xe + Ngày hóa đơn + Tên khách hàng) ──────────
+  // Bước 1a: Group sơ bộ theo (Số tàu/xe + Ngày HĐ + Tên KH)
+  const preliminaryGroupMap = new Map<string, RawRow[]>();
 
   dataRows.forEach((row) => {
     const vehicle = cell(row, COL.SO_TAU_XE);
     const date = row[COL.NGAY_HD] ?? '';
-    const key = `${vehicle}|||${date}`;
+    const customerName = cell(row, COL.TEN_KH);
+    const key = `${vehicle}|||${date}|||${customerName}`;
 
-    if (!groupMap.has(key)) {
-      groupMap.set(key, { vehicle, date: date as string | number, rows: [] });
+    if (!preliminaryGroupMap.has(key)) {
+      preliminaryGroupMap.set(key, []);
     }
-    groupMap.get(key)!.rows.push(row);
+    preliminaryGroupMap.get(key)!.push(row);
   });
 
-  // ── Step 2: Sort each group by Số hóa đơn ascending ──────────────────────
+  // Bước 1b: Kiểm tra SUM(HĐ Trọng lượng)/1000 >= 13 và điều chỉnh group key nếu cần
+  const groupMap = new Map<string, GroupData>();
+
+  preliminaryGroupMap.forEach((rows, prelimKey) => {
+    const [vehicle, date, customerName] = prelimKey.split('|||');
+
+    // Tính tổng HĐ Trọng lượng / 1000 của group này
+    const totalHDTrongLuong = rows.reduce((sum, row) => {
+      return sum + (Number(row[COL.HD_TRONG_LUONG]) || 0);
+    }, 0);
+    const totalMT = totalHDTrongLuong / 1000;
+
+    // Nếu SUM(HĐ Trọng lượng)/1000 >= 13, kiểm tra "Thông tin bổ sung"
+    if (totalMT >= 13) {
+      // Nhóm lại theo "Thông tin bổ sung" nếu có từ 2 giá trị trở lên
+      const subGroups = new Map<string, RawRow[]>();
+
+      rows.forEach((row) => {
+        const thongTinBS = cell(row, COL.THONG_TIN_BS);
+
+        // Đếm số giá trị trong "Thông tin bổ sung" (phân tách bằng dấu phẩy hoặc xuống dòng)
+        const values = thongTinBS
+          .split(/[,\n\r]+/)
+          .map(v => v.trim())
+          .filter(v => v.length > 0);
+
+        const hasMultipleValues = values.length >= 2;
+
+        // Nếu có từ 2 giá trị → dùng group key mới (có Thông tin bổ sung)
+        // Nếu không → dùng group key cũ (không có Thông tin bổ sung)
+        const finalKey = hasMultipleValues
+          ? `${vehicle}|||${date}|||${customerName}|||${thongTinBS}`
+          : `${vehicle}|||${date}|||${customerName}`;
+
+        if (!subGroups.has(finalKey)) {
+          subGroups.set(finalKey, []);
+        }
+        subGroups.get(finalKey)!.push(row);
+      });
+
+      // Add tất cả sub-groups vào groupMap chính
+      subGroups.forEach((subRows, finalKey) => {
+        if (!groupMap.has(finalKey)) {
+          groupMap.set(finalKey, {
+            vehicle,
+            date: date as string | number,
+            rows: []
+          });
+        }
+        groupMap.get(finalKey)!.rows.push(...subRows);
+      });
+    } else {
+      // SUM(HĐ Trọng lượng)/1000 < 13 → giữ nguyên group key (Số tàu/xe + Ngày HĐ + Tên KH)
+      const finalKey = prelimKey;
+      if (!groupMap.has(finalKey)) {
+        groupMap.set(finalKey, {
+          vehicle,
+          date: date as string | number,
+          rows: []
+        });
+      }
+      groupMap.get(finalKey)!.rows.push(...rows);
+    }
+  });
+
+  // ── Step 2: Sort each group by Số hóa đơn ASC, then Mã NCC ASC ───────────
   for (const group of groupMap.values()) {
     group.rows.sort((a, b) => {
       const invoiceA = cell(a, COL.SO_HD);
       const invoiceB = cell(b, COL.SO_HD);
-      return invoiceA.localeCompare(invoiceB, undefined, { numeric: true });
+      const invoiceCompare = invoiceA.localeCompare(invoiceB, undefined, { numeric: true });
+      if (invoiceCompare !== 0) return invoiceCompare;
+
+      // Secondary sort: Mã nhà cung cấp ASC
+      const nccA = cell(a, COL.MA_NCC);
+      const nccB = cell(b, COL.MA_NCC);
+      return nccA.localeCompare(nccB, undefined, { numeric: true });
     });
   }
 
@@ -724,11 +837,17 @@ export async function processDeliveryDataFromRows(
     ws: ReturnType<typeof outWb.addWorksheet>,
     rows: (string | number)[][],
     sepIndices: Set<number>,
-    colWidths: { wch: number }[] = COL_WIDTHS
+    colWidths: { wch: number }[] = COL_WIDTHS,
+    isFactorySheet: boolean = false
   ) {
     ws.columns = colWidths.map((w) => ({ width: w.wch }));
+
+    const numberColsMap = isFactorySheet ? FACTORY_NUMBER_COLS : PROCESSED_NUMBER_COLS;
+
     rows.forEach((row, rowIndex) => {
       const excelRow = ws.addRow(row);
+
+      // Apply styling (existing code)
       if (rowIndex === 0) {
         excelRow.eachCell({ includeEmpty: true }, (cell) => {
           cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFFF00' } };
@@ -739,16 +858,25 @@ export async function processDeliveryDataFromRows(
           cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD9D9D9' } };
         });
       }
+
+      // Apply number format
+      excelRow.eachCell({ includeEmpty: false }, (cell, colNumber) => {
+        const colIndex = colNumber - 1; // exceljs uses 1-based index
+        const numFmt = numberColsMap[colIndex];
+        if (numFmt && typeof cell.value === 'number') {
+          cell.numFmt = numFmt;
+        }
+      });
     });
   }
 
   const outWs = outWb.addWorksheet('Processed');
-  writeSheetRows(outWs, outputRows, separatorRowIndices);
+  writeSheetRows(outWs, outputRows, separatorRowIndices, COL_WIDTHS, false);
 
   // Add per-factory sheets (CLF, VFM, MCC, CLV, NDFC) with factory-specific col widths
   FACTORY_NAMES.forEach((factory) => {
     const factoryWs = outWb.addWorksheet(factory);
-    writeSheetRows(factoryWs, factorySheetRows[factory], factorySeparatorRowIndices[factory], COL_WIDTHS_FACTORY);
+    writeSheetRows(factoryWs, factorySheetRows[factory], factorySeparatorRowIndices[factory], COL_WIDTHS_FACTORY, true);
   });
 
   const outBuffer = await outWb.xlsx.writeBuffer();
