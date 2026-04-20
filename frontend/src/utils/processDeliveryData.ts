@@ -92,6 +92,7 @@ const OUTPUT_HEADERS = [
   'SP Trọng lượng net',
   'HĐ Trọng lượng (Net)',
   'Round(MT)',
+  'Khung giá',
   'CLF',
   'VFM',
   'MCC',
@@ -139,31 +140,32 @@ const FACTORY_OUTPUT_HEADERS = [
   'SP Trọng lượng net',    // 13
   'HĐ Trọng lượng (Net)',  // 14
   'Round(MT)',              // 15
-  'Tấn/ Chuyến',           // 16 ← mới
-  'Tấn/ Hóa đơn',          // 17 ← mới
-  'CLF',                   // 18
-  'VFM',                   // 19
-  'MCC',                   // 20
-  'CLV',                   // 21
-  'NDFC',                  // 22
-  '',                      // 23
+  'Khung giá',             // 16 ← mới
+  'Tấn/ Chuyến',           // 17 ← mới
+  'Tấn/ Hóa đơn',          // 18 ← mới
+  'CLF',                   // 19
+  'VFM',                   // 20
+  'MCC',                   // 21
+  'CLV',                   // 22
+  'NDFC',                  // 23
   '',                      // 24
-  'Tài xế',                // 25
-  'Thông tin bổ sung',     // 26
-  'Slot',                  // 27
-  'Diễn giải',             // 28
-  'Channel',               // 29
-  'SubChannel',            // 30
-  'SlotNo',                // 31
-  'user tạo HĐ',           // 32
-  'User tạo PXK',          // 33
-  'PO number',             // 34
-  'Warehouse No',          // 35
-  'Warehouse Name',        // 36
-  'Phiếu XK',              // 37
-  'Chứng từ ghi sổ',       // 38
-  'Số seri',               // 39
-  'Loại hàng',             // 40
+  '',                      // 25
+  'Tài xế',                // 26
+  'Thông tin bổ sung',     // 27
+  'Slot',                  // 28
+  'Diễn giải',             // 29
+  'Channel',               // 30
+  'SubChannel',            // 31
+  'SlotNo',                // 32
+  'user tạo HĐ',           // 33
+  'User tạo PXK',          // 34
+  'PO number',             // 35
+  'Warehouse No',          // 36
+  'Warehouse Name',        // 37
+  'Phiếu XK',              // 38
+  'Chứng từ ghi sổ',       // 39
+  'Số seri',               // 40
+  'Loại hàng',             // 41
 ];
 
 // ─── Column widths for output Excel ───────────────────────────────────────────
@@ -185,15 +187,16 @@ const COL_WIDTHS_FACTORY: { wch: number }[] = [
   { wch: 18 },  // 13 SP Trọng lượng net
   { wch: 20 },  // 14 HĐ Trọng lượng (Net)
   { wch: 10 },  // 15 Round(MT)
-  { wch: 14 },  // 16 Tấn/ Chuyến ← mới
-  { wch: 14 },  // 17 Tấn/ Hóa đơn ← mới
-  { wch: 10 },  // 18 CLF
-  { wch: 10 },  // 19 VFM
-  { wch: 10 },  // 20 MCC
-  { wch: 10 },  // 21 CLV
-  { wch: 10 },  // 22 NDFC
-  { wch: 12 },  // 23 Col1 (tổng đầu khối)
-  { wch: 12 },  // 24 Col2 (tổng tất cả dòng)
+  { wch: 15 },  // 16 Khung giá ← mới
+  { wch: 14 },  // 17 Tấn/ Chuyến ← mới
+  { wch: 14 },  // 18 Tấn/ Hóa đơn ← mới
+  { wch: 10 },  // 19 CLF
+  { wch: 10 },  // 20 VFM
+  { wch: 10 },  // 21 MCC
+  { wch: 10 },  // 22 CLV
+  { wch: 10 },  // 23 NDFC
+  { wch: 12 },  // 24 Col1 (tổng đầu khối)
+  { wch: 12 },  // 25 Col2 (tổng tất cả dòng)
   { wch: 20 },  // 25 Tài xế
   { wch: 20 },  // 26 Thông tin bổ sung
   { wch: 15 },  // 27 Slot
@@ -210,6 +213,7 @@ const COL_WIDTHS_FACTORY: { wch: number }[] = [
   { wch: 18 },  // 38 Chứng từ ghi sổ
   { wch: 12 },  // 39 Số seri
   { wch: 12 },  // 40 Loại hàng
+  { wch: 15 },  // 41 Khung giá
 ];
 
 const COL_WIDTHS = [
@@ -229,6 +233,7 @@ const COL_WIDTHS = [
   { wch: 18 },  // SP Trọng lượng net
   { wch: 20 },  // HĐ Trọng lượng (Net)
   { wch: 10 },  // Round(MT)
+  { wch: 15 },  // Khung giá
   { wch: 10 },  // CLF
   { wch: 10 },  // VFM
   { wch: 10 },  // MCC
@@ -252,39 +257,42 @@ const COL_WIDTHS = [
   { wch: 18 },  // Chứng từ ghi sổ
   { wch: 12 },  // Số seri
   { wch: 12 },  // Loại hàng
+  { wch: 15 },  // Khung giá
 ];
 
 // ─── Number format column mappings ────────────────────────────────────────────
-// Processed sheet (39 cols)
+// Processed sheet (40 cols)
 const PROCESSED_NUMBER_COLS: Record<number, string> = {
   12: NUM_FMT_THOUSAND,  // Số lượng
   13: NUM_FMT_DECIMAL,   // SP Trọng lượng
   14: NUM_FMT_DECIMAL,   // HĐ Trọng lượng
   15: NUM_FMT_DECIMAL,   // Round(MT)
-  16: NUM_FMT_DECIMAL,   // CLF
-  17: NUM_FMT_DECIMAL,   // VFM
-  18: NUM_FMT_DECIMAL,   // MCC
-  19: NUM_FMT_DECIMAL,   // CLV
-  20: NUM_FMT_DECIMAL,   // NDFC
-  21: NUM_FMT_DECIMAL,   // Col1
-  22: NUM_FMT_DECIMAL,   // Col2
+  // 16: Khung giá — text, không format số
+  17: NUM_FMT_DECIMAL,   // CLF
+  18: NUM_FMT_DECIMAL,   // VFM
+  19: NUM_FMT_DECIMAL,   // MCC
+  20: NUM_FMT_DECIMAL,   // CLV
+  21: NUM_FMT_DECIMAL,   // NDFC
+  22: NUM_FMT_DECIMAL,   // Col1
+  23: NUM_FMT_DECIMAL,   // Col2
 };
 
-// Factory sheets (41 cols)
+// Factory sheets (42 cols)
 const FACTORY_NUMBER_COLS: Record<number, string> = {
   12: NUM_FMT_THOUSAND,  // Số lượng
   13: NUM_FMT_DECIMAL,   // SP Trọng lượng
   14: NUM_FMT_DECIMAL,   // HĐ Trọng lượng
   15: NUM_FMT_DECIMAL,   // Round(MT)
-  16: NUM_FMT_DECIMAL,   // Tấn/Chuyến
-  17: NUM_FMT_DECIMAL,   // Tấn/Hóa đơn
-  18: NUM_FMT_DECIMAL,   // CLF
-  19: NUM_FMT_DECIMAL,   // VFM
-  20: NUM_FMT_DECIMAL,   // MCC
-  21: NUM_FMT_DECIMAL,   // CLV
-  22: NUM_FMT_DECIMAL,   // NDFC
-  23: NUM_FMT_DECIMAL,   // Col1
-  24: NUM_FMT_DECIMAL,   // Col2
+  // 16: Khung giá — text, không format số
+  17: NUM_FMT_DECIMAL,   // Tấn/Chuyến
+  18: NUM_FMT_DECIMAL,   // Tấn/Hóa đơn
+  19: NUM_FMT_DECIMAL,   // CLF
+  20: NUM_FMT_DECIMAL,   // VFM
+  21: NUM_FMT_DECIMAL,   // MCC
+  22: NUM_FMT_DECIMAL,   // CLV
+  23: NUM_FMT_DECIMAL,   // NDFC
+  24: NUM_FMT_DECIMAL,   // Col1
+  25: NUM_FMT_DECIMAL,   // Col2
 };
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -349,6 +357,12 @@ export function cell(row: RawRow, index: number): string {
  * factoryVals: { CLF, VFM, MCC, CLV, NDFC } — value for the row's factory col,
  *   '' for inactive factory cols.
  */
+function getKhungGia(groupRoundMTTotal: number): string {
+  if (groupRoundMTTotal <= 2.5) return '<=2.5 tấn';
+  if (groupRoundMTTotal > 16) return '>16-23 tấn';
+  return '>8-16 tấn';
+}
+
 function mapRowToOutput(row: RawRow, factoryVals: Record<string, string | number>, isFirstInGroup: boolean, groupRoundMTTotal: number): (string | number)[] {
   const roundMT = Math.round((Number(row[COL.HD_TRONG_LUONG]) || 0) / 1000 * 1000) / 1000;
   return [
@@ -368,6 +382,7 @@ function mapRowToOutput(row: RawRow, factoryVals: Record<string, string | number
     cell(row, COL.SP_TRONG_LUONG),
     cell(row, COL.HD_TRONG_LUONG),
     roundMT,
+    getKhungGia(groupRoundMTTotal),
     factoryVals['CLF'],
     factoryVals['VFM'],
     factoryVals['MCC'],
@@ -732,13 +747,13 @@ export async function processDeliveryDataFromRows(
           : '';
 
         // CLF/VFM/MCC/CLV/NDFC: dòng đầu khối = group sums; còn lại giữ nguyên từ processRow
-        const clf  = isFirstRowOfGroup ? (groupFactorySums['CLF']  || '') : processRow[16];
-        const vfm  = isFirstRowOfGroup ? (groupFactorySums['VFM']  || '') : processRow[17];
-        const mcc  = isFirstRowOfGroup ? (groupFactorySums['MCC']  || '') : processRow[18];
-        const clv  = isFirstRowOfGroup ? (groupFactorySums['CLV']  || '') : processRow[19];
-        const ndfc = isFirstRowOfGroup ? (groupFactorySums['NDFC'] || '') : processRow[20];
+        const clf  = isFirstRowOfGroup ? (groupFactorySums['CLF']  || '') : processRow[17];
+        const vfm  = isFirstRowOfGroup ? (groupFactorySums['VFM']  || '') : processRow[18];
+        const mcc  = isFirstRowOfGroup ? (groupFactorySums['MCC']  || '') : processRow[19];
+        const clv  = isFirstRowOfGroup ? (groupFactorySums['CLV']  || '') : processRow[20];
+        const ndfc = isFirstRowOfGroup ? (groupFactorySums['NDFC'] || '') : processRow[21];
 
-        // Build factory row: cols 0-15 (giống Process), chèn 16-17, rồi cols 18-40
+        // Build factory row: cols 0-15 (giống Process), chèn 16-18, rồi cols 19-41
         const factoryRow: (string | number)[] = [
           // 0-15: giống Process
           processRow[0],  // Mã nhà cung cấp
@@ -757,35 +772,37 @@ export async function processDeliveryDataFromRows(
           processRow[13], // SP Trọng lượng net
           processRow[14], // HĐ Trọng lượng (Net)
           processRow[15], // Round(MT)
-          // 16-17: 2 cột mới
+          // 16: Khung giá (từ processRow[16])
+          processRow[16], // Khung giá
+          // 17-18: 2 cột mới cho factory
           tanChuyen,      // Tấn/ Chuyến
           tanHoaDon,      // Tấn/ Hóa đơn
-          // 18-22: CLF/VFM/MCC/CLV/NDFC (shift từ 16-20 của processRow)
+          // 19-23: CLF/VFM/MCC/CLV/NDFC (shift từ 17-21 của processRow)
           clf,
           vfm,
           mcc,
           clv,
           ndfc,
-          // 23-24: Col1/Col2 (shift từ 21-22 của processRow)
-          processRow[21], // Col1 (tổng đầu khối)
-          processRow[22], // Col2 (tổng tất cả dòng)
-          // 25-40: metadata (shift từ 23-38 của processRow)
-          processRow[23], // Tài xế
-          processRow[24], // Thông tin bổ sung
-          processRow[25], // Slot
-          processRow[26], // Diễn giải
-          processRow[27], // Channel
-          processRow[28], // SubChannel
-          processRow[29], // SlotNo
-          processRow[30], // user tạo HĐ
-          processRow[31], // User tạo PXK
-          processRow[32], // PO number
-          processRow[33], // Warehouse No
-          processRow[34], // Warehouse Name
-          processRow[35], // Phiếu XK
-          processRow[36], // Chứng từ ghi sổ
-          processRow[37], // Số seri
-          processRow[38], // Loại hàng
+          // 24-25: Col1/Col2 (shift từ 22-23 của processRow)
+          processRow[22], // Col1 (tổng đầu khối)
+          processRow[23], // Col2 (tổng tất cả dòng)
+          // 26-41: metadata (shift từ 24-39 của processRow)
+          processRow[24], // Tài xế
+          processRow[25], // Thông tin bổ sung
+          processRow[26], // Slot
+          processRow[27], // Diễn giải
+          processRow[28], // Channel
+          processRow[29], // SubChannel
+          processRow[30], // SlotNo
+          processRow[31], // user tạo HĐ
+          processRow[32], // User tạo PXK
+          processRow[33], // PO number
+          processRow[34], // Warehouse No
+          processRow[35], // Warehouse Name
+          processRow[36], // Phiếu XK
+          processRow[37], // Chứng từ ghi sổ
+          processRow[38], // Số seri
+          processRow[39], // Loại hàng
         ];
 
         factorySheetRows[factory][i] = factoryRow;
@@ -795,13 +812,14 @@ export async function processDeliveryDataFromRows(
     if (groupIndex < sortedGroups.length - 1) {
       const separatorRow: (string | number)[] = new Array(OUTPUT_HEADERS.length).fill('');
       separatorRow[15] = groupRoundMTSum;
-      separatorRow[16] = groupFactorySums['CLF'] || '';
-      separatorRow[17] = groupFactorySums['VFM'] || '';
-      separatorRow[18] = groupFactorySums['MCC'] || '';
-      separatorRow[19] = groupFactorySums['CLV'] || '';
-      separatorRow[20] = groupFactorySums['NDFC'] || '';
-      separatorRow[21] = groupRoundMTSum;
+      // col 16: Khung giá — để trống trên separator row
+      separatorRow[17] = groupFactorySums['CLF'] || '';
+      separatorRow[18] = groupFactorySums['VFM'] || '';
+      separatorRow[19] = groupFactorySums['MCC'] || '';
+      separatorRow[20] = groupFactorySums['CLV'] || '';
+      separatorRow[21] = groupFactorySums['NDFC'] || '';
       separatorRow[22] = groupRoundMTSum;
+      separatorRow[23] = groupRoundMTSum;
       separatorRowIndices.add(outputRows.length);
       outputRows.push(separatorRow);
 
@@ -814,14 +832,15 @@ export async function processDeliveryDataFromRows(
           const fSeparatorRow: (string | number)[] = new Array(FACTORY_OUTPUT_HEADERS.length).fill('');
           const fRoundMTSum = factoryGroupRoundMTSums[factory];
           fSeparatorRow[15] = fRoundMTSum;
-          // col 16-17 (Tấn/ Chuyến, Tấn/ Hóa đơn): để trống trên separator row
-          fSeparatorRow[18] = groupFactorySums['CLF']  || '';
-          fSeparatorRow[19] = groupFactorySums['VFM']  || '';
-          fSeparatorRow[20] = groupFactorySums['MCC']  || '';
-          fSeparatorRow[21] = groupFactorySums['CLV']  || '';
-          fSeparatorRow[22] = groupFactorySums['NDFC'] || '';
-          fSeparatorRow[23] = fRoundMTSum;
+          // col 16 (Khung giá): để trống trên separator row
+          // col 17-18 (Tấn/ Chuyến, Tấn/ Hóa đơn): để trống trên separator row
+          fSeparatorRow[19] = groupFactorySums['CLF']  || '';
+          fSeparatorRow[20] = groupFactorySums['VFM']  || '';
+          fSeparatorRow[21] = groupFactorySums['MCC']  || '';
+          fSeparatorRow[22] = groupFactorySums['CLV']  || '';
+          fSeparatorRow[23] = groupFactorySums['NDFC'] || '';
           fSeparatorRow[24] = fRoundMTSum;
+          fSeparatorRow[25] = fRoundMTSum;
           factorySeparatorRowIndices[factory].add(factorySheetRows[factory].length);
           factorySheetRows[factory].push(fSeparatorRow);
         }
