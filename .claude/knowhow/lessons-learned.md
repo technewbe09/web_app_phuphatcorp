@@ -6,6 +6,16 @@ description: Ghi lại các bài học kinh nghiệm, bug đã fix, và pitfalls
 
 ## Bugs & Fixes
 
+### 400 Bad Request khi fetch delivery-schedules với limit > 100
+- **Ngày:** 2026-04-19
+- **Severity:** High
+- **Feature liên quan:** Xử lý Data Gạo (RiceDeliveryDataPage)
+- **Triệu chứng:** `GET /api/delivery-schedules?limit=5000` trả về 400 Bad Request
+- **Root cause:** `deliveryScheduleListSchema` (backend) validate `limit` với `max: 100`. Frontend dùng `limit: '5000'` để cố lấy tất cả data 1 lần → vượt giới hạn
+- **Fix:** `riceDeliveryApi.ts` — đổi `limit: '5000'` → `limit: '100'` ở **cả hai chỗ** (request đầu tiên và vòng lặp pagination). Dùng pagination loop fetch nhiều page × 100 records thay vì 1 request lớn
+- **Regression test:** N/A (integration bug)
+- **Cần chú ý:** Khi tái sử dụng API có sẵn, luôn kiểm tra validation schema trên backend (đặc biệt `max` cho `limit`). Không giả định backend chấp nhận limit lớn tùy ý.
+
 ### CORS block local dev khi .env config cho prod — Single origin limitation
 - **Ngày:** 2026-04-08
 - **Severity:** Critical
@@ -227,6 +237,74 @@ description: Ghi lại các bài học kinh nghiệm, bug đã fix, và pitfalls
 - **Fix:** Xóa `requirePermission(...)` khỏi 3 GET routes (`vehicles.ts:16`, `tripCodes.ts:16`, `dispatchSchedules.ts:15`). Write endpoints (POST/PUT/DELETE) vẫn giữ `requirePermission` vì đó là các action thay đổi data.
 - **Regression test:** Backend build + 33 tests pass sau khi sửa.
 - **Cần chú ý:** Khi tính năng mới spec là "tất cả authenticated users có thể xem", không thêm `requirePermission` vào GET route. Chỉ thêm `requirePermission` vào write endpoints. `authenticateToken` (đã ở `router.use()`) là đủ để bảo vệ read access.
+
+---
+
+### Delivery Data grouping logic — dynamic group key dựa trên threshold và multi-value field
+
+- **Ngày:** 2026-04-18
+- **Severity:** Medium
+- **Feature liên quan:** Delivery Data Processing — grouping algorithm (Step 5.2)
+- **Thay đổi:** Group key không còn cố định `(Số tàu/xe + Ngày HĐ)` mà thay đổi động:
+  1. Group sơ bộ theo `(Số tàu/xe + Ngày HĐ + Tên KH)`
+  2. Tính `SUM(HĐ Trọng lượng) / 1000` của group
+  3. Nếu `< 13`: giữ nguyên group key
+  4. Nếu `>= 13`: parse cột "Thông tin bổ sung" (split bằng dấu phẩy/xuống dòng)
+     - Có từ 2 giá trị → thêm "Thông tin bổ sung" vào group key
+     - Chỉ 1 giá trị hoặc rỗng → giữ nguyên
+- **File sửa:** `frontend/src/utils/processDeliveryData.ts` — Step 1 (grouping logic)
+- **Cần chú ý:**
+  - Logic grouping phức tạp nên tách thành 2 bước: preliminary grouping → final grouping adjustment
+  - Threshold (13) là hardcoded — nếu cần thay đổi sau này, cân nhắc extract thành constant hoặc config
+  - Multi-value detection dùng regex `/[,\n\r]+/` để split — linh hoạt với nhiều format input (comma-separated, newline-separated)
+  - BREAKING CHANGE: Users có dữ liệu cũ sẽ thấy output phân nhóm khác so với trước đây
+
+---
+
+### Excel number format — exceljs không set numFmt property
+- **Ngày:** 2026-04-18
+- **Severity:** Medium
+- **Feature liên quan:** Delivery Data Processing — Excel output formatting
+- **Triệu chứng:** Output Excel mất thousand separator format cho cột số — "Số lượng (DVT bán hàng)" hiển thị `10` thay vì `10.000`, SP Trọng lượng hiển thị `1234.567` thay vì `1.234.567`.
+- **Root cause:** `exceljs` write cells không tự động apply number format. Mặc dù cell value là `number` type, Excel hiển thị số thuần (raw number) vì không có thuộc tính `cell.numFmt` — thuộc tính này quyết định cách hiển thị number trong Excel (thousand separator, decimals, percentage, currency...).
+- **Fix:** Sau khi `ws.addRow(row)`, loop qua các cells có index thuộc number columns và set `cell.numFmt`:
+  - `NUM_FMT_THOUSAND = '#,##0'` cho "Số lượng" (integer với thousand separator)
+  - `NUM_FMT_DECIMAL = '#,##0.000'` cho "SP Trọng lượng", "HĐ Trọng lượng", "Round(MT)", factory columns (decimal 3 chữ số với thousand separator)
+  - Tạo 2 column maps riêng: `PROCESSED_NUMBER_COLS` (39 cols) và `FACTORY_NUMBER_COLS` (41 cols)
+  - Thêm param `isFactorySheet: boolean` vào `writeSheetRows()` để chọn đúng map
+  - Chỉ apply format khi `typeof cell.value === 'number'` để tránh lỗi với text/date cells
+- **File sửa:** `frontend/src/utils/processDeliveryData.ts` — constants (line ~22-23), column maps (line ~256-279), `writeSheetRows()` function (line ~830-850), function calls (line ~867, ~873)
+- **Regression test:** `docs/testing/bugfix-excel-number-format-test-checklist.md` — 10 manual test cases (Số lượng, SP/HĐ Trọng lượng, Round(MT), separator rows, factory sheets, header row preservation, text columns không bị ảnh hưởng)
+- **Cần chú ý:**
+  - ExcelJS cell index là 1-based (`eachCell` callback nhận `colNumber`), cần `-1` khi map với array index 0-based
+  - Header row (rowIndex === 0) không bị ảnh hưởng vì không có number values → type check tự động skip
+  - Separator rows cũng có number cells → cần apply format như data rows thông thường
+  - Backward compatibility: không thay đổi parsing logic (đọc file vẫn dùng xlsx) — chỉ thay đổi output formatting
+  - `eachCell({ includeEmpty: false })` để bỏ qua empty cells khi apply format → tránh set format cho cells rỗng
+
+### pg driver serialize DATE column thành ISO UTC timestamp — MasterPlateMap key không match
+- **Ngày:** 2026-04-19
+- **Severity:** High
+- **Feature liên quan:** Xử lý Data Gạo (RiceDeliveryDataPage) — buildMasterPlateMap / filterRiceData
+- **Triệu chứng:** Filter trả về 0 dòng khớp dù biển số và ngày nhìn bằng mắt là đúng.
+- **Root cause:** `pg` driver Node.js tự động convert PostgreSQL `DATE` column thành JS `Date` object. Khi JSON serialize (Express `res.json()`), Date UTC midnight của Việt Nam bị lệch 1 ngày: `"2026-03-02"` (DB) → `"2026-03-01T17:00:00.000Z"` (API response). Frontend dùng string này làm key trong `MasterPlateMap`, còn Excel parse ra `"2026-03-02"` → hai key không bao giờ bằng nhau → zero match.
+- **Fix:** Cast `ds.ngay::text as ngay` trong SQL SELECT của `deliveryScheduleService.list()`. pg trả string `"2026-03-02"` thay vì Date object → không bị timezone convert.
+- **File sửa:** `backend/src/services/deliveryScheduleService.ts` — dòng `ds.ngay` trong SELECT list query
+- **Regression test:** Manual — query DB trực tiếp với `ngay::text` xác nhận trả `"2026-03-02"`.
+- **Cần chú ý:** Bất cứ khi nào SELECT `DATE` column qua `pg` driver mà cần dùng làm string key hoặc compare với string từ frontend/file → luôn dùng `column::text`. Không dùng `column` trực tiếp vì pg tự convert sang JS Date với UTC timezone.
+
+---
+
+
+- **Ngày:** 2026-04-19 (revised 2026-04-19)
+- **Severity:** High
+- **Feature liên quan:** Xử lý Data Gạo (RiceDeliveryDataPage) — parseRiceFile
+- **Triệu chứng:** File Excel ngày 2/3/2026 → sau khi parse ra 1/3/2026 → filter trả về 0 dòng khớp.
+- **Root cause:** `xlsx` với `cellDates: true` tạo Date object bằng **LOCAL time constructor** (ví dụ `new Date(2026, 2, 2, 0, 0, 0)`), nhưng thực tế time component không phải midnight mà là `23:59:30` local — do xlsx tính giờ từ fractional serial. Kết quả: cả `getDate()` lẫn `getUTCDate()` đều trả sai ngày. Ví dụ: serial 46083 (2/3/2026) → Date ISO `2026-03-01T16:59:30.000Z` → `getDate()` = 1, `getUTCDate()` = 1 → đều sai.
+- **Fix đúng:** Dùng `cellDates: false` khi `XLSX.read()` — xlsx giữ nguyên serial number. `parseRawDate` branch `typeof val === 'number'` gọi `excelSerialToDate()` dùng `Date.UTC(1899, 11, 30 + serial)` → luôn đúng bất kể timezone.
+- **File sửa:** `frontend/src/utils/processRiceData.ts` — đổi `cellDates: true` → `cellDates: false` trong `XLSX.read()` call; cập nhật comment trong branch `instanceof Date`.
+- **Regression test:** Node smoke test — parse file thực tế: không còn `2026-03-01`, có `2026-03-02` đến `2026-03-14` ✅
+- **Cần chú ý:** **KHÔNG BAO GIỜ dùng `cellDates: true`** khi đọc Excel file trong project này. `xlsx` không tạo UTC midnight — nó tạo Date với time component không ổn định. Luôn dùng `cellDates: false` + xử lý serial number qua `excelSerialToDate()`. Entry trước (ghi dùng `getUTC*`) là sai — đã được sửa lại.
 
 ---
 
