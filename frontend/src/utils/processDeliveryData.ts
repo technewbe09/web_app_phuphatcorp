@@ -749,12 +749,12 @@ export async function processDeliveryDataFromRows(
           ? factoryGroupRoundMTSums[factory]
           : '';
 
-        // CLF/VFM/MCC/CLV/NDFC: dòng đầu khối = group sums; còn lại giữ nguyên từ processRow
-        const clf  = isFirstRowOfGroup ? (groupFactorySums['CLF']  || '') : processRow[17];
-        const vfm  = isFirstRowOfGroup ? (groupFactorySums['VFM']  || '') : processRow[18];
-        const mcc  = isFirstRowOfGroup ? (groupFactorySums['MCC']  || '') : processRow[19];
-        const clv  = isFirstRowOfGroup ? (groupFactorySums['CLV']  || '') : processRow[20];
-        const ndfc = isFirstRowOfGroup ? (groupFactorySums['NDFC'] || '') : processRow[21];
+        // CLF/VFM/MCC/CLV/NDFC: chỉ hiển thị ở dòng đầu khối, các dòng khác để trống
+        const clf  = isFirstRowOfGroup ? (groupFactorySums['CLF']  || '') : '';
+        const vfm  = isFirstRowOfGroup ? (groupFactorySums['VFM']  || '') : '';
+        const mcc  = isFirstRowOfGroup ? (groupFactorySums['MCC']  || '') : '';
+        const clv  = isFirstRowOfGroup ? (groupFactorySums['CLV']  || '') : '';
+        const ndfc = isFirstRowOfGroup ? (groupFactorySums['NDFC'] || '') : '';
 
         // Build factory row: cols 0-15 (giống Process), chèn 16-18, rồi cols 19-41
         const factoryRow: (string | number)[] = [
@@ -837,11 +837,7 @@ export async function processDeliveryDataFromRows(
           fSeparatorRow[15] = fRoundMTSum;
           // col 16 (Khung giá): để trống trên separator row
           // col 17-18 (Tấn/ Chuyến, Tấn/ Hóa đơn): để trống trên separator row
-          fSeparatorRow[19] = groupFactorySums['CLF']  || '';
-          fSeparatorRow[20] = groupFactorySums['VFM']  || '';
-          fSeparatorRow[21] = groupFactorySums['MCC']  || '';
-          fSeparatorRow[22] = groupFactorySums['CLV']  || '';
-          fSeparatorRow[23] = groupFactorySums['NDFC'] || '';
+          // Các cột CLF/VFM/MCC/CLV/NDFC: để trống trên separator row
           fSeparatorRow[24] = fRoundMTSum;
           fSeparatorRow[25] = fRoundMTSum;
           factorySeparatorRowIndices[factory].add(factorySheetRows[factory].length);
