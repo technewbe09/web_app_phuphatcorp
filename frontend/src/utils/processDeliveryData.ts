@@ -141,8 +141,8 @@ const FACTORY_OUTPUT_HEADERS = [
   'HĐ Trọng lượng (Net)',  // 14
   'Round(MT)',              // 15
   'Khung giá',             // 16 ← mới
-  'Tấn/ Chuyến',           // 17 ← mới
-  'Tấn/ Hóa đơn',          // 18 ← mới
+  'Tấn/ Hóa đơn',          // 17 ← mới
+  'Tấn/ Chuyến',           // 18 ← mới
   'CLF',                   // 19
   'VFM',                   // 20
   'MCC',                   // 21
@@ -188,8 +188,8 @@ const COL_WIDTHS_FACTORY: { wch: number }[] = [
   { wch: 20 },  // 14 HĐ Trọng lượng (Net)
   { wch: 10 },  // 15 Round(MT)
   { wch: 15 },  // 16 Khung giá ← mới
-  { wch: 14 },  // 17 Tấn/ Chuyến ← mới
-  { wch: 14 },  // 18 Tấn/ Hóa đơn ← mới
+  { wch: 14 },  // 17 Tấn/ Hóa đơn ← mới
+  { wch: 14 },  // 18 Tấn/ Chuyến ← mới
   { wch: 10 },  // 19 CLF
   { wch: 10 },  // 20 VFM
   { wch: 10 },  // 21 MCC
@@ -357,7 +357,10 @@ export function cell(row: RawRow, index: number): string {
  * factoryVals: { CLF, VFM, MCC, CLV, NDFC } — value for the row's factory col,
  *   '' for inactive factory cols.
  */
-function getKhungGia(groupRoundMTTotal: number): string {
+function getKhungGia(groupRoundMTTotal: number, soTauXe: string): string {
+  const normalizedSoTauXe = soTauXe.trim();
+  if (normalizedSoTauXe.startsWith('PPH-P')) return 'Pallet';
+
   if (groupRoundMTTotal <= 2.5) return '<=2.5 tấn';
   if (groupRoundMTTotal > 16) return '>16-23 tấn';
   return '>8-16 tấn';
@@ -382,7 +385,7 @@ function mapRowToOutput(row: RawRow, factoryVals: Record<string, string | number
     cell(row, COL.SP_TRONG_LUONG),
     cell(row, COL.HD_TRONG_LUONG),
     roundMT,
-    getKhungGia(groupRoundMTTotal),
+    getKhungGia(groupRoundMTTotal, cell(row, COL.SO_TAU_XE)),
     factoryVals['CLF'],
     factoryVals['VFM'],
     factoryVals['MCC'],
@@ -732,11 +735,6 @@ export async function processDeliveryDataFromRows(
 
         const isFirstRowOfGroup = (i === groupStartIdx);
 
-        // Tấn/ Chuyến (col 16): chỉ dòng đầu khối
-        const tanChuyen: string | number = isFirstRowOfGroup
-          ? factoryGroupRoundMTSums[factory]
-          : '';
-
         // Tấn/ Hóa đơn (col 17): dòng đầu mỗi invoice+factory
         const invoiceNo = String(processRow[1]); // col 1 = Số hóa đơn
         const invoiceKey = `${invoiceNo}|||${factory}`;
@@ -744,6 +742,11 @@ export async function processDeliveryDataFromRows(
         if (isFirstForInvoice) invoiceSeenForFactory.add(invoiceKey);
         const tanHoaDon: string | number = isFirstForInvoice
           ? (invoiceFactorySums.get(invoiceKey) ?? '')
+          : '';
+
+        // Tấn/ Chuyến (col 18): chỉ dòng đầu khối
+        const tanChuyen: string | number = isFirstRowOfGroup
+          ? factoryGroupRoundMTSums[factory]
           : '';
 
         // CLF/VFM/MCC/CLV/NDFC: dòng đầu khối = group sums; còn lại giữ nguyên từ processRow
@@ -775,8 +778,8 @@ export async function processDeliveryDataFromRows(
           // 16: Khung giá (từ processRow[16])
           processRow[16], // Khung giá
           // 17-18: 2 cột mới cho factory
-          tanChuyen,      // Tấn/ Chuyến
           tanHoaDon,      // Tấn/ Hóa đơn
+          tanChuyen,      // Tấn/ Chuyến
           // 19-23: CLF/VFM/MCC/CLV/NDFC (shift từ 17-21 của processRow)
           clf,
           vfm,
@@ -851,6 +854,10 @@ export async function processDeliveryDataFromRows(
   // ── Step 5: Build output workbook ─────────────────────────────────────────
   const outWb = new Workbook();
 
+  // Column indices (0-based) for CLF/VFM/MCC/CLV/NDFC headers in each sheet type
+  const PROCESSED_GREEN_HEADER_COLS = new Set([17, 18, 19, 20, 21]); // CLF=17, VFM=18, MCC=19, CLV=20, NDFC=21
+  const FACTORY_GREEN_HEADER_COLS   = new Set([19, 20, 21, 22, 23]); // CLF=19, VFM=20, MCC=21, CLV=22, NDFC=23
+
   /** Helper: write rows into a worksheet with header + separator styling */
   function writeSheetRows(
     ws: ReturnType<typeof outWb.addWorksheet>,
@@ -862,15 +869,22 @@ export async function processDeliveryDataFromRows(
     ws.columns = colWidths.map((w) => ({ width: w.wch }));
 
     const numberColsMap = isFactorySheet ? FACTORY_NUMBER_COLS : PROCESSED_NUMBER_COLS;
+    const greenHeaderCols = isFactorySheet ? FACTORY_GREEN_HEADER_COLS : PROCESSED_GREEN_HEADER_COLS;
 
     rows.forEach((row, rowIndex) => {
       const excelRow = ws.addRow(row);
 
       // Apply styling (existing code)
       if (rowIndex === 0) {
-        excelRow.eachCell({ includeEmpty: true }, (cell) => {
-          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFFF00' } };
-          cell.font = { bold: true };
+        excelRow.eachCell({ includeEmpty: true }, (cell, colNumber) => {
+          const colIndex = colNumber - 1; // 0-based
+          const isGreenCol = greenHeaderCols.has(colIndex);
+          cell.fill = {
+            type: 'pattern',
+            pattern: 'solid',
+            fgColor: { argb: isGreenCol ? 'FF00B050' : 'FFFFFF00' },
+          };
+          cell.font = { bold: true, color: isGreenCol ? { argb: 'FFFFFFFF' } : undefined };
         });
       } else if (sepIndices.has(rowIndex)) {
         excelRow.eachCell({ includeEmpty: true }, (cell) => {
