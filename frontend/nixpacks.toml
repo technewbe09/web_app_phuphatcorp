@@ -1,5 +1,5 @@
 [phases.build]
-cmds = ["NODE_OPTIONS='--max-old-space-size=512' npm run build"]
+cmds = ["NODE_OPTIONS='--max-old-space-size=1536' npm run build"]
 [phases.setup]
 nixPkgs = ["nodejs_20"]
 [start]
