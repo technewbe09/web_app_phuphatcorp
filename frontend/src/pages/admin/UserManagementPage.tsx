@@ -133,9 +133,9 @@ export function UserManagementPage() {
                   <TableRow>
                     <TableHead className="w-12">{t('users.columns.stt')}</TableHead>
                     <TableHead>{t('users.columns.fullName')}</TableHead>
+                    <TableHead>{t('users.columns.username')}</TableHead>
                     <TableHead>{t('users.columns.email')}</TableHead>
                     <TableHead>{t('users.columns.role')}</TableHead>
-                    <TableHead>{t('users.columns.createdAt')}</TableHead>
                     <TableHead className="w-32">{t('users.columns.actions')}</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -148,14 +148,14 @@ export function UserManagementPage() {
                       <TableCell className="font-medium text-neutral-900 dark:text-neutral-100">
                         {user.full_name}
                       </TableCell>
+                      <TableCell className="text-neutral-600 dark:text-neutral-400 font-mono text-sm">
+                        {user.username}
+                      </TableCell>
                       <TableCell className="text-neutral-600 dark:text-neutral-400">{user.email}</TableCell>
                       <TableCell>
                         <Badge variant={user.role === 'ADMIN' ? 'warning' : user.role === 'ACCOUNTANT' ? 'info' : 'default'}>
                           {t(`users.roles.${user.role}`)}
                         </Badge>
-                      </TableCell>
-                      <TableCell className="text-neutral-500 dark:text-neutral-400 text-sm">
-                        {meta?.page !== undefined ? '' : ''}
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-1">

@@ -18,6 +18,11 @@ interface Props {
 
 const schema = yup.object({
   full_name: yup.string().required('validation.required'),
+  username: yup
+    .string()
+    .required('validation.required')
+    .min(3, 'validation.minLength')
+    .matches(/^[a-zA-Z0-9_]+$/, 'validation.usernameFormat'),
   email: yup.string().required('validation.required').email('validation.email'),
   password: yup.string().required('validation.required').min(6, 'validation.minLength'),
   role_id: yup.string().required('validation.required'),
@@ -48,6 +53,7 @@ export function CreateUserModal({ isOpen, onClose, onSuccess }: Props) {
     try {
       await createUser.mutateAsync({
         full_name: data.full_name,
+        username: data.username,
         email: data.email,
         password: data.password,
         role_id: parseInt(data.role_id, 10),
@@ -84,6 +90,12 @@ export function CreateUserModal({ isOpen, onClose, onSuccess }: Props) {
           label={t('createUser.fullName')}
           error={errors.full_name?.message ? t(errors.full_name.message) : undefined}
           {...register('full_name')}
+        />
+
+        <Input
+          label={t('createUser.username')}
+          error={errors.username?.message ? t(errors.username.message, { min: 3 }) : undefined}
+          {...register('username')}
         />
 
         <Input

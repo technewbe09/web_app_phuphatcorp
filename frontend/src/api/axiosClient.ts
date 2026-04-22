@@ -37,8 +37,19 @@ axiosClient.interceptors.response.use(
   async (error) => {
     const originalRequest = error.config;
 
-    // Nếu không phải 401 hoặc đã retry rồi → reject luôn
-    if (error.response?.status !== 401 || originalRequest._retry) {
+    const status = error.response?.status;
+
+    // Nếu không phải 401/403 hoặc đã retry rồi → reject luôn
+    // Backend trả 403 khi token hết hạn (jwt.verify throw), 401 khi thiếu token
+    if ((status !== 401 && status !== 403) || originalRequest._retry) {
+      return Promise.reject(error);
+    }
+
+    // 403 từ role bị thu hồi (message cụ thể) → không refresh, logout luôn
+    const message: string = error.response?.data?.message ?? '';
+    if (status === 403 && message.includes('Vai trò')) {
+      localStorage.removeItem('access_token');
+      window.location.href = '/login';
       return Promise.reject(error);
     }
 

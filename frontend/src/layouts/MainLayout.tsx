@@ -110,6 +110,7 @@ export function MainLayout() {
 
   const accountingDataSubItems = [
     { to: '/accounting-data/weight-adjustments', icon: Scale, label: t('accountingData.weightAdjustment' as never) },
+    { to: '/accounting-data/customers', icon: Users, label: t('customers.title' as never) },
   ];
 
   const renderSubGroup = (

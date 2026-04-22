@@ -361,7 +361,7 @@ function getKhungGia(groupRoundMTTotal: number, soTauXe: string): string {
   const normalizedSoTauXe = soTauXe.trim();
   if (normalizedSoTauXe.startsWith('PPH-P')) return 'Pallet';
 
-  if (groupRoundMTTotal <= 2.5) return '<=2.5 tấn';
+  if (groupRoundMTTotal <= 2.5) return '≤2.5 tấn';
   if (groupRoundMTTotal > 16) return '>16-23 tấn';
   return '>8-16 tấn';
 }
@@ -787,8 +787,8 @@ export async function processDeliveryDataFromRows(
           clv,
           ndfc,
           // 24-25: Col1/Col2 (shift từ 22-23 của processRow)
-          processRow[22], // Col1 (tổng đầu khối)
-          processRow[23], // Col2 (tổng tất cả dòng)
+          isFirstRowOfGroup ? processRow[22] : '', // Col1 (tổng đầu khối — blank trên non-first rows)
+          isFirstRowOfGroup ? processRow[23] : '', // Col2 (blank trên non-first rows)
           // 26-41: metadata (shift từ 24-39 của processRow)
           processRow[24], // Tài xế
           processRow[25], // Thông tin bổ sung

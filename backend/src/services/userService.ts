@@ -20,11 +20,13 @@ export interface CreateUserData {
   full_name: string;
   role?: UserRole;
   role_id?: number;
+  username: string;
   created_by: number;
 }
 
 export interface UpdateUserData {
   full_name?: string;
+  username?: string;
   role?: UserRole;
   role_id?: number;
   is_active?: boolean;
@@ -82,6 +84,15 @@ export const userService = {
       throw new ServiceError('EMAIL_EXISTS', 'Email already registered', 409);
     }
 
+    // Check username uniqueness
+    const existingUsername = await pool.query(
+      'SELECT id FROM users WHERE username = $1',
+      [data.username],
+    );
+    if (existingUsername.rows.length > 0) {
+      throw new ServiceError('USERNAME_EXISTS', 'Tên đăng nhập đã được sử dụng', 409);
+    }
+
     // Validate role_id is active if provided
     let resolvedRoleId: number | null = data.role_id ?? null;
     if (resolvedRoleId) {
@@ -108,10 +119,10 @@ export const userService = {
     const role = data.role || UserRole.VIEWER;
 
     const result = await pool.query<UserRow>(
-      `INSERT INTO users (email, password_hash, full_name, role, role_id, created_by)
-       VALUES ($1, $2, $3, $4, $5, $6)
-       RETURNING id, email, full_name, role, role_id, is_active`,
-      [data.email.toLowerCase(), passwordHash, data.full_name, role, resolvedRoleId, data.created_by],
+      `INSERT INTO users (email, username, password_hash, full_name, role, role_id, created_by)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
+       RETURNING id, email, username, full_name, role, role_id, is_active`,
+      [data.email.toLowerCase(), data.username, passwordHash, data.full_name, role, resolvedRoleId, data.created_by],
     );
 
     const user = result.rows[0];
@@ -150,6 +161,18 @@ export const userService = {
     const values: unknown[] = [];
     let paramIndex = 1;
 
+    if (data.username !== undefined) {
+      // Check username uniqueness (exclude current user)
+      const existingUsername = await pool.query(
+        'SELECT id FROM users WHERE username = $1 AND id != $2',
+        [data.username, id],
+      );
+      if (existingUsername.rows.length > 0) {
+        throw new ServiceError('USERNAME_EXISTS', 'Tên đăng nhập đã được sử dụng', 409);
+      }
+      updates.push(`username = $${paramIndex++}`);
+      values.push(data.username);
+    }
     if (data.full_name !== undefined) {
       updates.push(`full_name = $${paramIndex++}`);
       values.push(data.full_name);
@@ -285,7 +308,7 @@ export const userService = {
     const total = parseInt(countResult.rows[0].count, 10);
 
     const result = await pool.query<UserRow>(
-      `SELECT u.id, u.email, u.full_name, u.role, u.role_id, u.is_active,
+      `SELECT u.id, u.email, u.username, u.full_name, u.role, u.role_id, u.is_active,
               r.name AS role_name, u.created_at, u.updated_at
        FROM users u
        LEFT JOIN roles r ON r.id = u.role_id

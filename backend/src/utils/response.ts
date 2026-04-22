@@ -20,11 +20,13 @@ export function sendError(
   message = 'Internal Server Error',
   statusCode = 500,
   error?: string,
+  data?: unknown,
 ): void {
   const response: ApiResponse = {
     success: false,
     message,
     error,
+    data,
   };
   res.status(statusCode).json(response);
 }

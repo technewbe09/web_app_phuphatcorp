@@ -11,6 +11,7 @@
  */
 
 import * as XLSX from 'xlsx';
+import ExcelJS from 'exceljs';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -342,10 +343,13 @@ export function filterRiceData(
 
 // ─── Export Excel ─────────────────────────────────────────────────────────────
 
-const ORIGINAL_HEADERS = [
-  'DATE', 'SO XE', 'GATE PATE', 'CODE', 'SAP Code',
-  'Description V', 'Unit', 'DAI LY', 'CO',
-  'XUẤT CLF', 'XUẤT ĐẠI LÝ', 'XUẤT TRẢ VINH PHAT', 'XUẤT KHÁC',
+// ─── Output headers (sau khi lọc cột và thêm cột mới) ───────────────────────
+// Các cột bị xoá: GATE PATE, CODE, SAP Code, Unit, CO, XUẤT CLF
+// Cột mới: TRỌNG LƯỢNG (TẤN/ HÓA ĐƠN) = XUẤT ĐẠI LÝ / 1000, nằm sau XUẤT ĐẠI LÝ
+const OUTPUT_HEADERS = [
+  'DATE', 'SO XE', 'Description V', 'DAI LY',
+  'XUẤT ĐẠI LÝ', 'TRỌNG LƯỢNG (TẤN/ HÓA ĐƠN)',
+  'XUẤT TRẢ VINH PHAT', 'XUẤT KHÁC',
   'BỐC XẾP', 'SỐ KG', 'PALLET', 'SPOT CHECK',
   'QUY ĐỔI ĐVT (BAO/THÙNG/CÁI)', 'SỐ TẤN', 'QUY CÁCH',
   'CB chẳn/lẻ', 'Mt Chẳn', 'Mt Lẻ',
@@ -354,20 +358,79 @@ const ORIGINAL_HEADERS = [
 function rowsToSheetData(rows: RiceDataRow[]): (string | number | null)[][] {
   return rows.map((r) => {
     const cells = [...r.raw] as (string | number | null)[];
-    // Trả lại ngày đẹp (string) thay vì Date object
-    cells[COL.DATE] = r.ngay;
     // Trả lại biển số raw
     cells[COL.SO_XE] = r.soXeRaw;
-    return cells;
+
+    // Format ngày thành DD/MM/YYYY
+    const [yr, mo, dy] = r.ngay.split('-');
+    const ngayFormatted = `${dy}/${mo}/${yr}`;
+
+    // Cột "Trọng lượng (tấn/ hóa đơn)" = Xuất đại lý / 1000, làm tròn 3 chữ số
+    const troNgLuong = r.xuatDaiLy != null ? +(r.xuatDaiLy / 1000).toFixed(3) : null;
+
+    // Trả về chỉ các cột cần thiết (đã lọc + cột mới)
+    return [
+      ngayFormatted,             // DATE (DD/MM/YYYY)
+      cells[COL.SO_XE],          // SO XE
+      cells[COL.DESC_V],         // Description V
+      cells[COL.DAI_LY],         // DAI LY
+      cells[COL.XUAT_DAI_LY],    // XUẤT ĐẠI LÝ
+      troNgLuong,                // TRỌNG LƯỢNG (TẤN/ HÓA ĐƠN) — cột mới
+      cells[COL.XUAT_TRA],       // XUẤT TRẢ VINH PHAT
+      cells[COL.XUAT_KHAC],      // XUẤT KHÁC
+      cells[COL.BOC_XEP],        // BỐC XẾP
+      cells[COL.SO_KG],          // SỐ KG
+      cells[COL.PALLET],         // PALLET
+      cells[COL.SPOT_CHECK],     // SPOT CHECK
+      cells[COL.QUY_DOI],        // QUY ĐỔI ĐVT
+      cells[COL.SO_TAN],         // SỐ TẤN
+      cells[COL.QUY_CACH],       // QUY CÁCH
+      cells[COL.CB],             // CB chẳn/lẻ
+      cells[COL.MT_CHAN],        // Mt Chẳn
+      cells[COL.MT_LE],          // Mt Lẻ
+    ];
   });
 }
 
-export function exportRiceResult(
+// ─── Màu header cho từng sheet ───────────────────────────────────────────────
+const HEADER_STYLE: Record<string, { bgColor: string; fontColor: string }> = {
+  'Khớp lịch':  { bgColor: '1E7E34', fontColor: 'FFFFFF' }, // xanh lá
+  'Không khớp': { bgColor: 'E65C00', fontColor: 'FFFFFF' }, // cam
+  'Thống kê':   { bgColor: '1565C0', fontColor: 'FFFFFF' }, // xanh dương
+};
+
+function applyHeaderStyle(
+  ws: ExcelJS.Worksheet,
+  sheetName: string,
+  numCols: number
+) {
+  const style = HEADER_STYLE[sheetName] ?? { bgColor: '37474F', fontColor: 'FFFFFF' };
+  const headerRow = ws.getRow(1);
+  headerRow.height = 22;
+  for (let c = 1; c <= numCols; c++) {
+    const cell = headerRow.getCell(c);
+    cell.fill = {
+      type: 'pattern',
+      pattern: 'solid',
+      fgColor: { argb: `FF${style.bgColor}` },
+    };
+    cell.font = { bold: true, color: { argb: `FF${style.fontColor}` }, size: 11 };
+    cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
+    cell.border = {
+      bottom: { style: 'thin', color: { argb: 'FF000000' } },
+    };
+  }
+}
+
+export async function exportRiceResult(
   filterResult: FilterResult,
-  originalHeaders: string[]
-): ExportResult {
-  const wb = XLSX.utils.book_new();
-  const headers = originalHeaders.length >= 23 ? originalHeaders : ORIGINAL_HEADERS;
+  _originalHeaders: string[]
+): Promise<ExportResult> {
+  const today = new Date();
+  const dateStr = `${today.getFullYear()}${String(today.getMonth() + 1).padStart(2, '0')}${String(today.getDate()).padStart(2, '0')}`;
+  const filename = `data_gao_filtered_${dateStr}.xlsx`;
+
+  const wb = new ExcelJS.Workbook();
 
   const sortRows = (rows: RiceDataRow[]) =>
     [...rows].sort((a, b) => {
@@ -376,18 +439,24 @@ export function exportRiceResult(
       return a.soXeNorm.localeCompare(b.soXeNorm, 'vi');
     });
 
-  // ─ Sheet 1: Khớp lịch
-  const matchedData = [headers, ...rowsToSheetData(sortRows(filterResult.matched))];
-  const wsMatched = XLSX.utils.aoa_to_sheet(matchedData);
-  XLSX.utils.book_append_sheet(wb, wsMatched, 'Khớp lịch');
+  const addDataSheet = (sheetName: string, rows: RiceDataRow[]) => {
+    const ws = wb.addWorksheet(sheetName);
+    ws.addRow(OUTPUT_HEADERS);
+    for (const rowArr of rowsToSheetData(sortRows(rows))) {
+      ws.addRow(rowArr);
+    }
+    ws.columns.forEach((col, i) => {
+      col.width = Math.max((OUTPUT_HEADERS[i] ?? '').length + 2, 12);
+    });
+    applyHeaderStyle(ws, sheetName, OUTPUT_HEADERS.length);
+  };
 
-  // ─ Sheet 2: Không khớp
-  const unmatchedData = [headers, ...rowsToSheetData(sortRows(filterResult.unmatched))];
-  const wsUnmatched = XLSX.utils.aoa_to_sheet(unmatchedData);
-  XLSX.utils.book_append_sheet(wb, wsUnmatched, 'Không khớp');
+  addDataSheet('Khớp lịch', filterResult.matched);
+  addDataSheet('Không khớp', filterResult.unmatched);
 
   // ─ Sheet 3: Thống kê
-  const statsData: (string | number)[][] = [
+  const wsStats = wb.addWorksheet('Thống kê');
+  const statsRows: (string | number)[][] = [
     ['Chỉ số', 'Giá trị'],
     ['Tổng dòng khớp lịch', filterResult.totalMatched],
     ['Tổng dòng không khớp', filterResult.totalUnmatched],
@@ -398,17 +467,14 @@ export function exportRiceResult(
     ['Biển số không tìm thấy trong lịch'],
     ...filterResult.unknownPlates.map((p) => [p]),
   ];
-  const wsStats = XLSX.utils.aoa_to_sheet(statsData);
-  XLSX.utils.book_append_sheet(wb, wsStats, 'Thống kê');
+  for (const r of statsRows) wsStats.addRow(r);
+  wsStats.columns = [{ width: 36 }, { width: 16 }];
+  applyHeaderStyle(wsStats, 'Thống kê', 2);
 
-  const buffer = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+  const buffer = await wb.xlsx.writeBuffer();
   const blob = new Blob([buffer], {
     type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
   });
-
-  const today = new Date();
-  const dateStr = `${today.getFullYear()}${String(today.getMonth() + 1).padStart(2, '0')}${String(today.getDate()).padStart(2, '0')}`;
-  const filename = `data_gao_filtered_${dateStr}.xlsx`;
 
   return { blob, filename };
 }

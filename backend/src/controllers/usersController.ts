@@ -41,7 +41,7 @@ export const usersController = {
 
   async createUser(req: AuthRequest, res: Response): Promise<void> {
     try {
-      const { email, password, full_name, role, role_id } = req.body;
+      const { email, password, full_name, role, role_id, username } = req.body;
       const actorId = req.user!.userId;
 
       const user = await userService.createUser({
@@ -50,6 +50,7 @@ export const usersController = {
         full_name,
         role,
         role_id,
+        username,
         created_by: actorId,
       });
 
@@ -67,7 +68,7 @@ export const usersController = {
   async updateUser(req: AuthRequest, res: Response): Promise<void> {
     try {
       const id = parseInt(req.params.id, 10);
-      const { full_name, role, role_id, is_active } = req.body;
+      const { full_name, role, role_id, is_active, username } = req.body;
       const actorId = req.user!.userId;
 
       const user = await userService.updateUser(id, {
@@ -75,6 +76,7 @@ export const usersController = {
         role,
         role_id,
         is_active,
+        username,
         updated_by: actorId,
         actor_id: actorId,
       });

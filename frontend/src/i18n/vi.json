@@ -18,6 +18,7 @@
     "columns": {
       "stt": "STT",
       "fullName": "Họ tên",
+      "username": "Tên đăng nhập",
       "email": "Email",
       "role": "Vai trò",
       "status": "Trạng thái",
@@ -128,6 +129,7 @@
   "createUser": {
     "title": "Thêm người dùng",
     "fullName": "Họ tên",
+    "username": "Tên đăng nhập",
     "email": "Email",
     "password": "Mật khẩu",
     "role": "Vai trò",
@@ -137,6 +139,7 @@
   "editUser": {
     "title": "Sửa người dùng",
     "fullName": "Họ tên",
+    "username": "Tên đăng nhập",
     "email": "Email",
     "role": "Vai trò",
     "status": "Trạng thái hoạt động",
@@ -171,17 +174,95 @@
     "required": "Trường này là bắt buộc",
     "email": "Email không hợp lệ",
     "minLength": "Phải có ít nhất {min} ký tự",
-    "passwordMatch": "Mật khẩu xác nhận không khớp"
+    "passwordMatch": "Mật khẩu xác nhận không khớp",
+    "usernameFormat": "Chỉ được chứa chữ cái, số và dấu gạch dưới (_)"
   },
   "messages": {
     "createSuccess": "Tạo người dùng thành công",
     "updateSuccess": "Cập nhật người dùng thành công",
     "deleteSuccess": "Xóa người dùng thành công",
-    "error": "Đã xảy ra lỗi. Vui lòng thử lại."
+    "error": "Đã xảy ra lỗi. Vui lòng thử lại.",
+    "forbidden": "Bạn không có quyền truy cập."
   },
   "accountingData": {
     "menuTitle": "Quản lý dữ liệu kế toán",
-    "weightAdjustment": "Điều chỉnh trọng lượng"
+    "weightAdjustment": "Điều chỉnh trọng lượng",
+    "customers": "Danh sách khách hàng"
+  },
+  "customers": {
+    "title": "Danh sách khách hàng",
+    "searchPlaceholder": "Tìm theo Điểm trả hàng hoặc Tên khách hàng...",
+    "loadError": "Không thể tải dữ liệu.",
+    "empty": "Chưa có dữ liệu. Nhấn \"Tạo mới\" để bắt đầu.",
+    "noResults": "Không tìm thấy kết quả phù hợp.",
+    "columns": {
+      "diem_tra_hang": "Điểm trả hàng",
+      "ten_khach_hang": "Tên khách hàng",
+      "tuyen_moi": "Tuyến-phường",
+      "tuyen_cu": "Tuyến-cũ",
+      "dia_chi_giao_hang": "Địa chỉ giao hàng (vn)",
+      "boc_xep": "Bốc xếp",
+      "actions": "Thao tác"
+    },
+    "fields": {
+      "diem_tra_hang": "Điểm trả hàng",
+      "ten_khach_hang": "Tên khách hàng",
+      "tuyen_moi": "Tuyến-phường",
+      "tuyen_cu": "Tuyến-cũ",
+      "dia_chi_giao_hang": "Địa chỉ giao hàng (vn)",
+      "boc_xep": {
+        "label": "Bốc xếp",
+        "placeholder": "Chọn...",
+        "co": "Có",
+        "khong": "Không"
+      }
+    },
+    "actions": {
+      "create": "Tạo mới",
+      "save": "Lưu",
+      "cancel": "Hủy",
+      "delete": "Xóa",
+      "edit": "Sửa",
+      "import": "Import",
+      "retry": "Thử lại",
+      "uploadExcel": "Upload Excel"
+    },
+    "toast": {
+      "created": "Đã tạo khách hàng.",
+      "updated": "Đã cập nhật khách hàng.",
+      "deleted": "Đã xóa khách hàng."
+    },
+    "create": {
+      "title": "Thêm khách hàng"
+    },
+    "edit": {
+      "title": "Sửa khách hàng"
+    },
+    "delete": {
+      "title": "Xác nhận xóa",
+      "confirm": "Bạn có chắc muốn xóa khách hàng",
+      "note": "Hành động này sẽ deactivate bản ghi."
+    },
+    "upload": {
+      "title": "Upload Excel — Danh sách khách hàng",
+      "dropHere": "Kéo thả file .xlsx vào đây",
+      "orClick": "hoặc click để chọn file",
+      "downloadTemplate": "Tải file mẫu",
+      "onlyXlsx": "Chỉ chấp nhận file .xlsx",
+      "emptyOrInvalid": "File không có dữ liệu hợp lệ. Kiểm tra cột \"Điểm trả hàng\".",
+      "parseError": "Không thể đọc file Excel. Vui lòng kiểm tra định dạng file.",
+      "readError": "Không thể đọc file.",
+      "uploadError": "Lỗi upload. Vui lòng thử lại.",
+      "networkError": "Lỗi kết nối. Vui lòng thử lại.",
+      "success": "Đã import {count} bản ghi.",
+      "rowCount": "{count} bản ghi",
+      "hasErrors": "Có {count} lỗi — không có dòng nào được lưu:",
+      "columns": {
+        "row": "Dòng",
+        "diem_tra_hang": "Điểm trả hàng",
+        "reason": "Lý do"
+      }
+    }
   },
   "weightAdjustment": {
     "pageTitle": "Điều chỉnh trọng lượng",
@@ -405,6 +486,66 @@
       "gioNhanRequired": "Giờ nhận là bắt buộc",
       "bienSoRequired": "Biển số là bắt buộc",
       "bienSoSelectRequired": "Vui lòng chọn biển số xe"
+    }
+  },
+  "customers": {
+    "title": "Danh sách khách nhận hàng",
+    "addCustomer": "Thêm mới",
+    "importExcel": "Import Excel",
+    "search": "Tìm kiếm theo tên...",
+    "filterTuyen": "Lọc theo tuyến",
+    "allTuyen": "Tất cả tuyến",
+    "columns": {
+      "stt": "STT",
+      "diemTraHang": "Điểm trả hàng",
+      "tenKhachHang": "Tên khách hàng",
+      "tuyenPhuong": "Tuyến-phường",
+      "tuyenCu": "Tuyến-cũ",
+      "diaChiGiaoHang": "Địa chỉ giao hàng",
+      "bocXep": "Bốc xếp",
+      "actions": "Hành động"
+    },
+    "bocXep": {
+      "true": "Có",
+      "false": "Không"
+    },
+    "empty": "Chưa có khách hàng nào",
+    "noResults": "Không tìm thấy khách hàng nào",
+    "errorLoad": "Không thể tải danh sách khách hàng",
+    "retry": "Thử lại",
+    "create": {
+      "title": "Thêm khách hàng mới",
+      "submit": "Thêm mới",
+      "success": "Đã thêm khách hàng thành công"
+    },
+    "edit": {
+      "title": "Chỉnh sửa khách hàng",
+      "submit": "Lưu thay đổi",
+      "success": "Đã cập nhật khách hàng thành công"
+    },
+    "delete": {
+      "title": "Xóa khách hàng",
+      "warning": "Hành động này không thể hoàn tác.",
+      "submit": "Xóa",
+      "success": "Đã xóa khách hàng thành công"
+    },
+    "upload": {
+      "title": "Import khách hàng từ Excel",
+      "success": "Đã import {{count}} khách hàng thành công"
+    },
+    "fields": {
+      "diemTraHang": "Điểm trả hàng",
+      "tenKhachHang": "Tên khách hàng",
+      "tuyenPhuong": "Tuyến-phường",
+      "tuyenCu": "Tuyến-cũ",
+      "diaChiGiaoHang": "Địa chỉ giao hàng",
+      "bocXep": "Có bốc xếp"
+    },
+    "errors": {
+      "diemTraHangRequired": "Điểm trả hàng không được rỗng",
+      "tenKhachHangRequired": "Tên khách hàng không được rỗng",
+      "diemTraHangDuplicate": "Điểm trả hàng đã tồn tại",
+      "notFound": "Không tìm thấy khách hàng"
     }
   }
 }

@@ -61,7 +61,8 @@ export function authenticateToken(
       next();
     }
   } catch {
-    res.status(403).json({ success: false, message: 'Invalid or expired token' });
+    // 401 = token hết hạn hoặc không hợp lệ → frontend interceptor sẽ tự refresh
+    res.status(401).json({ success: false, message: 'Invalid or expired token' });
   }
 }
 
