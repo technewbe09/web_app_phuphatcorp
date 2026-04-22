@@ -71,6 +71,31 @@ function buildAdjustments(
   return result;
 }
 
+const DIEN_GIAI_EXCLUDE_KEYWORDS = ['thay thế', 'điều chỉnh'];
+
+function filterExcludedRows(rawRows: RawRow[], sourceRowNums: number[]): {
+  filteredRows: RawRow[];
+  filteredSourceRowNums: number[];
+  excludedCount: number;
+} {
+  const filteredRows: RawRow[] = [];
+  const filteredSourceRowNums: number[] = [];
+  let excludedCount = 0;
+
+  rawRows.forEach((row, idx) => {
+    const dienGiai = cell(row, COL.DIEN_GIAI).toLowerCase();
+    const shouldExclude = DIEN_GIAI_EXCLUDE_KEYWORDS.some((kw) => dienGiai.includes(kw));
+    if (shouldExclude) {
+      excludedCount++;
+    } else {
+      filteredRows.push(row);
+      filteredSourceRowNums.push(sourceRowNums[idx]);
+    }
+  });
+
+  return { filteredRows, filteredSourceRowNums, excludedCount };
+}
+
 function applyAdjustments(rawRows: RawRow[], adjustments: AdjustmentRow[]): RawRow[] {
   const modified = rawRows.map((row) => [...row] as RawRow);
   for (const adj of adjustments) {
@@ -87,6 +112,7 @@ export function DeliveryDataPage() {
   const [isDragOver, setIsDragOver] = useState(false);
   const [result, setResult] = useState<ProcessResult | null>(null);
   const [errorMessage, setErrorMessage] = useState<string>('');
+  const [excludedRowCount, setExcludedRowCount] = useState<number>(0);
   const [parsedFileData, setParsedFileData] = useState<ParsedFileData | null>(null);
   const [adjustments, setAdjustments] = useState<AdjustmentRow[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -129,14 +155,23 @@ export function DeliveryDataPage() {
     setErrorMessage('');
     try {
       const parsed = await parseDeliveryFile(selectedFile);
+
+      // BƯỚC 1.5 — Lọc dòng có Diễn giải chứa "thay thế" hoặc "điều chỉnh"
+      const { filteredRows, filteredSourceRowNums, excludedCount } = filterExcludedRows(
+        parsed.rawRows,
+        parsed.sourceRowNums
+      );
+      setExcludedRowCount(excludedCount);
+      const effectiveParsed = { rawRows: filteredRows, sourceRowNums: filteredSourceRowNums };
+
       const masterdata = await weightAdjustmentApi.fetchAll();
       const masterMap = new Map(masterdata.map((m) => [m.ma_hang, m]));
-      const found = buildAdjustments(parsed.rawRows, parsed.sourceRowNums, masterMap);
+      const found = buildAdjustments(effectiveParsed.rawRows, effectiveParsed.sourceRowNums, masterMap);
 
       if (found.length === 0) {
-        await runProcess(parsed.rawRows, parsed.sourceRowNums);
+        await runProcess(effectiveParsed.rawRows, effectiveParsed.sourceRowNums);
       } else {
-        setParsedFileData(parsed);
+        setParsedFileData(effectiveParsed);
         setAdjustments(found);
         setPageState('awaiting_confirmation');
       }
@@ -175,6 +210,7 @@ export function DeliveryDataPage() {
     setSelectedFile(null);
     setResult(null);
     setErrorMessage('');
+    setExcludedRowCount(0);
     setParsedFileData(null);
     setAdjustments([]);
     if (fileInputRef.current) fileInputRef.current.value = '';
@@ -338,7 +374,19 @@ export function DeliveryDataPage() {
                     {result.groupCount.toLocaleString()}
                   </p>
                 </div>
-                <div className="p-3 rounded-lg bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 col-span-2">
+                {excludedRowCount > 0 && (
+                  <div className="p-3 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800">
+                    <p className="text-xs text-amber-600 dark:text-amber-400 mb-1">Dòng bị loại</p>
+                    <p className="text-xl font-semibold text-amber-700 dark:text-amber-300">
+                      {excludedRowCount.toLocaleString()}
+                    </p>
+                    <p className="text-xs text-amber-500 dark:text-amber-500 mt-0.5">thay thế / điều chỉnh</p>
+                  </div>
+                )}
+                <div className={cn(
+                  'p-3 rounded-lg bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700',
+                  excludedRowCount > 0 ? '' : 'col-span-2'
+                )}>
                   <p className="text-xs text-neutral-500 dark:text-neutral-400 mb-1">Khoảng ngày</p>
                   <p className="text-sm font-medium text-neutral-900 dark:text-neutral-100">
                     {result.dateRange.from} → {result.dateRange.to}

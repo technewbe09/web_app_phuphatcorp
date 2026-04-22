@@ -18,6 +18,7 @@
     "columns": {
       "stt": "#",
       "fullName": "Full Name",
+      "username": "Username",
       "email": "Email",
       "role": "Role",
       "status": "Status",
@@ -128,6 +129,7 @@
   "createUser": {
     "title": "Add User",
     "fullName": "Full Name",
+    "username": "Username",
     "email": "Email",
     "password": "Password",
     "role": "Role",
@@ -137,6 +139,7 @@
   "editUser": {
     "title": "Edit User",
     "fullName": "Full Name",
+    "username": "Username",
     "email": "Email",
     "role": "Role",
     "status": "Active Status",
@@ -171,17 +174,95 @@
     "required": "This field is required",
     "email": "Invalid email address",
     "minLength": "Must be at least {min} characters",
-    "passwordMatch": "Password confirmation does not match"
+    "passwordMatch": "Password confirmation does not match",
+    "usernameFormat": "Only letters, numbers and underscores (_) are allowed"
   },
   "messages": {
     "createSuccess": "User created successfully",
     "updateSuccess": "User updated successfully",
     "deleteSuccess": "User deleted successfully",
-    "error": "An error occurred. Please try again."
+    "error": "An error occurred. Please try again.",
+    "forbidden": "You don't have permission to access this page."
   },
   "accountingData": {
     "menuTitle": "Accounting Data",
-    "weightAdjustment": "Weight Adjustment"
+    "weightAdjustment": "Weight Adjustment",
+    "customers": "Customers"
+  },
+  "customers": {
+    "title": "Customers",
+    "searchPlaceholder": "Search by Delivery Point or Customer Name...",
+    "loadError": "Unable to load data.",
+    "empty": "No data yet. Click \"Create\" to get started.",
+    "noResults": "No matching results.",
+    "columns": {
+      "diem_tra_hang": "Delivery point",
+      "ten_khach_hang": "Customer name",
+      "tuyen_moi": "Route-ward",
+      "tuyen_cu": "Old route",
+      "dia_chi_giao_hang": "Delivery address (vn)",
+      "boc_xep": "Loading",
+      "actions": "Actions"
+    },
+    "fields": {
+      "diem_tra_hang": "Delivery point",
+      "ten_khach_hang": "Customer name",
+      "tuyen_moi": "Route-ward",
+      "tuyen_cu": "Old route",
+      "dia_chi_giao_hang": "Delivery address (vn)",
+      "boc_xep": {
+        "label": "Loading",
+        "placeholder": "Select...",
+        "co": "Yes",
+        "khong": "No"
+      }
+    },
+    "actions": {
+      "create": "Create",
+      "save": "Save",
+      "cancel": "Cancel",
+      "delete": "Delete",
+      "edit": "Edit",
+      "import": "Import",
+      "retry": "Retry",
+      "uploadExcel": "Upload Excel"
+    },
+    "toast": {
+      "created": "Customer created.",
+      "updated": "Customer updated.",
+      "deleted": "Customer deleted."
+    },
+    "create": {
+      "title": "Add customer"
+    },
+    "edit": {
+      "title": "Edit customer"
+    },
+    "delete": {
+      "title": "Confirm delete",
+      "confirm": "Are you sure you want to delete customer",
+      "note": "This action will deactivate the record."
+    },
+    "upload": {
+      "title": "Upload Excel — Customers",
+      "dropHere": "Drag and drop .xlsx file here",
+      "orClick": "or click to select file",
+      "downloadTemplate": "Download template",
+      "onlyXlsx": "Only .xlsx files are accepted",
+      "emptyOrInvalid": "No valid data found. Please check column \"Điểm trả hàng\".",
+      "parseError": "Cannot read Excel file. Please check the file format.",
+      "readError": "Cannot read file.",
+      "uploadError": "Upload error. Please try again.",
+      "networkError": "Network error. Please try again.",
+      "success": "Imported {count} records.",
+      "rowCount": "{count} records",
+      "hasErrors": "There are {count} errors — no rows were saved:",
+      "columns": {
+        "row": "Row",
+        "diem_tra_hang": "Delivery point",
+        "reason": "Reason"
+      }
+    }
   },
   "weightAdjustment": {
     "pageTitle": "Weight Adjustment",
@@ -405,6 +486,66 @@
       "gioNhanRequired": "Pickup time is required",
       "bienSoRequired": "Plate number is required",
       "bienSoSelectRequired": "Please select a vehicle"
+    }
+  },
+  "customers": {
+    "title": "Customer Delivery List",
+    "addCustomer": "Add New",
+    "importExcel": "Import Excel",
+    "search": "Search by name...",
+    "filterTuyen": "Filter by route",
+    "allTuyen": "All routes",
+    "columns": {
+      "stt": "No.",
+      "diemTraHang": "Delivery Point",
+      "tenKhachHang": "Customer Name",
+      "tuyenPhuong": "Route (New)",
+      "tuyenCu": "Route (Old)",
+      "diaChiGiaoHang": "Delivery Address",
+      "bocXep": "Loading",
+      "actions": "Actions"
+    },
+    "bocXep": {
+      "true": "Yes",
+      "false": "No"
+    },
+    "empty": "No customers yet",
+    "noResults": "No customers found",
+    "errorLoad": "Unable to load customer list",
+    "retry": "Retry",
+    "create": {
+      "title": "Add New Customer",
+      "submit": "Add",
+      "success": "Customer added successfully"
+    },
+    "edit": {
+      "title": "Edit Customer",
+      "submit": "Save Changes",
+      "success": "Customer updated successfully"
+    },
+    "delete": {
+      "title": "Delete Customer",
+      "warning": "This action cannot be undone.",
+      "submit": "Delete",
+      "success": "Customer deleted successfully"
+    },
+    "upload": {
+      "title": "Import Customers from Excel",
+      "success": "Imported {{count}} customers successfully"
+    },
+    "fields": {
+      "diemTraHang": "Delivery Point",
+      "tenKhachHang": "Customer Name",
+      "tuyenPhuong": "Route (New)",
+      "tuyenCu": "Route (Old)",
+      "diaChiGiaoHang": "Delivery Address",
+      "bocXep": "Has Loading Service"
+    },
+    "errors": {
+      "diemTraHangRequired": "Delivery point is required",
+      "tenKhachHangRequired": "Customer name is required",
+      "diemTraHangDuplicate": "Delivery point already exists",
+      "notFound": "Customer not found"
     }
   }
 }

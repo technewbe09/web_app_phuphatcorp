@@ -20,6 +20,11 @@ interface Props {
 
 const schema = yup.object({
   full_name: yup.string().required('validation.required'),
+  username: yup
+    .string()
+    .required('validation.required')
+    .min(3, 'validation.minLength')
+    .matches(/^[a-zA-Z0-9_]+$/, 'validation.usernameFormat'),
   role_id: yup.string().required('validation.required'),
   is_active: yup.boolean().required(),
 });
@@ -44,6 +49,7 @@ export function EditUserModal({ isOpen, onClose, user, onSuccess }: Props) {
     resolver: yupResolver(schema),
     defaultValues: {
       full_name: user?.full_name || '',
+      username: user?.username || '',
       role_id: user?.role_id ? String(user.role_id) : '',
       is_active: user?.is_active ?? true,
     },
@@ -53,6 +59,7 @@ export function EditUserModal({ isOpen, onClose, user, onSuccess }: Props) {
     if (user) {
       reset({
         full_name: user.full_name,
+        username: user.username,
         role_id: user.role_id ? String(user.role_id) : '',
         is_active: user.is_active ?? true,
       });
@@ -67,6 +74,7 @@ export function EditUserModal({ isOpen, onClose, user, onSuccess }: Props) {
         id: user.id,
         data: {
           full_name: data.full_name,
+          username: data.username,
           role_id: parseInt(data.role_id, 10),
           is_active: data.is_active,
         },
@@ -105,6 +113,12 @@ export function EditUserModal({ isOpen, onClose, user, onSuccess }: Props) {
           label={t('editUser.fullName')}
           error={errors.full_name?.message ? t(errors.full_name.message) : undefined}
           {...register('full_name')}
+        />
+
+        <Input
+          label={t('editUser.username')}
+          error={errors.username?.message ? t(errors.username.message, { min: 3 }) : undefined}
+          {...register('username')}
         />
 
         <Input

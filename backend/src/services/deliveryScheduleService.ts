@@ -229,9 +229,9 @@ export const deliveryScheduleService = {
         }
       }
 
-      // Normalize SỐ XE (BR-004)
+      // Normalize SỐ XE (BR-004): uppercase, strip spaces/dashes/dots/commas → e.g. 50H12345
       if (so_xe !== null && so_xe !== undefined && so_xe !== '') {
-        normalizedSoXe = so_xe.toString().replace(/,/g, '.').trim();
+        normalizedSoXe = so_xe.toString().replace(/[\s\-.]/g, '').toUpperCase();
       }
 
       // Add to insert batch

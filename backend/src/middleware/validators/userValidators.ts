@@ -3,6 +3,10 @@ import { UserRole } from '../../types/user';
 
 export const createUserSchema: ValidationChain[] = [
   body('full_name').notEmpty().withMessage('Họ tên là bắt buộc'),
+  body('username')
+    .notEmpty().withMessage('Tên đăng nhập là bắt buộc')
+    .isLength({ min: 3, max: 100 }).withMessage('Tên đăng nhập phải từ 3 đến 100 ký tự')
+    .matches(/^[a-zA-Z0-9_]+$/).withMessage('Tên đăng nhập chỉ được chứa chữ cái, số và dấu gạch dưới'),
   body('email').isEmail().withMessage('Email không hợp lệ'),
   body('password')
     .isLength({ min: 6 })
@@ -21,6 +25,10 @@ export const createUserSchema: ValidationChain[] = [
 
 export const updateUserSchema: ValidationChain[] = [
   body('full_name').optional().notEmpty().withMessage('Họ tên không được để trống'),
+  body('username')
+    .optional()
+    .isLength({ min: 3, max: 100 }).withMessage('Tên đăng nhập phải từ 3 đến 100 ký tự')
+    .matches(/^[a-zA-Z0-9_]+$/).withMessage('Tên đăng nhập chỉ được chứa chữ cái, số và dấu gạch dưới'),
   body('role')
     .optional()
     .isIn(Object.values(UserRole))

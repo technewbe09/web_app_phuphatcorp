@@ -3,6 +3,7 @@ import type { UserPublic } from '../types/user';
 
 export interface CreateUserRequest {
   email: string;
+  username: string;
   password: string;
   full_name: string;
   role?: string;
@@ -11,6 +12,7 @@ export interface CreateUserRequest {
 
 export interface UpdateUserRequest {
   full_name?: string;
+  username?: string;
   role?: string;
   role_id?: number;
   is_active?: boolean;

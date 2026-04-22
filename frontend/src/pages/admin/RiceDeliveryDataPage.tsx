@@ -209,7 +209,7 @@ export function RiceDeliveryDataPage() {
       setFilterResult(result);
 
       // Step 4: Build export blob
-      const exported = exportRiceResult(result, parsed.headers);
+      const exported = await exportRiceResult(result, parsed.headers);
       setExportBlob(exported);
 
       setPageState('success');
