@@ -12,6 +12,7 @@ Thumbs.db
 .idea/
 *.sw?
 .claude
+.md
 
 # Dependencies
 node_modules/

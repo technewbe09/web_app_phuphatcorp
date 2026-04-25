@@ -424,7 +424,8 @@ function applyHeaderStyle(
 
 export async function exportRiceResult(
   filterResult: FilterResult,
-  _originalHeaders: string[]
+  originalHeaders: string[],
+  allRows: RiceDataRow[]
 ): Promise<ExportResult> {
   const today = new Date();
   const dateStr = `${today.getFullYear()}${String(today.getMonth() + 1).padStart(2, '0')}${String(today.getDate()).padStart(2, '0')}`;
@@ -453,6 +454,36 @@ export async function exportRiceResult(
 
   addDataSheet('Khớp lịch', filterResult.matched);
   addDataSheet('Không khớp', filterResult.unmatched);
+
+  // ─ Sheet "Raw": toàn bộ dữ liệu gốc, các row khớp lịch tô vàng
+  const matchedSourceRows = new Set(filterResult.matched.map((r) => r.sourceRowNum));
+  const wsRaw = wb.addWorksheet('Raw');
+  const numRawCols = Math.max(originalHeaders.length, 23);
+
+  // Header row
+  wsRaw.addRow(originalHeaders);
+  applyHeaderStyle(wsRaw, 'Raw', numRawCols);
+
+  // Data rows — giữ nguyên raw cells từ file gốc
+  for (const row of allRows) {
+    const cells = row.raw.slice(0, numRawCols) as (string | number | null)[];
+    const excelRow = wsRaw.addRow(cells);
+
+    if (matchedSourceRows.has(row.sourceRowNum)) {
+      // Tô vàng các row xuất hiện trong sheet "Khớp lịch"
+      for (let c = 1; c <= numRawCols; c++) {
+        excelRow.getCell(c).fill = {
+          type: 'pattern',
+          pattern: 'solid',
+          fgColor: { argb: 'FFFFFF00' }, // vàng
+        };
+      }
+    }
+  }
+
+  wsRaw.columns.forEach((col, i) => {
+    col.width = Math.max((originalHeaders[i] ?? '').length + 2, 12);
+  });
 
   // ─ Sheet 3: Thống kê
   const wsStats = wb.addWorksheet('Thống kê');

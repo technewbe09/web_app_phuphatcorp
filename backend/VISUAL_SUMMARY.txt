@@ -1,0 +1,313 @@
+╔════════════════════════════════════════════════════════════════════════════╗
+║          BACKEND TESTING STRUCTURE - VISUAL OVERVIEW                       ║
+╚════════════════════════════════════════════════════════════════════════════╝
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ CONFIGURATION LAYER                                                         │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  jest.config.js                    package.json                            │
+│  ┌──────────────────┐             ┌──────────────────┐                    │
+│  │ • preset: ts-jest│             │ • npm test       │                    │
+│  │ • test match     │             │ • jest deps      │                    │
+│  │ • module mapping │             │ • ts-jest v29    │                    │
+│  │ • redirects DB   │             │ • typescript v5  │                    │
+│  └──────────────────┘             └──────────────────┘                    │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ AUTHENTICATION & AUTHORIZATION                                              │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  src/middleware/auth.ts                                                    │
+│  ┌─────────────────────────────────────────────────────────┐              │
+│  │ authenticateToken()                                      │              │
+│  │  └─ Validates JWT from Authorization header            │              │
+│  │  └─ Extracts userId, email, role, roleId, permissions   │              │
+│  │  └─ Attaches to req.user (AuthRequest)                  │              │
+│  │  └─ Checks role is still active (async)                 │              │
+│  │                                                          │              │
+│  │ requirePermission(code)                                  │              │
+│  │  └─ HOF returns middleware                              │              │
+│  │  └─ Checks code in req.user.permissions array           │              │
+│  │  └─ Returns 403 if missing                              │              │
+│  │                                                          │              │
+│  │ authorizeRoles(...roles)                                 │              │
+│  │  └─ HOF returns middleware                              │              │
+│  │  └─ Checks role in allowed roles list                   │              │
+│  │  └─ Returns 403 if not allowed                          │              │
+│  └─────────────────────────────────────────────────────────┘              │
+│                                                                             │
+│  src/routes/roles.ts (Example Usage)                                       │
+│  ┌─────────────────────────────────────────────────────────┐              │
+│  │ router.use(authenticateToken)  ← Global protection      │              │
+│  │                                                          │              │
+│  │ GET / — requirePermission('roles.view')                 │              │
+│  │ POST / — requirePermission('roles.manage')              │              │
+│  │ PUT /:id — requirePermission('roles.manage')            │              │
+│  └─────────────────────────────────────────────────────────┘              │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ SERVICE LAYER (Business Logic)                                              │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  src/services/roleService.ts                                               │
+│  ├─ getRoles()           → async query with JOINs                          │
+│  ├─ createRole()         → code generation + collision check               │
+│  ├─ updateRole()         → simple update                                   │
+│  ├─ toggleRoleActive()   → deactivate with user count                      │
+│  ├─ ServiceError class   → (statusCode, code) properties                   │
+│  └─ generateCode()       → strips diacritics, generates code               │
+│                                                                             │
+│  src/services/permissionService.ts                                         │
+│  ├─ getAllPermissions()      → returns flat + grouped by module            │
+│  ├─ getPermissionMatrix()    → all roles, permissions, assignments        │
+│  └─ updateRolePermissions()  → transaction: DELETE + INSERT                │
+│                                                                             │
+│  src/services/driverService.ts                                             │
+│  ├─ list()              → simple SELECT                                    │
+│  ├─ create()            → check duplicate + INSERT                         │
+│  ├─ update()            → find, check duplicate, UPDATE                    │
+│  ├─ softDelete()        → change status to deactive                        │
+│  ├─ uploadDocument()    → validates size (5MB max), INSERT                 │
+│  └─ deleteDocument()    → DELETE by IDs                                    │
+│                                                                             │
+│  src/services/dispatchScheduleService.ts                                   │
+│  ├─ listByDate()   → groups by loai_tuyen and loai_xe                      │
+│  └─ create()       → INSERT with all optional fields                       │
+│                                                                             │
+│  src/services/weightAdjustmentService.ts                                   │
+│  ├─ list()         → active records ordered                                │
+│  ├─ create()       → check duplicate, INSERT                               │
+│  ├─ softUpdate()   → transaction: deactivate old, INSERT new version       │
+│  └─ [others]       → various soft-delete operations                        │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ DATABASE LAYER                                                              │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  src/config/database.ts (Real)                                             │
+│  ┌───────────────────────────────────────────┐                            │
+│  │ const pool = new Pool({                   │                            │
+│  │   connectionString: process.env.DB_URL,   │                            │
+│  │   max: 20, min: 2                         │                            │
+│  │ })                                        │                            │
+│  └───────────────────────────────────────────┘                            │
+│           ↓ (Jest redirects via moduleNameMapper)                          │
+│  src/__tests__/__mocks__/database.ts (Mock)                                │
+│  ┌───────────────────────────────────────────┐                            │
+│  │ export const pool = {                     │                            │
+│  │   query: jest.fn(),  ← mockResolvedValueOnce()                          │
+│  │   connect: jest.fn(), ← returns mockClient                              │
+│  │   end: jest.fn()                          │                            │
+│  │ }                                         │                            │
+│  └───────────────────────────────────────────┘                            │
+│                                                                             │
+│  How Module Mapping Works:                                                 │
+│  ┌───────────────────────────────────────────────────────────────┐        │
+│  │ jest.config.js:                                               │        │
+│  │                                                               │        │
+│  │ moduleNameMapper: {                                           │        │
+│  │   '^../config/database$': '<path>/src/__tests__/__mocks__...' │        │
+│  │   '^../../config/database$': '<path>/src/__tests__/__mocks__...'│       │
+│  │ }                                                             │        │
+│  │                                                               │        │
+│  │ Test file: import { pool } from '../config/database'         │        │
+│  │ Actually gets: src/__tests__/__mocks__/database.ts           │        │
+│  └───────────────────────────────────────────────────────────────┘        │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ TEST LAYER                                                                  │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  src/__tests__/ Directory Structure                                        │
+│  ├── __mocks__/                                                             │
+│  │   └── database.ts                                                       │
+│  ├── permissionService.test.ts    (80 lines)  ✓                            │
+│  ├── roleService.test.ts         (104 lines)  ✓                            │
+│  ├── driverService.test.ts       (161 lines)  ✓                            │
+│  ├── dispatchScheduleService.test.ts (150+ lines) ✓                        │
+│  ├── weightAdjustmentService.test.ts (200+ lines) ✓                        │
+│  └── [Routes, Controllers, Auth] ✗ NOT TESTED                              │
+│                                                                             │
+│  Test Pattern:                                                              │
+│  ┌─────────────────────────────────────────────────────────────┐          │
+│  │ import { service } from '../services/...'                   │          │
+│  │ import { pool } from './__mocks__/database'                 │          │
+│  │                                                             │          │
+│  │ const mockPool = pool as jest.Mocked<typeof pool>           │          │
+│  │                                                             │          │
+│  │ beforeEach(() => jest.clearAllMocks())                      │          │
+│  │                                                             │          │
+│  │ describe('service.method', () => {                          │          │
+│  │   it('should do X', async () => {                           │          │
+│  │     // Setup                                                │          │
+│  │     mockPool.query.mockResolvedValueOnce({rows: [...]})     │          │
+│  │                                                             │          │
+│  │     // Execute                                              │          │
+│  │     const result = await service.method()                   │          │
+│  │                                                             │          │
+│  │     // Assert                                               │          │
+│  │     expect(result).toEqual(...)                             │          │
+│  │   })                                                        │          │
+│  │ })                                                          │          │
+│  └─────────────────────────────────────────────────────────────┘          │
+│                                                                             │
+│  Database Mocking Patterns:                                                 │
+│  ┌─────────────────────────────────────────────────────────────┐          │
+│  │ Single Query:                                               │          │
+│  │  mockPool.query.mockResolvedValueOnce({rows: [...]})        │          │
+│  │                                                             │          │
+│  │ Sequential Queries:                                         │          │
+│  │  mockPool.query                                             │          │
+│  │    .mockResolvedValueOnce({rows: [...]})                    │          │
+│  │    .mockResolvedValueOnce({rows: [...]})                    │          │
+│  │    .mockResolvedValueOnce(undefined)                        │          │
+│  │                                                             │          │
+│  │ Transaction (via Client):                                   │          │
+│  │  mockClient.query                                           │          │
+│  │    .mockResolvedValueOnce({})  // BEGIN                     │          │
+│  │    .mockResolvedValueOnce({})  // UPDATE                    │          │
+│  │    .mockResolvedValueOnce({})  // COMMIT                    │          │
+│  │                                                             │          │
+│  │ Error:                                                      │          │
+│  │  await expect(...).rejects.toMatchObject({statusCode: 404}) │          │
+│  └─────────────────────────────────────────────────────────────┘          │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ DATA FLOW: Request with Auth                                                │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  1. HTTP Request arrives                                                    │
+│     Authorization: Bearer eyJhbGc...                                        │
+│                                                                             │
+│  2. authenticateToken middleware                                            │
+│     ├─ Extract token from header                                            │
+│     ├─ Verify signature with JWT_SECRET                                    │
+│     ├─ Decode: { userId, email, role, permissions[] }                      │
+│     ├─ Attach to req.user                                                   │
+│     └─ Query DB for role active status (async, fire-and-forget)            │
+│                                                                             │
+│  3. requirePermission('roles.view') middleware                              │
+│     ├─ Check req.user exists                                                │
+│     ├─ Check 'roles.view' in req.user.permissions array                    │
+│     └─ If not found: return 403                                             │
+│                                                                             │
+│  4. Controller receives request                                             │
+│     └─ Calls service layer                                                  │
+│                                                                             │
+│  5. Service executes business logic                                         │
+│     ├─ Queries database (via pool)                                          │
+│     ├─ Processes data                                                       │
+│     ├─ Throws ServiceError if validation fails                              │
+│     └─ Returns result                                                       │
+│                                                                             │
+│  6. Controller returns response                                             │
+│     ├─ If error: catches ServiceError                                       │
+│     ├─ Maps statusCode to HTTP status                                       │
+│     └─ Returns JSON response                                                │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ PERMISSION STRUCTURE                                                        │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  JWT Token Contents:                                                        │
+│  {                                                                          │
+│    userId: 1,                                                               │
+│    email: 'user@example.com',                                               │
+│    role: 'USER',                                                            │
+│    roleId: 5,                                                               │
+│    permissions: [                                                           │
+│      'roles.view',         ← module.action format                           │
+│      'users.manage',                                                        │
+│      'reports.view'                                                        │
+│    ]                                                                        │
+│  }                                                                          │
+│                                                                             │
+│  Database Structure:                                                        │
+│  ┌─────────────┐  1:N  ┌──────────────┐  N:N  ┌────────────┐              │
+│  │ roles       ├──────→│ role_perm    │──────→│ permissions│              │
+│  │ id (PK)     │       │ role_id (FK) │       │ id (PK)    │              │
+│  │ name        │       │ perm_id (FK) │       │ code       │              │
+│  │ code        │       │              │       │ module     │              │
+│  │ is_active   │       │              │       │ name       │              │
+│  └─────────────┘       └──────────────┘       └────────────┘              │
+│                                                                             │
+│  Permission Codes:                                                          │
+│  dashboard.view, dashboard.manage                                           │
+│  roles.view, roles.manage                                                   │
+│  users.view, users.manage, users.create                                     │
+│  etc.                                                                       │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ ERROR HANDLING PATTERN                                                      │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  Service Layer (Throws):                                                    │
+│  ┌──────────────────────────────────────────────────────────────┐          │
+│  │ export class ServiceError extends Error {                    │          │
+│  │   constructor(                                               │          │
+│  │     message: string,                                         │          │
+│  │     public statusCode: number,                               │          │
+│  │     public code?: string                                     │          │
+│  │   ) { super(message) }                                       │          │
+│  │ }                                                            │          │
+│  │                                                              │          │
+│  │ throw new ServiceError('Not found', 404, 'NOT_FOUND')        │          │
+│  │ throw new ServiceError('Duplicate', 409, 'DUPLICATE_CODE')   │          │
+│  └──────────────────────────────────────────────────────────────┘          │
+│                                                                             │
+│  Controller Layer (Catches):                                                │
+│  ┌──────────────────────────────────────────────────────────────┐          │
+│  │ try {                                                        │          │
+│  │   result = await service.method()                            │          │
+│  │ } catch (err) {                                              │          │
+│  │   if (err instanceof ServiceError) {                         │          │
+│  │     sendError(res, err.message, err.statusCode, err.code)    │          │
+│  │   } else {                                                   │          │
+│  │     sendError(res, 'Server error', 500)                      │          │
+│  │   }                                                          │          │
+│  │ }                                                            │          │
+│  └──────────────────────────────────────────────────────────────┘          │
+│                                                                             │
+│  Test Layer (Expects):                                                      │
+│  ┌──────────────────────────────────────────────────────────────┐          │
+│  │ await expect(service.method()).rejects.toMatchObject({       │          │
+│  │   message: 'Not found',                                      │          │
+│  │   statusCode: 404,                                           │          │
+│  │   code: 'NOT_FOUND'                                          │          │
+│  │ })                                                           │          │
+│  └──────────────────────────────────────────────────────────────┘          │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+╔════════════════════════════════════════════════════════════════════════════╗
+║ DOCUMENTATION FILES GENERATED                                             ║
+╠════════════════════════════════════════════════════════════════════════════╣
+║                                                                            ║
+║  1. TESTING_GUIDE.md (19 KB)                                              ║
+║     └─ Complete 14-section guide with all patterns and explanations       ║
+║                                                                            ║
+║  2. TESTING_QUICK_REF.md (6.3 KB)                                         ║
+║     └─ Quick reference tables and command cheatsheet                      ║
+║                                                                            ║
+║  3. CODE_SNIPPETS.md (16 KB)                                              ║
+║     └─ Real code excerpts from the project (14 sections)                  ║
+║                                                                            ║
+║  4. FILE_INDEX.md (10 KB)                                                 ║
+║     └─ Navigation guide with file locations and cross-references          ║
+║                                                                            ║
+╚════════════════════════════════════════════════════════════════════════════╝
