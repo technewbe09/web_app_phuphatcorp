@@ -565,6 +565,83 @@ frontend/src/components/accounting-data/WeightAdjustmentUploadModal.tsx
 
 ---
 
+### 11.2 Danh sách khách nhận hàng (/accounting-data/customers)
+
+**Mục đích:** Quản lý masterdata danh sách khách hàng nhận hàng — cho phép CRUD thủ công và import hàng loạt từ Excel.
+
+**Data model — bảng `customers`:**
+```sql
+customers (
+  id SERIAL PK,
+  diem_tra_hang VARCHAR(255) NOT NULL,       -- Điểm trả hàng, business key (unique per active)
+  ten_khach_hang VARCHAR(255) NOT NULL,       -- Tên khách hàng
+  tuyen_phuong VARCHAR(255),                  -- Tuyến-phường (nullable)
+  tuyen_cu VARCHAR(255),                      -- Tuyến cũ (nullable)
+  dia_chi_giao_hang TEXT,                     -- Địa chỉ giao hàng (nullable)
+  boc_xep BOOLEAN NOT NULL DEFAULT TRUE,      -- Có bốc xếp không
+  status VARCHAR(20) NOT NULL DEFAULT 'active', -- 'active' | 'deactive'
+  created_by INTEGER FK→users.id,
+  updated_by INTEGER FK→users.id,
+  created_at TIMESTAMPTZ, updated_at TIMESTAMPTZ
+)
+```
+
+**Business Rules:**
+- BR-001: `diem_tra_hang` unique trong active rows (service-level check, không phải DB constraint)
+- BR-002: Soft delete — UPDATE SET status='deactive' (không xóa vật lý)
+- BR-003: Create → 409 nếu diem_tra_hang đã tồn tại (active record)
+- BR-004: Update → 409 nếu diem_tra_hang conflict với record khác
+- BR-005: Upload fail-fast — nếu bất kỳ dòng nào lỗi → không insert gì cả, trả 422 + error list
+- BR-006: Cột boc_xep trong Excel: "Không"/"Khong" (case-insensitive) → false; rỗng/other → true
+- BR-007: Excel column order (positional, col index từ 0): col0=Điểm trả hàng, col1=Tuyến-phường, col2=Tuyến-cũ, col3=bỏ qua, col4=Tên khách hàng, col5=Địa chỉ giao hàng, col6=Bốc xếp
+- BR-008: fetchAll → chỉ trả active records
+
+**API Endpoints:**
+```
+GET    /api/customers          → list active rows (accounting_data.view)
+POST   /api/customers          → create (accounting_data.manage) → 409 if duplicate diem_tra_hang
+PUT    /api/customers/:id      → update (accounting_data.manage) → 409 if conflict, 404 if not found
+DELETE /api/customers/:id      → soft-delete (accounting_data.manage) → 404 if not found
+POST   /api/customers/upload   → bulk insert fail-fast (accounting_data.manage)
+                                  → 422 { success: false, errors: [{ row, diem_tra_hang, reason }] }
+```
+
+**Flow — Upload Excel:**
+```
+User chọn/kéo thả .xlsx
+  → Frontend parse Excel (xlsx lib, header:1 positional)
+    → Filter dòng header (row[0] = "Điểm trả hàng")
+    → Filter dòng trống (col0 rỗng)
+    → Map columns: col0 → diem_tra_hang, col1 → tuyen_phuong, ...
+    → boc_xep: col6.toLowerCase() === 'không'||'khong' → false, else true
+  → Preview: hiện số dòng + 3 dòng đầu
+  → Confirm import → POST /api/customers/upload { rows: [...] }
+  → 200: toast success "Đã import N bản ghi"
+  → 422: hiện bảng lỗi trong modal (dừng lại, không toast)
+```
+
+**Files:**
+```
+backend/src/migrations/012_create_customers.sql
+backend/src/services/customerService.ts
+backend/src/controllers/customerController.ts
+backend/src/routes/customers.ts
+backend/src/__tests__/customerService.test.ts  (17 tests)
+frontend/src/api/customersApi.ts
+frontend/src/hooks/useCustomers.ts
+frontend/src/pages/admin/accounting-data/CustomersPage.tsx
+frontend/src/components/admin/CreateCustomerModal.tsx
+frontend/src/components/admin/EditCustomerModal.tsx
+frontend/src/components/admin/DeleteCustomerDialog.tsx
+frontend/src/components/admin/UploadCustomersModal.tsx
+```
+
+**Permissions:** Same as weight-adjustments — `accounting_data.view` / `accounting_data.manage`
+
+**Access:** Route `/accounting-data/customers`, sidebar menu "Quản lý dữ liệu kế toán" → "Danh sách khách hàng"
+
+---
+
 
 - [ ] Trang Sổ kế toán (/accounting) — CRUD phiếu thu/chi, nhật ký chứng từ
 - [ ] Trang Báo cáo (/reports) — báo cáo tài chính, biểu đồ doanh thu

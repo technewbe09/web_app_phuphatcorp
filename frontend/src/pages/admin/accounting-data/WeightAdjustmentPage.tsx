@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react';
 import { Plus, Upload, Pencil, Trash2, AlertTriangle, RefreshCw } from 'lucide-react';
+import { Pagination } from '../../../components/ui/Pagination';
 import { Card, CardContent } from '../../../components/ui/Card';
 import { Button } from '../../../components/ui/Button';
 import { Input } from '../../../components/ui/Input';
@@ -39,6 +40,8 @@ export function WeightAdjustmentPage() {
   const [modal, setModal] = useState<ModalState>(null);
   const [search, setSearch] = useState('');
   const [toasts, setToasts] = useState<Toast[]>([]);
+  const [page, setPage] = useState(1);
+  const PAGE_SIZE = 20;
   const [deleteError, setDeleteError] = useState('');
 
   const showToast = (message: string, variant: 'success' | 'error' = 'success') => {
@@ -57,6 +60,12 @@ export function WeightAdjustmentPage() {
         row.ten_hang.toLowerCase().includes(q),
     );
   }, [data, search]);
+
+  const totalPages = Math.ceil(filteredRows.length / PAGE_SIZE);
+  const pagedRows = useMemo(() => {
+    const start = (page - 1) * PAGE_SIZE;
+    return filteredRows.slice(start, start + PAGE_SIZE);
+  }, [filteredRows, page]);
 
   const closeModal = () => {
     setModal(null);
@@ -123,7 +132,7 @@ export function WeightAdjustmentPage() {
           <Input
             placeholder="Tìm theo Mã hàng hoặc Tên hàng..."
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => { setSearch(e.target.value); setPage(1); }}
           />
         </CardContent>
       </Card>
@@ -173,7 +182,7 @@ export function WeightAdjustmentPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredRows.map((row) => {
+                  {pagedRows.map((row) => {
                     return (
                       <TableRow key={row.id}>
                         <TableCell className="font-medium text-neutral-900 dark:text-neutral-100">
@@ -213,6 +222,13 @@ export function WeightAdjustmentPage() {
                   })}
                 </TableBody>
               </Table>
+              <Pagination
+                currentPage={page}
+                totalPages={totalPages}
+                totalItems={filteredRows.length}
+                pageSize={PAGE_SIZE}
+                onPageChange={setPage}
+              />
             </div>
           )}
         </CardContent>

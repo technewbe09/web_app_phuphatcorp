@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react';
 import { Plus, Upload, Pencil, Trash2, AlertTriangle, RefreshCw, Check, X } from 'lucide-react';
+import { Pagination } from '../../../components/ui/Pagination';
 import { Card, CardContent } from '../../../components/ui/Card';
 import { Button } from '../../../components/ui/Button';
 import { Input } from '../../../components/ui/Input';
@@ -37,6 +38,8 @@ export function CustomersPage() {
   const [search, setSearch] = useState('');
   const [filterTuyen, setFilterTuyen] = useState('');
   const [toasts, setToasts] = useState<Toast[]>([]);
+  const [page, setPage] = useState(1);
+  const PAGE_SIZE = 20;
 
   const showToast = (message: string, variant: 'success' | 'error' = 'success') => {
     const id = Date.now();
@@ -65,6 +68,12 @@ export function CustomersPage() {
       return matchSearch && matchTuyen;
     });
   }, [data, search, filterTuyen]);
+
+  const totalPages = Math.ceil(filteredRows.length / PAGE_SIZE);
+  const pagedRows = useMemo(() => {
+    const start = (page - 1) * PAGE_SIZE;
+    return filteredRows.slice(start, start + PAGE_SIZE);
+  }, [filteredRows, page]);
 
   const closeModal = () => setModal(null);
 
@@ -112,12 +121,12 @@ export function CustomersPage() {
             <Input
               placeholder={t('customers.search')}
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              onChange={(e) => { setSearch(e.target.value); setPage(1); }}
               className="flex-1 min-w-48"
             />
             <select
               value={filterTuyen}
-              onChange={(e) => setFilterTuyen(e.target.value)}
+              onChange={(e) => { setFilterTuyen(e.target.value); setPage(1); }}
               className="px-3 py-2 text-sm border border-neutral-200 dark:border-neutral-700 rounded-lg bg-white dark:bg-neutral-900 text-neutral-900 dark:text-neutral-100 focus:outline-none focus:ring-2 focus:ring-neutral-900 dark:focus:ring-neutral-100"
             >
               <option value="">{t('customers.allTuyen')}</option>
@@ -174,10 +183,10 @@ export function CustomersPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredRows.map((row, idx) => (
+                  {pagedRows.map((row, idx) => (
                     <TableRow key={row.id}>
                       <TableCell className="text-neutral-500 dark:text-neutral-400 text-sm">
-                        {idx + 1}
+                        {(page - 1) * PAGE_SIZE + idx + 1}
                       </TableCell>
                       <TableCell
                         className="font-medium text-neutral-900 dark:text-neutral-100 max-w-48 truncate"
@@ -232,6 +241,13 @@ export function CustomersPage() {
                   ))}
                 </TableBody>
               </Table>
+              <Pagination
+                currentPage={page}
+                totalPages={totalPages}
+                totalItems={filteredRows.length}
+                pageSize={PAGE_SIZE}
+                onPageChange={setPage}
+              />
             </div>
           )}
         </CardContent>

@@ -197,6 +197,26 @@ VITE_API_URL=http://localhost:3021/api
 **Indexes:** `idx_user_activities_actor`, `idx_user_activities_target`
 **Actions:** `CREATE_USER`, `UPDATE_USER`, `DELETE_USER`, `RESET_PASSWORD`, `TOGGLE_STATUS`
 
+### customers
+| Column | Type | Constraints |
+|--------|------|-------------|
+| id | SERIAL | PRIMARY KEY |
+| diem_tra_hang | VARCHAR(255) | NOT NULL |
+| ten_khach_hang | VARCHAR(255) | NOT NULL |
+| tuyen_phuong | VARCHAR(255) | NULL |
+| tuyen_cu | VARCHAR(255) | NULL |
+| dia_chi_giao_hang | TEXT | NULL |
+| boc_xep | BOOLEAN | NOT NULL, DEFAULT TRUE |
+| status | VARCHAR(20) | NOT NULL, DEFAULT 'active' |
+| created_by | INTEGER | FK → users(id), NULL |
+| updated_by | INTEGER | FK → users(id), NULL |
+| created_at | TIMESTAMP | DEFAULT CURRENT_TIMESTAMP |
+| updated_at | TIMESTAMP | DEFAULT CURRENT_TIMESTAMP |
+
+**Indexes:** `idx_customers_diem_tra_hang`, `idx_customers_status`
+**Soft delete:** `status = 'deactive'` (không xóa cứng)
+**Migration:** `012_create_customers.sql`
+
 **Roles:** `ADMIN`, `ACCOUNTANT`, `VIEWER`
 
 **Admin account:**
@@ -243,6 +263,21 @@ Base URL: `/api`
 | PUT | /dispatch-schedules/:id | JWT + dispatch.manage | `{ bien_so, tai_xe?, ma_chuyen?, diem_nhan, diem_tra, gio_nhan, ghi_chu?, vehicle_id?, trip_code_id? }` | `{ success, data: DispatchSchedule }` |
 | DELETE | /dispatch-schedules/:id | JWT + dispatch.manage | — | `{ success, message }` |
 
+### Customers — /customers
+
+| Method | Path | Auth | Body/Query | Response |
+|--------|------|------|------------|----------|
+| GET | /customers | JWT + accounting_data.view | — | `{ success, data: Customer[] }` (only active records) |
+| POST | /customers | JWT + accounting_data.manage | `{ diem_tra_hang, ten_khach_hang, tuyen_phuong?, tuyen_cu?, dia_chi_giao_hang?, boc_xep? }` | `{ success, data: Customer }` |
+| PUT | /customers/:id | JWT + accounting_data.manage | same as POST | `{ success, data: Customer }` |
+| DELETE | /customers/:id | JWT + accounting_data.manage | — | `{ success, message }` (soft delete: status→'deactive') |
+| POST | /customers/upload | JWT + accounting_data.manage | `{ rows: UploadCustomerRow[] }` | `{ success, data: { inserted: number } }` or `{ success: false, errors: [] }` (HTTP 422) |
+
+**Error codes:**
+- 409: `diem_tra_hang` đã tồn tại (duplicate check trên active records)
+- 404: Không tìm thấy customer (hoặc đã bị deactivate)
+- 422: Upload validation errors (all-or-nothing: nếu có lỗi thì không save bất kỳ dòng nào)
+
 ### Response Format Convention
 
 ```typescript
@@ -283,6 +318,7 @@ Base URL: `/api`
 | /vehicle-data/drivers | MainLayout | Protected | DriverPage |
 | /dispatch/schedule | MainLayout | Protected | SchedulePage (Bảng điều phối xe) |
 | /accounting-data/weight-adjustments | MainLayout | Protected | WeightAdjustmentPage (Điều chỉnh trọng lượng) |
+| /accounting-data/customers | MainLayout | Protected | CustomersPage (Danh sách khách nhận hàng) |
 | * | — | — | Navigate to / |
 
 **Router pattern:** Dùng `BrowserRouter` + JSX `<Routes>` (KHÔNG dùng `createBrowserRouter` vì gây lỗi React context với AuthProvider).
@@ -339,6 +375,7 @@ cd backend && npx tsx src/scripts/create-admin.ts
 
 # Chạy migration
 psql -h 72.61.124.36 -p 5443 -U postgres -d test_PhuPhatCorp -f src/migrations/001_create_users.sql
+psql -h 72.61.124.36 -p 5443 -U postgres -d test_PhuPhatCorp -f src/migrations/012_create_customers.sql
 ```
 
 ## 13. Key Conventions

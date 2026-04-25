@@ -4,7 +4,18 @@ description: Ghi lại các bài học kinh nghiệm, bug đã fix, và pitfalls
 
 # Lessons Learned — PhuPhatCorp
 
-## Bugs & Fixes
+## Bug: POST /api/users 500 — username NOT NULL violation khi tạo user từ admin panel
+- **Ngày:** 2026-04-20
+- **Severity:** High
+- **Feature liên quan:** User Management — Create User (admin panel)
+- **Triệu chứng:** `POST /api/users` → 500 Internal Server Error. Không tạo được user mới từ form admin.
+- **Root cause:** Migration `008_add_username_to_users.sql` thêm column `username VARCHAR(100) NOT NULL UNIQUE`, nhưng `userService.createUser()` INSERT query không truyền `username` → PostgreSQL throw NOT NULL violation. `authService.createUser()` (register flow) không bị ảnh hưởng vì đã truyền username.
+- **Fix:** Thêm input `username` vào form Create User (admin nhập thủ công). Backend: `userService.createUser()` nhận `username` từ request body, INSERT trực tiếp. Thêm validation username uniqueness check cả ở create lẫn update. Frontend: thêm field `username` vào CreateUserModal, EditUserModal, và cột `username` vào UserManagementPage table.
+- **Bug kèm theo:** `getUsers()` SELECT query thiếu `u.username` → column hiển thị trống trong UI dù data đã có trong DB. Fix: thêm `u.username` vào SELECT list.
+- **Regression test:** POST /api/users với valid ADMIN token + `{email, password, full_name, username, role_id}` → HTTP 201, user được tạo với đúng username đã nhập.
+- **Cần chú ý:** (1) Bất kỳ khi nào thêm `NOT NULL` column mới vào bảng `users`, phải kiểm tra tất cả service methods (không chỉ authService) đang INSERT vào bảng đó. `userService.createUser` và `authService.createUser` là hai paths tách biệt. (2) Khi thêm column mới vào bảng, phải nhớ thêm column đó vào SELECT list trong tất cả query (`getUsers`, `getUserById`, ...) để data được trả về frontend.
+
+---
 
 ### 400 Bad Request khi fetch delivery-schedules với limit > 100
 - **Ngày:** 2026-04-19
