@@ -4,6 +4,48 @@ description: Ghi lại các bài học kinh nghiệm, bug đã fix, và pitfalls
 
 # Lessons Learned — PhuPhatCorp
 
+## Bug: Delivery Data Processing — Vehicle sort wrong because sort key ≠ display key (.slice(-9))
+- **Ngày:** 2026-04-26
+- **Severity:** High
+- **Feature liên quan:** Xử lý Data Giao Hàng (DeliveryDataPage) — 5 Nhà Processing Flow
+- **Triệu chứng:** Output file hiển thị biển số `85H 01932` trước `47H 02023` — thứ tự biển số hiển thị không tăng dần. 6 lỗi sort trong 74 khối.
+- **Root cause:** `compareVehicleNumbers(a.vehicle, b.vehicle)` so sánh **full source string** (vd: `PPH 85H 01932`, `PPH-47H 02023`), nhưng output hiển thị `.slice(-9)` (vd: `85H 01932`, `47H 02023`). Các prefix PPH có format khác nhau: `PPH ` (space) vs `PPH-` (dash). ASCII space (32) < dash (45), nên `PPH 85H` sort trước `PPH-47H`, tạo ra thứ tự sai khi nhìn ở output.
+- **Fix:** Đổi sort comparator từ `compareVehicleNumbers(a.vehicle, b.vehicle)` thành `compareVehicleNumbers(a.vehicle.slice(-9), b.vehicle.slice(-9))` — sort theo biển số hiển thị thay vì full source string.
+- **File sửa:** `frontend/src/utils/processDeliveryData.ts:631-633`
+- **Regression test:** Node script verify 210 groups, 0 sort errors (displayed). TypeScript typecheck pass, lint pass.
+- **Cần chú ý:** Khi sort key và display key khác nhau (do truncation/slicing), luôn sort theo display key. Verify sort bằng cách so sánh giá trị **hiển thị** trong output, không phải giá trị source. Verification script trước đó check full vehicle strings nên report 0 errors — sai vì không phản ánh output thực tế.
+
+---
+
+## Bug: Delivery Data Processing — Output rows duplicated N×N and vehicle sort broken
+- **Ngày:** 2026-04-26
+- **Severity:** Critical
+- **Feature liên quan:** Xử lý Data Giao Hàng (DeliveryDataPage) — 5 Nhà Processing Flow
+- **Triệu chứng:** File output "Processed" sheet có rows bị duplicate (mỗi group N rows → N² rows trong output), và thứ tự các khối theo biển số xe không tăng dần.
+- **Root cause:** Dòng 715 trong `processDeliveryData.ts` gọi `outputRows.push(...group.rows.sort((a,b) => compareVehicleNumbers(...)).map(row => mapRowToOutput(...)))` BÊN TRONG `group.rows.forEach()`. Hai vấn đề: (1) Push toàn bộ N rows của group trong MỖI iteration → N×N rows; (2) `sort()` in-place thay đổi thứ tự array đang được iterate bởi forEach.
+- **Fix:** Thay dòng 715 bằng `outputRows.push(outputRow)` — push 1 row đã được tạo ở dòng 714, giống cách factory sheets hoạt động (dòng 733).
+- **File sửa:** `frontend/src/utils/processDeliveryData.ts:715`
+- **Regression test:** TypeScript typecheck pass, lint pass.
+- **Cần chú ý:** Không bao giờ gọi `.sort()` trên array đang được iterate bằng `.forEach()` — sort in-place phá thứ tự iteration. Không push nhiều rows bên trong forEach khi logic chỉ cần push 1 row per iteration.
+
+---
+
+## Change: Delivery Data Processing — Remove pre-sort, add final sort groups by vehicle
+- **Ngày:** 2026-04-25
+- **Severity:** Medium
+- **Feature liên quan:** Xử lý Data Giao Hàng (DeliveryDataPage) — 5 Nhà Processing Flow
+- **Bối cảnh:** User feedback: pre-sort rows + sort groups trong quá trình processing gây phức tạp không cần thiết. Thay vì sort rows trước grouping, user chỉ muốn groups được sort theo **Số xe tăng dần** ở cuối cùng.
+- **Quyết định:** Bỏ Step 0 (pre-sort 3-level: vehicle → date → invoice) → Thêm final sort groups theo vehicle ASC (sau khi grouping và sort mỗi group).
+- **Thực hiện:**
+  - Xóa Step 0 pre-sort từ `processDeliveryData.ts` (dòng 533-559)
+  - Cập nhật Step 3: từ "sort groups by (Date, Vehicle)" → "final sort groups by Vehicle ASC"
+  - Dùng `compareVehicleNumbers()` để handle "[PREFIX][NUMBER]" format (e.g. "50H 55116")
+- **Impact:** Output file groups giờ chỉ theo Số xe tăng dần, bất kể ngày hóa đơn
+- **Kiểm tra:** Build ✅, lint ✅, no TypeScript errors ✅
+- **Cần chú ý:** Pre-sort rows có tác dụng "warm-up" ordering cho grouping (Map insertion order). Khi bỏ pre-sort, groups sẽ theo thứ tự xuất hiện từ grouping logic (vehicle + date + customer), rồi mới được sắp xếp lại theo vehicle ở cuối. Không ảnh hưởng kết quả, chỉ thay đổi thứ tự xử lý.
+
+---
+
 ## Bug: POST /api/users 500 — username NOT NULL violation khi tạo user từ admin panel
 - **Ngày:** 2026-04-20
 - **Severity:** High
@@ -237,6 +279,57 @@ description: Ghi lại các bài học kinh nghiệm, bug đã fix, và pitfalls
 - **Cần chú ý:** `xlsx` community edition chỉ đọc styles từ file có sẵn, không ghi styles mới. Khi cần output Excel có formatting (màu sắc, bold, border...) → luôn dùng `exceljs`. Tên biến `buffer` bị trùng với biến đọc file input — đặt tên là `outBuffer`.
 
 ---
+
+### Delivery Data processing — Pre-sort dòng trước grouping (điều chỉnh 3-level sort + fix vehicle number sorting + fix BR-003 inconsistency)
+- **Ngày:** 2026-04-25
+- **Severity:** High (was Medium)
+- **Feature liên quan:** Delivery Data Processing — grouping algorithm + group sorting
+- **Thay đổi ban đầu (2026-04-25 sáng):** Thêm bước sort (BR-000) trước bước grouping (BR-001)
+  - Primary: Số tàu/xe ASC (numeric-aware)
+  - Secondary: Ngày hóa đơn ASC
+  - Mục đích: Đảm bảo thứ tự nhất quán của các nhóm
+
+- **Điều chỉnh 1 (2026-04-25 chiều, Part 1):** Mở rộng BR-000 thành 3-level sort
+  - Primary: Số tàu/xe ASC (numeric-aware)
+  - Secondary: Ngày hóa đơn ASC
+  - Tertiary: Số hóa đơn ASC (numeric-aware) — **NEW**
+
+- **Bug discovery & fix (2026-04-25 chiều, Part 2):** Fix vehicle number sorting
+  - Issue: `localeCompare(..., { numeric: true })` không hoạt động đúng cho vehicle numbers
+  - Root cause: So sánh từng segment ký tự độc lập, không nhận biết "[PREFIX][NUMBER]" structure
+  - Fix: Thêm helper function `compareVehicleNumbers()` (lines 78-105)
+
+- **Logic conflict detection (2026-04-25 chiều, Part 3):** Phát hiện Step 1 vs Step 4 xung đột
+  - Issue: Step 1 (BR-000) pre-sort dùng `compareVehicleNumbers()` ✅
+  - Nhưng Step 4 (BR-003) group sort dùng `.localeCompare(b.vehicle)` ❌
+  - Impact: Step 1 pre-sort bị override lại bởi Step 4 sort khác logic
+  - Fix: Step 4 (BR-003) cập nhật dùng `compareVehicleNumbers()` (line 668)
+
+- **File sửa:**
+  - `frontend/src/utils/processDeliveryData.ts`:
+    * Added function `compareVehicleNumbers()` (lines 78-105)
+    * Updated Step 1 sort logic (lines 533-559) — use compareVehicleNumbers
+    * Updated Step 3 (BR-003) sort logic (line 668) — use compareVehicleNumbers
+
+- **Documentation:**
+  - Updated `system-features.md` BR-000: "natural sort: prefix numeric-aware → number numeric"
+  - Updated `system-features.md` BR-003: "dùng hàm compareVehicleNumbers() để maintain consistency với BR-000"
+
+- **Cần chú ý:**
+  - Thay đổi này ĐẢM BẢO:
+    * BR-000 pre-sort result không bị override bởi BR-003 group sort
+    * Output file vehicles được sort correctly (ascending order)
+    * Consistency giữa row-level sort (Step 1) và group-level sort (Step 4)
+  - Backward compatible — không break feature khác
+  - TypeScript typecheck: pass ✅
+
+---
+
+### Delivery Data processing — Pre-sort dòng trước grouping (initial 2-level sort)
+
+---
+
+### xlsx 0.18.5 community edition không ghi cell styles — dùng exceljs để write
 
 ### 403 Forbidden trên GET endpoints — requirePermission vs "Tất cả authenticated users"
 

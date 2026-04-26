@@ -20,6 +20,7 @@ import {
   cell,
 } from '../../utils/processDeliveryData';
 import { weightAdjustmentApi, type WeightAdjustment } from '../../api/weightAdjustmentApi';
+import { customersApi, type Customer } from '../../api/customersApi';
 import {
   WeightAdjustmentConfirmDialog,
   type AdjustmentRow,
@@ -136,10 +137,12 @@ export function DeliveryDataPage() {
     [handleFileChange]
   );
 
+  const customersRef = useRef<Customer[]>([]);
+
   const runProcess = useCallback(async (rows: RawRow[], nums: number[]) => {
     setPageState('processing');
     try {
-      const processResult = await processDeliveryDataFromRows(rows, nums);
+      const processResult = await processDeliveryDataFromRows(rows, nums, customersRef.current);
       setResult(processResult);
       setPageState('success');
     } catch (err) {
@@ -164,7 +167,11 @@ export function DeliveryDataPage() {
       setExcludedRowCount(excludedCount);
       const effectiveParsed = { rawRows: filteredRows, sourceRowNums: filteredSourceRowNums };
 
-      const masterdata = await weightAdjustmentApi.fetchAll();
+      const [masterdata, customers] = await Promise.all([
+        weightAdjustmentApi.fetchAll(),
+        customersApi.fetchAll(),
+      ]);
+      customersRef.current = customers;
       const masterMap = new Map(masterdata.map((m) => [m.ma_hang, m]));
       const found = buildAdjustments(effectiveParsed.rawRows, effectiveParsed.sourceRowNums, masterMap);
 

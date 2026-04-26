@@ -5,8 +5,9 @@
  * Ported from scripts/process-delivery-data.cjs to TypeScript for browser use.
  *
  * Logic:
- * 1. Read XLSX file (ArrayBuffer) using xlsx library
- * 2. Skip first 4 rows (company name, address, title, blank) — row 5 = header, row 6+ = data
+ * 0. Read XLSX file (ArrayBuffer) using xlsx library
+ * 1. Skip first 4 rows (company name, address, title, blank) — row 5 = header, row 6+ = data
+ * 2. Pre-sort all rows by Số tàu/xe ASC → Ngày hóa đơn ASC (ensures consistent group order downstream)
  * 3. Group rows by (Số tàu/xe + Ngày hóa đơn + Tên khách hàng)
  *    - Nếu SUM(HĐ Trọng lượng)/1000 < 13: giữ nguyên group key
  *    - Nếu SUM(HĐ Trọng lượng)/1000 >= 13 và Thông tin bổ sung có từ 2 giá trị trở lên:
@@ -19,6 +20,7 @@
 
 import * as XLSX from 'xlsx';
 import { Workbook } from 'exceljs';
+import type { Customer } from '../api/customersApi';
 
 // ─── Excel number format patterns ─────────────────────────────────────────────
 const NUM_FMT_THOUSAND = '#,##0';         // Integer với thousand separator
@@ -74,6 +76,35 @@ function getFactory(maNcc: string): string {
   return FACTORY_BY_NCC[maNcc] ?? 'CLV';
 }
 
+// ─── Helper: Compare vehicle numbers with natural sorting ──────────────────────
+/**
+ * Compare two vehicle numbers using natural sorting rules.
+ * Vehicle format: "[PREFIX][SPACES][NUMBER]" (e.g. "50H 55116", "85H 01932")
+ * Sort by: PREFIX (alphabetically) → NUMBER (numerically)
+ */
+function compareVehicleNumbers(a: string, b: string): number {
+  // Extract prefix and number from each vehicle string
+  const vehicleRegex = /^([A-Z0-9]+)[\s]*(\d+)$/i;
+
+  const matchA = a.match(vehicleRegex);
+  const matchB = b.match(vehicleRegex);
+
+  // If either doesn't match the pattern, fall back to string comparison
+  if (!matchA || !matchB) {
+    return a.localeCompare(b, undefined, { numeric: true });
+  }
+
+  const [, prefixA, numA] = matchA;
+  const [, prefixB, numB] = matchB;
+
+  // Compare prefix first (alphabetically)
+  const prefixCompare = prefixA.localeCompare(prefixB, undefined, { numeric: true });
+  if (prefixCompare !== 0) return prefixCompare;
+
+  // If same prefix, compare numbers (numerically)
+  return Number(numA) - Number(numB);
+}
+
 // ─── Output column headers ─────────────────────────────────────────────────────
 const OUTPUT_HEADERS = [
   'Mã nhà cung cấp',
@@ -116,6 +147,9 @@ const OUTPUT_HEADERS = [
   'Chứng từ ghi sổ',
   'Số seri',
   'Loại hàng',
+  'Tuyến cũ',
+  'Tuyến mới',
+  'Tuyến lên hóa đơn',
 ];
 
 // ─── Factory sheet headers (41 cols) ──────────────────────────────────────────
@@ -166,6 +200,9 @@ const FACTORY_OUTPUT_HEADERS = [
   'Chứng từ ghi sổ',       // 39
   'Số seri',               // 40
   'Loại hàng',             // 41
+  'Tuyến cũ',              // 42
+  'Tuyến mới',             // 43
+  'Tuyến lên hóa đơn',     // 44
 ];
 
 // ─── Column widths for output Excel ───────────────────────────────────────────
@@ -214,6 +251,9 @@ const COL_WIDTHS_FACTORY: { wch: number }[] = [
   { wch: 12 },  // 39 Số seri
   { wch: 12 },  // 40 Loại hàng
   { wch: 15 },  // 41 Khung giá
+  { wch: 20 },  // 42 Tuyến cũ
+  { wch: 20 },  // 43 Tuyến mới
+  { wch: 30 },  // 44 Tuyến lên hóa đơn
 ];
 
 const COL_WIDTHS = [
@@ -258,6 +298,9 @@ const COL_WIDTHS = [
   { wch: 12 },  // Số seri
   { wch: 12 },  // Loại hàng
   { wch: 15 },  // Khung giá
+  { wch: 20 },  // Tuyến cũ
+  { wch: 20 },  // Tuyến mới
+  { wch: 30 },  // Tuyến lên hóa đơn
 ];
 
 // ─── Number format column mappings ────────────────────────────────────────────
@@ -318,6 +361,27 @@ export interface ProcessResult {
   outputFilename: string;
 }
 
+// ─── Customer lookup ─────────────────────────────────────────────────────────
+
+type CustomerLookup = Map<string, { tuyenCu: string; tuyenPhuong: string }>;
+
+function buildCustomerLookup(customers: Customer[]): CustomerLookup {
+  const map: CustomerLookup = new Map();
+  for (const c of customers) {
+    const key = `${(c.ten_khach_hang ?? '').trim().toLowerCase()}|||${(c.dia_chi_giao_hang ?? '').trim().toLowerCase()}`;
+    map.set(key, {
+      tuyenCu: c.tuyen_cu ?? '',
+      tuyenPhuong: c.tuyen_phuong ?? '',
+    });
+  }
+  return map;
+}
+
+function lookupCustomer(lookup: CustomerLookup, tenKH: string, diaChi: string): { tuyenCu: string; tuyenPhuong: string } {
+  const key = `${tenKH.trim().toLowerCase()}|||${diaChi.trim().toLowerCase()}`;
+  return lookup.get(key) ?? { tuyenCu: '', tuyenPhuong: '' };
+}
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 /**
@@ -366,13 +430,17 @@ function getKhungGia(groupRoundMTTotal: number, soTauXe: string): string {
   return '>8-16 tấn';
 }
 
-function mapRowToOutput(row: RawRow, factoryVals: Record<string, string | number>, isFirstInGroup: boolean, groupRoundMTTotal: number): (string | number)[] {
+function mapRowToOutput(row: RawRow, factoryVals: Record<string, string | number>, isFirstInGroup: boolean, groupRoundMTTotal: number, customerLookup: CustomerLookup): (string | number)[] {
   const roundMT = Math.round((Number(row[COL.HD_TRONG_LUONG]) || 0) / 1000 * 1000) / 1000;
+  const khungGia = getKhungGia(groupRoundMTTotal, cell(row, COL.SO_TAU_XE));
+  const soXe = cell(row, COL.SO_TAU_XE).slice(-9);
+  const { tuyenCu, tuyenPhuong } = lookupCustomer(customerLookup, cell(row, COL.TEN_KH), cell(row, COL.DIA_CHI));
+  const tuyenLenHD = tuyenPhuong ? `${tuyenPhuong} ${khungGia} (${soXe})` : '';
   return [
     cell(row, COL.MA_NCC) || 'CLV',
     cell(row, COL.SO_HD),
     excelDateToString(row[COL.NGAY_HD] as string | number | null | undefined),
-    cell(row, COL.SO_TAU_XE).slice(-9),
+    soXe,
     cell(row, COL.MA_KH),
     cell(row, COL.TEN_KH),
     cell(row, COL.DIA_CHI),
@@ -385,7 +453,7 @@ function mapRowToOutput(row: RawRow, factoryVals: Record<string, string | number
     cell(row, COL.SP_TRONG_LUONG),
     cell(row, COL.HD_TRONG_LUONG),
     roundMT,
-    getKhungGia(groupRoundMTTotal, cell(row, COL.SO_TAU_XE)),
+    khungGia,
     factoryVals['CLF'],
     factoryVals['VFM'],
     factoryVals['MCC'],
@@ -409,6 +477,9 @@ function mapRowToOutput(row: RawRow, factoryVals: Record<string, string | number
     cell(row, COL.SO_CHUNG_TU),
     cell(row, COL.SO_SERI),
     cell(row, COL.LOAI_HANG),
+    tuyenCu,
+    tuyenPhuong,
+    tuyenLenHD,
   ];
 }
 
@@ -471,9 +542,11 @@ export async function parseDeliveryFile(file: File): Promise<ParsedFileData> {
  */
 export async function processDeliveryDataFromRows(
   dataRows: RawRow[],
-  sourceRowNums: number[]
+  sourceRowNums: number[],
+  customers?: Customer[]
 ): Promise<ProcessResult> {
   const warnings: string[] = [];
+  const customerLookup = buildCustomerLookup(customers ?? []);
 
   // ── Validate rows — generate specific warnings ────────────────────────────
   dataRows.forEach((row, idx) => {
@@ -596,18 +669,10 @@ export async function processDeliveryDataFromRows(
     });
   }
 
-  // ── Step 3: Sort groups by (Ngày HĐ ASC, Số tàu/xe ASC) ─────────────────
+  // ── Step 3: Final sort groups by Số tàu/xe ASC (natural numeric order) ────
+  // Sort groups by vehicle using compareVehicleNumbers for proper [PREFIX][NUMBER] handling
   const sortedGroups = Array.from(groupMap.values()).sort((a, b) => {
-    const dateA = typeof a.date === 'number' ? a.date : 0;
-    const dateB = typeof b.date === 'number' ? b.date : 0;
-
-    if (dateA !== dateB) {
-      if (typeof a.date === 'number' && typeof b.date === 'number') {
-        return a.date - b.date;
-      }
-      return String(a.date).localeCompare(String(b.date));
-    }
-    return a.vehicle.localeCompare(b.vehicle);
+    return compareVehicleNumbers(a.vehicle.slice(-9), b.vehicle.slice(-9));
   });
 
   // ── Step 4: Build output rows ─────────────────────────────────────────────
@@ -689,7 +754,7 @@ export async function processDeliveryDataFromRows(
         groupFactorySums[currentFactory] = Math.round((groupFactorySums[currentFactory] + factorySum) * 1000) / 1000;
       }
 
-      const outputRow = mapRowToOutput(row, factoryVals, groupRowIndex === 0, groupRoundMTTotal);
+      const outputRow = mapRowToOutput(row, factoryVals, groupRowIndex === 0, groupRoundMTTotal, customerLookup);
       outputRows.push(outputRow);
 
       // ── Build factory sheet row (41 cols = 39 base + Tấn/Chuyến + Tấn/Hóa đơn) ──
@@ -806,6 +871,9 @@ export async function processDeliveryDataFromRows(
           processRow[37], // Chứng từ ghi sổ
           processRow[38], // Số seri
           processRow[39], // Loại hàng
+          processRow[40], // Tuyến cũ
+          processRow[41], // Tuyến mới
+          processRow[42], // Tuyến lên hóa đơn
         ];
 
         factorySheetRows[factory][i] = factoryRow;
