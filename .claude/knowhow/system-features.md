@@ -234,9 +234,10 @@ User upload file .xlsx ERP (Delivery Report)
       → XLSX.read() parse workbook
       → Bỏ qua 4 dòng đầu (metadata ERP), row 5 = header, row 6+ = data
       → Filter dòng trống
-      → Group theo key = (Số tàu/xe + Ngày HĐ)
-      → Sort mỗi nhóm theo Số HĐ ASC (numeric-aware)
-      → Sort các nhóm theo (Ngày HĐ ASC, Số tàu/xe ASC)
+      → Group theo key = (Số tàu/xe + Ngày HĐ + Tên KH)
+        - Nếu SUM(HĐ Trọng lượng)/1000 >= 13 và Thông tin bổ sung có 2+ giá trị → add "Thông tin bổ sung" vào key
+      → Sort mỗi nhóm theo Số HĐ ASC (numeric-aware), rồi Mã NCC ASC
+      → Final sort các nhóm theo Số tàu/xe ASC (natural sort: prefix numeric-aware → number numeric)
       → Tính Round(MT) = SUM(HĐ Trọng lượng Net) / 1000 per group
       → Build output XLSX:
           Sheet "Processed": tất cả dòng, header row + data rows + separator row màu xám giữa các nhóm
@@ -305,6 +306,7 @@ Giống sheet Processed, nhưng có thêm logic riêng:
 
 ### 5.3 Business Rules
 
+- **BR-000:** ⚠️ DEPRECATED (removed 2026-04-25) — Pre-sort rows by vehicle+date+invoice was removed. Final sort groups by vehicle is now performed in BR-003.
 - **BR-001:** Grouping key ban đầu = Số tàu/xe + Ngày hóa đơn + Tên khách hàng
   - Tính SUM(HĐ Trọng lượng) / 1000 của group sơ bộ
   - Nếu < 13: giữ nguyên group key (Số tàu/xe + Ngày HĐ + Tên KH)
@@ -312,7 +314,7 @@ Giống sheet Processed, nhưng có thêm logic riêng:
     - Có từ 2 giá trị trở lên (phân tách bằng dấu phẩy/xuống dòng) → group key = Số tàu/xe + Ngày HĐ + Tên KH + Thông tin bổ sung
     - Chỉ có 1 giá trị hoặc rỗng → giữ nguyên group key
 - **BR-002:** Trong mỗi nhóm, sort rows theo Số HĐ ASC (numeric-aware localeCompare), sau đó Mã nhà cung cấp ASC (numeric-aware)
-- **BR-003:** Các nhóm sort theo Ngày HĐ ASC, rồi Số tàu/xe ASC
+- **BR-003:** Final sort groups theo **biển số hiển thị** (`.slice(-9)` của Số tàu/xe) ASC. Dùng `compareVehicleNumbers(a.vehicle.slice(-9), b.vehicle.slice(-9))` — sort theo biển số đã cắt prefix PPH, không phải full source string. Lý do: source data có nhiều format prefix khác nhau (`PPH `, `PPH-`, `PPH-P-`, `PPH-G-`, `PPH-ND-`, etc.) gây sai thứ tự nếu sort full string. ✅ UPDATED 2026-04-26: sort key = `.slice(-9)` display value
 - **BR-004:** Round(MT) = HD_TRONG_LUONG (col 19) / 1000, làm tròn 2 chữ số thập phân — tính per row (không phải per group)
 - **BR-005:** Output có 1 separator row giữa các nhóm (không có giữa row cuối và end-of-file). Separator row hiển thị SUM tại các cột: Round(MT), CLF, VFM, MCC, CLV, NDFC ('' nếu factory đó không có invoice trong nhóm)
 - **BR-006:** Ngày HĐ là Excel serial number → convert sang DD/MM/YYYY string trong output
