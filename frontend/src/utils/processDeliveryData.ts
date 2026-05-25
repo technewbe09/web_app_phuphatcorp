@@ -6,7 +6,7 @@
  *
  * Logic:
  * 0. Read XLSX file (ArrayBuffer) using xlsx library
- * 1. Skip first 4 rows (company name, address, title, blank) — row 5 = header, row 6+ = data
+ * 1. Skip first 4 rows (company name, address, title, header) — row 5+ = data
  * 2. Pre-sort all rows by Số tàu/xe ASC → Ngày hóa đơn ASC (ensures consistent group order downstream)
  * 3. Group rows by (Số tàu/xe + Ngày hóa đơn + Tên khách hàng)
  *    - Nếu SUM(HĐ Trọng lượng)/1000 < 13: giữ nguyên group key
@@ -519,10 +519,10 @@ export async function parseDeliveryFile(file: File): Promise<ParsedFileData> {
   const rawRows: RawRow[] = [];
   const sourceRowNums: number[] = [];
 
-  rawData.slice(5).forEach((row, i) => {
+  rawData.slice(4).forEach((row, i) => {
     if (row && row.length > 0 && row.some((c) => c !== null && c !== undefined && c !== '')) {
       rawRows.push(row);
-      sourceRowNums.push(i + 6);
+      sourceRowNums.push(i + 5);
     }
   });
 
