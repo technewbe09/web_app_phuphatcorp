@@ -481,6 +481,14 @@ export async function exportRiceResult(
     }
   }
 
+  // Apply date format to column A cells with numeric (serial) values
+  for (let r = 2; r <= wsRaw.rowCount; r++) {
+    const cell = wsRaw.getCell(r, 1);
+    if (typeof cell.value === 'number') {
+      cell.numFmt = 'dd/mm/yyyy';
+    }
+  }
+
   wsRaw.columns.forEach((col, i) => {
     col.width = Math.max((originalHeaders[i] ?? '').length + 2, 12);
   });
