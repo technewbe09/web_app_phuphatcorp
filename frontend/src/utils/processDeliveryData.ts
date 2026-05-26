@@ -124,6 +124,7 @@ const OUTPUT_HEADERS = [
   'HĐ Trọng lượng (Net)',
   'Round(MT)',
   'Khung giá',
+  'Đơn vị tính',
   'CLF',
   'VFM',
   'MCC',
@@ -274,6 +275,7 @@ const COL_WIDTHS = [
   { wch: 20 },  // HĐ Trọng lượng (Net)
   { wch: 10 },  // Round(MT)
   { wch: 15 },  // Khung giá
+  { wch: 12 },  // Đơn vị tính
   { wch: 10 },  // CLF
   { wch: 10 },  // VFM
   { wch: 10 },  // MCC
@@ -311,13 +313,14 @@ const PROCESSED_NUMBER_COLS: Record<number, string> = {
   14: NUM_FMT_DECIMAL,   // HĐ Trọng lượng
   15: NUM_FMT_DECIMAL,   // Round(MT)
   // 16: Khung giá — text, không format số
-  17: NUM_FMT_DECIMAL,   // CLF
-  18: NUM_FMT_DECIMAL,   // VFM
-  19: NUM_FMT_DECIMAL,   // MCC
-  20: NUM_FMT_DECIMAL,   // CLV
-  21: NUM_FMT_DECIMAL,   // NDFC
-  22: NUM_FMT_DECIMAL,   // Col1
-  23: NUM_FMT_DECIMAL,   // Col2
+  // 17: Đơn vị tính — text, không format số
+  18: NUM_FMT_DECIMAL,   // CLF
+  19: NUM_FMT_DECIMAL,   // VFM
+  20: NUM_FMT_DECIMAL,   // MCC
+  21: NUM_FMT_DECIMAL,   // CLV
+  22: NUM_FMT_DECIMAL,   // NDFC
+  23: NUM_FMT_DECIMAL,   // Col1
+  24: NUM_FMT_DECIMAL,   // Col2
 };
 
 // Factory sheets (42 cols)
@@ -436,6 +439,7 @@ function mapRowToOutput(row: RawRow, factoryVals: Record<string, string | number
   const soXe = cell(row, COL.SO_TAU_XE).slice(-9);
   const { tuyenCu, tuyenPhuong } = lookupCustomer(customerLookup, cell(row, COL.TEN_KH), cell(row, COL.DIA_CHI));
   const tuyenLenHD = tuyenPhuong ? `${tuyenPhuong} ${khungGia} (${soXe})` : '';
+  const donViTinh = khungGia === '≤2.5 tấn' ? 'Chuyến' : 'Tấn';
   return [
     cell(row, COL.MA_NCC) || 'CLV',
     cell(row, COL.SO_HD),
@@ -454,6 +458,7 @@ function mapRowToOutput(row: RawRow, factoryVals: Record<string, string | number
     cell(row, COL.HD_TRONG_LUONG),
     roundMT,
     khungGia,
+    donViTinh,
     factoryVals['CLF'],
     factoryVals['VFM'],
     factoryVals['MCC'],
@@ -845,35 +850,35 @@ export async function processDeliveryDataFromRows(
           // 17-18: 2 cột mới cho factory
           tanHoaDon,      // Tấn/ Hóa đơn
           tanChuyen,      // Tấn/ Chuyến
-          // 19-23: CLF/VFM/MCC/CLV/NDFC (shift từ 17-21 của processRow)
+          // 19-23: CLF/VFM/MCC/CLV/NDFC (shift từ 18-22 của processRow)
           clf,
           vfm,
           mcc,
           clv,
           ndfc,
-          // 24-25: Col1/Col2 (shift từ 22-23 của processRow)
-          isFirstRowOfGroup ? processRow[22] : '', // Col1 (tổng đầu khối — blank trên non-first rows)
-          isFirstRowOfGroup ? processRow[23] : '', // Col2 (blank trên non-first rows)
-          // 26-41: metadata (shift từ 24-39 của processRow)
-          processRow[24], // Tài xế
-          processRow[25], // Thông tin bổ sung
-          processRow[26], // Slot
-          processRow[27], // Diễn giải
-          processRow[28], // Channel
-          processRow[29], // SubChannel
-          processRow[30], // SlotNo
-          processRow[31], // user tạo HĐ
-          processRow[32], // User tạo PXK
-          processRow[33], // PO number
-          processRow[34], // Warehouse No
-          processRow[35], // Warehouse Name
-          processRow[36], // Phiếu XK
-          processRow[37], // Chứng từ ghi sổ
-          processRow[38], // Số seri
-          processRow[39], // Loại hàng
-          processRow[40], // Tuyến cũ
-          processRow[41], // Tuyến mới
-          processRow[42], // Tuyến lên hóa đơn
+          // 24-25: Col1/Col2 (shift từ 23-24 của processRow)
+          isFirstRowOfGroup ? processRow[23] : '', // Col1 (tổng đầu khối — blank trên non-first rows)
+          isFirstRowOfGroup ? processRow[24] : '', // Col2 (blank trên non-first rows)
+          // 26-41: metadata (shift từ 25-40 của processRow)
+          processRow[25], // Tài xế
+          processRow[26], // Thông tin bổ sung
+          processRow[27], // Slot
+          processRow[28], // Diễn giải
+          processRow[29], // Channel
+          processRow[30], // SubChannel
+          processRow[31], // SlotNo
+          processRow[32], // user tạo HĐ
+          processRow[33], // User tạo PXK
+          processRow[34], // PO number
+          processRow[35], // Warehouse No
+          processRow[36], // Warehouse Name
+          processRow[37], // Phiếu XK
+          processRow[38], // Chứng từ ghi sổ
+          processRow[39], // Số seri
+          processRow[40], // Loại hàng
+          processRow[41], // Tuyến cũ
+          processRow[42], // Tuyến mới
+          processRow[43], // Tuyến lên hóa đơn
         ];
 
         factorySheetRows[factory][i] = factoryRow;
@@ -884,13 +889,14 @@ export async function processDeliveryDataFromRows(
       const separatorRow: (string | number)[] = new Array(OUTPUT_HEADERS.length).fill('');
       separatorRow[15] = groupRoundMTSum;
       // col 16: Khung giá — để trống trên separator row
-      separatorRow[17] = groupFactorySums['CLF'] || '';
-      separatorRow[18] = groupFactorySums['VFM'] || '';
-      separatorRow[19] = groupFactorySums['MCC'] || '';
-      separatorRow[20] = groupFactorySums['CLV'] || '';
-      separatorRow[21] = groupFactorySums['NDFC'] || '';
-      separatorRow[22] = groupRoundMTSum;
+      // col 17: Đơn vị tính — để trống trên separator row
+      separatorRow[18] = groupFactorySums['CLF'] || '';
+      separatorRow[19] = groupFactorySums['VFM'] || '';
+      separatorRow[20] = groupFactorySums['MCC'] || '';
+      separatorRow[21] = groupFactorySums['CLV'] || '';
+      separatorRow[22] = groupFactorySums['NDFC'] || '';
       separatorRow[23] = groupRoundMTSum;
+      separatorRow[24] = groupRoundMTSum;
       separatorRowIndices.add(outputRows.length);
       outputRows.push(separatorRow);
 
@@ -919,7 +925,7 @@ export async function processDeliveryDataFromRows(
   const outWb = new Workbook();
 
   // Column indices (0-based) for CLF/VFM/MCC/CLV/NDFC headers in each sheet type
-  const PROCESSED_GREEN_HEADER_COLS = new Set([17, 18, 19, 20, 21]); // CLF=17, VFM=18, MCC=19, CLV=20, NDFC=21
+  const PROCESSED_GREEN_HEADER_COLS = new Set([18, 19, 20, 21, 22]); // CLF=18, VFM=19, MCC=20, CLV=21, NDFC=22
   const FACTORY_GREEN_HEADER_COLS   = new Set([19, 20, 21, 22, 23]); // CLF=19, VFM=20, MCC=21, CLV=22, NDFC=23
 
   /** Helper: write rows into a worksheet with header + separator styling */
