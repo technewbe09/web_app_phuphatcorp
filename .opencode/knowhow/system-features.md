@@ -270,6 +270,7 @@ User upload file .xlsx ERP (Delivery Report)
 | SP Trọng lượng net | 18 | SP_TRONG_LUONG |
 | HĐ Trọng lượng (Net) | 19 | HD_TRONG_LUONG |
 | Round(MT) | — | HD_TRONG_LUONG / 1000 per row, làm tròn 3 chữ số thập phân |
+| Đơn vị tính | — | "Chuyến" nếu Khung giá = "≤2.5 tấn", còn lại "Tấn" |
 | Col1 (không tiêu đề) | — | Dòng đầu tiên của khối = tổng Round(MT) khối; các dòng còn lại = 0 |
 | Col2 (không tiêu đề) | — | Tất cả dòng trong khối = tổng Round(MT) khối |
 | CLF | — | Factory col: first row of invoice = SUM(Round(MT)) nếu MA_NCC=2000000001, else 0; other rows = 0; inactive factories = '' |
