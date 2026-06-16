@@ -11,7 +11,7 @@
 | ID   | Task | Chi tiết kỹ thuật | Effort |
 |------|------|-------------------|--------|
 | BE-01 | Tạo migration | Bảng `vehicles`: id, plate_number VARCHAR(20) NOT NULL, driver_name VARCHAR(255) NOT NULL, status, created_at, updated_at. Unique partial index trên `plate_number WHERE status='active'`. File: `backend/src/migrations/017_create_vehicles.sql` | S |
-| BE-02 | Viết service `vehicleService` | `getAll(search?, page, limit)` → trả { vehicles, total }. `upload(file: Buffer)` → parse sheet "xe" bằng `xlsx`, chuẩn hóa biển số (regex: strip non-alphanum, format XXY-XXXXX), fail-fast validate (rỗng, format sai, trùng trong file, trùng DB active), INSERT hoặc re-activate (nếu đã deactive). `delete(id)` → soft delete. File: `backend/src/services/vehicleService.ts` | M |
+| BE-02 | Viết service `vehicleService` | `getAll(search?, page, limit)` → trả { vehicles, total }. `upload(file: Buffer)` → parse sheet "xe" bằng `xlsx`, chuẩn hóa biển số (logic `normalizeSoXe()`: strip prefix non-digit, bỏ `[-,\s.]`, truncate `/`, uppercase; output `XXYXXXXX`), fail-fast validate (rỗng, pattern sai, trùng trong file, trùng DB active), INSERT hoặc re-activate (nếu đã deactive). `delete(id)` → soft delete. File: `backend/src/services/vehicleService.ts` | M |
 | BE-03 | Viết controller `vehicleController` | `getAll(req, res)` parse query params + gọi service. `upload(req, res)` nhận file từ multer, gọi service, trả kết quả hoặc 422 + errors list. `delete(req, res)` parse id, gọi service. Validation dùng Zod. File: `backend/src/controllers/vehicleController.ts` | M |
 | BE-04 | Tạo routes `vehicleRoutes` | `GET /` → getAll. `POST /upload` → multer.single('file') + upload. `DELETE /:id` → delete. Middleware: authenticateToken. File: `backend/src/routes/vehicles.ts` | S |
 | BE-05 | Đăng ký routes vào index | Thêm `router.use('/vehicles', vehicleRoutes)` trong `backend/src/routes/index.ts` | S |
@@ -40,7 +40,7 @@ BE và FE có thể làm song song sau khi BE-01 hoàn tất (có schema để F
 
 ## ⚠️ Lưu ý kỹ thuật
 
-1. **Chuẩn hóa biển số:** Logic chuẩn hóa phải giống hệt giữa frontend (preview) và backend (lưu DB). Nên viết 1 hàm `normalizePlateNumber(raw: string): string | null` dùng chung hoặc copy cùng logic.
+1. **Chuẩn hóa biển số:** Logic chuẩn hóa phải giống hệt giữa frontend (preview) và backend (lưu DB). Tham khảo `driverInvoiceService.normalizeSoXe()`: strip prefix non-digit → bỏ `[-,\s.]` → truncate `/` → uppercase. Output format: `XXYXXXXX` (e.g. `50H70216`).
 
 2. **Fail-fast atomic upload:** Backend dùng transaction (`BEGIN`/`COMMIT`/`ROLLBACK`) khi import. Nếu bất kỳ dòng nào lỗi → ROLLBACK toàn bộ.
 

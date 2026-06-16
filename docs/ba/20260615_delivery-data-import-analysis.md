@@ -51,10 +51,10 @@ flowchart TD
 | BR-002 | Dữ liệu import lưu toàn bộ 34 cột từ Excel vào bảng `delivery_data`, KHÔNG filter, KHÔNG loại trừ dòng nào. |
 | BR-003 | Mỗi lần upload tạo một `batch_id` duy nhất (UUID) để gom nhóm. |
 | BR-004 | Hóa đơn bóc tách là tổ hợp duy nhất của (ngày hóa đơn + số xe + số hóa đơn). Cùng số hóa đơn trên cùng ngày nhưng khác xe → 2 record riêng biệt. |
-| BR-005 | `accountant_invoices.so_xe` chuẩn hóa tương tự `driver_invoices.so_xe`: bỏ dấu gạch ngang, dấu phẩy, khoảng trắng (regex: `[-,\s]`). |
-| BR-006 | Đối chiếu dựa trên số hóa đơn (pattern: khớp chuỗi chính xác) trong `driver_invoices.so_hoa_don` (JSONB array), KHÔNG phân biệt hoa thường hay khoảng trắng. |
-| BR-007 | Khoảng thời gian đối chiếu = min(ngay_hd) đến max(ngay_hd) của dữ liệu trong batch vừa import. Chỉ query `driver_invoices` trong khoảng này. |
-| BR-008 | Mặc định trạng thái là `'không có'`. Sau khi đối chiếu, nếu số hóa đơn tồn tại trong bất kỳ `driver_invoices.so_hoa_don` nào → `'đã có'`. |
+| BR-005 | `accountant_invoices.so_xe` chuẩn hóa theo 3 bước: (1) bỏ mọi ký tự không phải số từ đầu chuỗi (`^[^0-9]*`), (2) bỏ gạch ngang, phẩy, khoảng trắng (`[-,\s]`), (3) bỏ hậu tố sau `/` (`/.*$`). VD: `PPH-50H 88294/L2` → `50H88294`. |
+| BR-006 | Đối chiếu hóa đơn với 3 điều kiện đồng thời: (a) `so_xe` chuẩn hóa khớp nhau, (b) `ngay` khớp nhau, (c) số hóa đơn fuzzy match: strip leading zeros cả 2 phía, kiểm tra 4 mức: bằng chính xác → prefix → substring. VD: `00078097` khớp với `7809`, `78097`, `8097`, `097`. |
+| BR-007 | Đối chiếu với **toàn bộ** `driver_invoices` (không giới hạn khoảng ngày). EXISTS subquery tự kiểm tra `ngay` khớp chính xác. |
+| BR-008 | Mặc định trạng thái là `'không có'`. Sau khi đối chiếu, nếu số hóa đơn thỏa mãn BR-006 → `'đã có'`. |
 | BR-009 | Xóa một batch sẽ xóa cả data trong `delivery_data` và `accountant_invoices` thuộc batch đó. |
 | BR-010 | Permission: `accounting_data.view` để xem, `accounting_data.manage` để import/xóa. |
 
@@ -255,7 +255,35 @@ Response 200:
 }
 ```
 
-### 5.4 Xóa batch
+### 5.5 Lấy danh sách hóa đơn thiếu theo số xe (tích hợp danh mục xe)
+
+```
+GET /api/accountant-invoices/missing-summary?batch_id=xxx&in_catalog=true
+Auth: JWT (accounting_data.view)
+
+Query params:
+  batch_id    (required) - UUID của batch
+  in_catalog  (optional) - true: xe trong danh mục, false: xe ngoài danh mục, bỏ trống: tất cả
+
+Response 200:
+{
+  "success": true,
+  "data": [
+    {
+      "so_xe": "50H88294",
+      "missing_count": 15,
+      "in_catalog": true,
+      "dates": [
+        { "ngay": "2026-05-14", "so_hoa_don": ["00078097", "00078098"] }
+      ]
+    }
+  ]
+}
+```
+
+Lưu ý: `in_catalog` được xác định bằng LEFT JOIN với bảng `vehicles` (migration 017). Chuẩn hóa `vehicles.plate_number` cùng quy tắc BR-005 rồi so sánh với `accountant_invoices.so_xe`. Chỉ tính `vehicles.status = 'active'`.
+
+### 5.6 Xóa batch
 
 ```
 DELETE /api/delivery-data/batches/:batchId
@@ -276,7 +304,7 @@ Response 200:
 | # | Screen | Route | Mô tả |
 |---|--------|-------|-------|
 | 1 | **Import Delivery Data** | `/accounting-data/delivery-import` | Upload file Excel, xem kết quả import + thống kê đối chiếu |
-| 2 | **Accountant Invoices List** | `/accounting-data/invoice-matching` | Danh sách hóa đơn đã đối chiếu, filter, pagination, export |
+| 2 | **Accountant Invoices List** | `/accounting-data/invoice-matching` | Tab "Tất cả hóa đơn": danh sách đầy đủ với filter, pagination. Tab "Hóa đơn thiếu": grouped theo số xe, drill-down từng xe xem ngày + số HĐ, phân biệt xe có/không trong danh mục (tích hợp `vehicles` table), filter `in_catalog`. |
 
 ---
 
@@ -295,13 +323,20 @@ Response 200:
 | EC-09 | Người dùng không có quyền accounting_data.manage | Trả 403 |
 | EC-10 | so_tau_xe chứa prefix PPH-G- (xe gạo) hoặc PPH-P- | Cần chuẩn hóa: `regexp_replace(so_xe, '[-,\s]', '', 'g')`. VD: "PPH-G-68H 02015" → "PPHG68H02015" |
 | EC-11 | THONG_TIN_BS chứa nhiều giá trị ngăn cách dấu phẩy (vd: "81038,81039") | Lưu nguyên bản, không tách. Đây là thông tin bổ sung cho việc group dữ liệu khi export, không dùng để đối chiếu |
-| EC-12 | NGAY_HD là Excel serial date number (vd: 46146) thay vì ISO date | Parse bằng `XLSX.SSF.parse_date_code()` trước khi INSERT để lưu DATE chuẩn PostgreSQL |
+| EC-12 | NGAY_HD là Excel serial date number (vd: 46146) thay vì ISO date | Parse bằng `excelSerialToDate()` — dùng `getUTC*()` methods để tránh lệch múi giờ. |
+| EC-13 | Số xe trong `driver_invoices.so_xe` có ký tự "PPH-" hoặc hậu tố "/L2" | Chuẩn hóa đồng nhất 3 bước trong SQL query (BR-005). |
+| EC-14 | PostgreSQL không hỗ trợ `\d` trong regex | Dùng `[0-9]` thay vì `\d`. `^[^\d]*` → `^[^0-9]*`. |
 
 ---
 
 ## 8. Performance Considerations
 
-- **Import:** Dùng `UNNEST` để insert hàng nghìn dòng trong 1 query duy nhất (như pattern hiện tại của `driverInvoiceService.uploadMany`)
-- **Bóc tách hóa đơn:** Dùng `INSERT INTO ... SELECT DISTINCT` từ `delivery_data`
-- **Đối chiếu:** Thay vì query EXISTS cho từng row, unnest toàn bộ `so_hoa_don` từ `driver_invoices` 1 lần → tạo flat set → 1 query UPDATE duy nhất
-- **Tổng cộng chỉ 4-5 database queries cho toàn bộ quy trình import**
+- **Import batch:** Dùng `UNNEST` để insert hàng nghìn dòng trong 1 query duy nhất (pattern từ `driverInvoiceService.uploadMany`).
+- **Bóc tách + đối chiếu:** Thực hiện trong 1 query INSERT duy nhất với CTE + EXISTS.
+  - `driver_invoice_flat`: Flatten toàn bộ `driver_invoices.so_hoa_don` (JSONB array) thành flat set (so_xe_norm, ngay, so_hoa_don_stripped).
+  - `delivery_invoices`: SELECT DISTINCT từ `delivery_data` vừa insert.
+  - EXISTS subquery: Khớp 3 điều kiện (so_xe_norm + ngay + fuzzy so_hoa_don) với 4 mức: exact =, prefix LIKE, substring LIKE '%...%'.
+  - **Không lọc khoảng ngày** ở CTE driver_invoice_flat — EXISTS tự xử lý việc khớp ngày chính xác, tránh bỏ sót.
+- **Tổng cộng: 2 database queries** cho toàn bộ quy trình import (1 INSERT delivery_data + 1 INSERT accountant_invoices).
+- **Missing summary**: 1 query LEFT JOIN `vehicles` + group trong code thay vì query riêng từng xe.
+- **Regex caveat**: PostgreSQL không hỗ trợ `\d`, phải dùng `[0-9]` cho digit class trong SQL.

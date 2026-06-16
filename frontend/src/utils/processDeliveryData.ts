@@ -76,6 +76,14 @@ function getFactory(maNcc: string): string {
   return FACTORY_BY_NCC[maNcc] ?? 'CLV';
 }
 
+// ─── Helper: Strip " /L2" suffix from vehicle number ──────────────────────────
+function normalizeVehicle(soTauXe: string): string {
+  if (soTauXe.length >= 4 && soTauXe.slice(-4) === ' /L2') {
+    return soTauXe.slice(0, -4);
+  }
+  return soTauXe;
+}
+
 // ─── Helper: Compare vehicle numbers with natural sorting ──────────────────────
 /**
  * Compare two vehicle numbers using natural sorting rules.
@@ -114,6 +122,8 @@ const OUTPUT_HEADERS = [
   'Mã khách hàng',
   'Tên khách hàng',
   'Địa chỉ giao hàng',
+  'Khung giá',
+  'Đơn vị tính',
   'Mã hàng hóa',
   'Tên hàng hóa (Vie)',
   'Tên hàng hóa (En)',
@@ -123,8 +133,6 @@ const OUTPUT_HEADERS = [
   'SP Trọng lượng net',
   'HĐ Trọng lượng (Net)',
   'Round(MT)',
-  'Khung giá',
-  'Đơn vị tính',
   'CLF',
   'VFM',
   'MCC',
@@ -162,17 +170,17 @@ const FACTORY_OUTPUT_HEADERS = [
   'Mã khách hàng',         // 4
   'Tên khách hàng',        // 5
   'Địa chỉ giao hàng',     // 6
-  'Mã hàng hóa',           // 7
-  'Tên hàng hóa (Vie)',    // 8
-  'Tên hàng hóa (En)',     // 9
-  'Mã liên hệ giao hàng',  // 10
-  'Mã DVT',                // 11
-  'Số lượng (DVT bán hàng)', // 12
-  'SP Trọng lượng net',    // 13
-  'HĐ Trọng lượng (Net)',  // 14
-  'Round(MT)',              // 15
-  'Khung giá',             // 16
-  'Đơn vị tính',           // 17
+  'Khung giá',             // 7
+  'Đơn vị tính',           // 8
+  'Mã hàng hóa',           // 9
+  'Tên hàng hóa (Vie)',    // 10
+  'Tên hàng hóa (En)',     // 11
+  'Mã liên hệ giao hàng',  // 12
+  'Mã DVT',                // 13
+  'Số lượng (DVT bán hàng)', // 14
+  'SP Trọng lượng net',    // 15
+  'HĐ Trọng lượng (Net)',  // 16
+  'Round(MT)',              // 17
   'Tấn/ Hóa đơn',          // 18
   'Tấn/ Chuyến',           // 19
   'CLF',                   // 20
@@ -212,17 +220,17 @@ const COL_WIDTHS_FACTORY: { wch: number }[] = [
   { wch: 15 },  // 4  Mã khách hàng
   { wch: 35 },  // 5  Tên khách hàng
   { wch: 50 },  // 6  Địa chỉ giao hàng
-  { wch: 15 },  // 7  Mã hàng hóa
-  { wch: 35 },  // 8  Tên hàng hóa (Vie)
-  { wch: 35 },  // 9  Tên hàng hóa (En)
-  { wch: 20 },  // 10 Mã liên hệ giao hàng
-  { wch: 10 },  // 11 Mã DVT
-  { wch: 22 },  // 12 Số lượng (DVT bán hàng)
-  { wch: 18 },  // 13 SP Trọng lượng net
-  { wch: 20 },  // 14 HĐ Trọng lượng (Net)
-  { wch: 10 },  // 15 Round(MT)
-  { wch: 15 },  // 16 Khung giá
-  { wch: 12 },  // 17 Đơn vị tính
+  { wch: 15 },  // 7  Khung giá
+  { wch: 12 },  // 8  Đơn vị tính
+  { wch: 15 },  // 9  Mã hàng hóa
+  { wch: 35 },  // 10 Tên hàng hóa (Vie)
+  { wch: 35 },  // 11 Tên hàng hóa (En)
+  { wch: 20 },  // 12 Mã liên hệ giao hàng
+  { wch: 10 },  // 13 Mã DVT
+  { wch: 22 },  // 14 Số lượng (DVT bán hàng)
+  { wch: 18 },  // 15 SP Trọng lượng net
+  { wch: 20 },  // 16 HĐ Trọng lượng (Net)
+  { wch: 10 },  // 17 Round(MT)
   { wch: 14 },  // 18 Tấn/ Hóa đơn
   { wch: 14 },  // 19 Tấn/ Chuyến
   { wch: 10 },  // 20 CLF
@@ -261,6 +269,8 @@ const COL_WIDTHS = [
   { wch: 15 },  // Mã khách hàng
   { wch: 35 },  // Tên khách hàng
   { wch: 50 },  // Địa chỉ giao hàng
+  { wch: 15 },  // Khung giá
+  { wch: 12 },  // Đơn vị tính
   { wch: 15 },  // Mã hàng hóa
   { wch: 35 },  // Tên hàng hóa (Vie)
   { wch: 35 },  // Tên hàng hóa (En)
@@ -270,8 +280,6 @@ const COL_WIDTHS = [
   { wch: 18 },  // SP Trọng lượng net
   { wch: 20 },  // HĐ Trọng lượng (Net)
   { wch: 10 },  // Round(MT)
-  { wch: 15 },  // Khung giá
-  { wch: 12 },  // Đơn vị tính
   { wch: 10 },  // CLF
   { wch: 10 },  // VFM
   { wch: 10 },  // MCC
@@ -304,12 +312,12 @@ const COL_WIDTHS = [
 // ─── Number format column mappings ────────────────────────────────────────────
 // Processed sheet (40 cols)
 const PROCESSED_NUMBER_COLS: Record<number, string> = {
-  12: NUM_FMT_THOUSAND,  // Số lượng
-  13: NUM_FMT_DECIMAL,   // SP Trọng lượng
-  14: NUM_FMT_DECIMAL,   // HĐ Trọng lượng
-  15: NUM_FMT_DECIMAL,   // Round(MT)
-  // 16: Khung giá — text, không format số
-  // 17: Đơn vị tính — text, không format số
+  14: NUM_FMT_THOUSAND,  // Số lượng
+  15: NUM_FMT_DECIMAL,   // SP Trọng lượng
+  16: NUM_FMT_DECIMAL,   // HĐ Trọng lượng
+  17: NUM_FMT_DECIMAL,   // Round(MT)
+  // 7:  Khung giá — text, không format số
+  // 8:  Đơn vị tính — text, không format số
   18: NUM_FMT_DECIMAL,   // CLF
   19: NUM_FMT_DECIMAL,   // VFM
   20: NUM_FMT_DECIMAL,   // MCC
@@ -321,12 +329,12 @@ const PROCESSED_NUMBER_COLS: Record<number, string> = {
 
 // Factory sheets (45 cols)
 const FACTORY_NUMBER_COLS: Record<number, string> = {
-  12: NUM_FMT_THOUSAND,  // Số lượng
-  13: NUM_FMT_DECIMAL,   // SP Trọng lượng
-  14: NUM_FMT_DECIMAL,   // HĐ Trọng lượng
-  15: NUM_FMT_DECIMAL,   // Round(MT)
-  // 16: Khung giá — text, không format số
-  // 17: Đơn vị tính — text, không format số
+  14: NUM_FMT_THOUSAND,  // Số lượng
+  15: NUM_FMT_DECIMAL,   // SP Trọng lượng
+  16: NUM_FMT_DECIMAL,   // HĐ Trọng lượng
+  17: NUM_FMT_DECIMAL,   // Round(MT)
+  // 7:  Khung giá — text, không format số
+  // 8:  Đơn vị tính — text, không format số
   18: NUM_FMT_DECIMAL,   // Tấn/ Hóa đơn
   19: NUM_FMT_DECIMAL,   // Tấn/ Chuyến
   20: NUM_FMT_DECIMAL,   // CLF
@@ -445,6 +453,8 @@ function mapRowToOutput(row: RawRow, factoryVals: Record<string, string | number
     cell(row, COL.MA_KH),
     cell(row, COL.TEN_KH),
     cell(row, COL.DIA_CHI),
+    khungGia,
+    donViTinh,
     cell(row, COL.MA_HANG),
     cell(row, COL.TEN_HANG_HOA),
     cell(row, COL.TEN_HANG_EN),
@@ -454,8 +464,6 @@ function mapRowToOutput(row: RawRow, factoryVals: Record<string, string | number
     cell(row, COL.SP_TRONG_LUONG),
     cell(row, COL.HD_TRONG_LUONG),
     roundMT,
-    khungGia,
-    donViTinh,
     factoryVals['CLF'],
     factoryVals['VFM'],
     factoryVals['MCC'],
@@ -574,6 +582,14 @@ export async function processDeliveryDataFromRows(
       warnings.push(`${rowRef} Thiếu Số hóa đơn${detail ? ` — ${detail}` : ''}`);
     }
   });
+
+  // Normalize vehicle numbers — strip " /L2" suffix for consistent group key + display
+  for (const row of dataRows) {
+    const raw = cell(row, COL.SO_TAU_XE);
+    if (raw) {
+      row[COL.SO_TAU_XE] = normalizeVehicle(raw);
+    }
+  }
 
   // ── Step 1: Group by (Số tàu/xe + Ngày hóa đơn + Tên khách hàng) ──────────
   // Bước 1a: Group sơ bộ theo (Số tàu/xe + Ngày HĐ + Tên KH)
@@ -823,9 +839,9 @@ export async function processDeliveryDataFromRows(
         const clv  = isFirstRowOfGroup ? (groupFactorySums['CLV']  || '') : '';
         const ndfc = isFirstRowOfGroup ? (groupFactorySums['NDFC'] || '') : '';
 
-        // Build factory row: cols 0-15 (giống Process), chèn 16-19, rồi cols 20-45
+        // Build factory row: cols 0-6 (giống Process), 7-8 (Khung giá, Đơn vị tính), 9-17 (Mã HH → Round(MT)), 18-45
         const factoryRow: (string | number)[] = [
-          // 0-15: giống Process
+          // 0-6: giống Process
           processRow[0],  // Mã nhà cung cấp
           processRow[1],  // Số hóa đơn
           processRow[2],  // Ngày hóa đơn
@@ -833,19 +849,19 @@ export async function processDeliveryDataFromRows(
           processRow[4],  // Mã khách hàng
           processRow[5],  // Tên khách hàng
           processRow[6],  // Địa chỉ giao hàng
-          processRow[7],  // Mã hàng hóa
-          processRow[8],  // Tên hàng hóa (Vie)
-          processRow[9],  // Tên hàng hóa (En)
-          processRow[10], // Mã liên hệ giao hàng
-          processRow[11], // Mã DVT
-          processRow[12], // Số lượng (DVT bán hàng)
-          processRow[13], // SP Trọng lượng net
-          processRow[14], // HĐ Trọng lượng (Net)
-          processRow[15], // Round(MT)
-          // 16: Khung giá (từ processRow[16])
-          processRow[16], // Khung giá
-          // 17: Đơn vị tính (từ processRow[17])
-          processRow[17], // Đơn vị tính
+          // 7-8: Khung giá, Đơn vị tính
+          processRow[7],  // Khung giá
+          processRow[8],  // Đơn vị tính
+          // 9-17: Mã hàng hóa → Round(MT)
+          processRow[9],  // Mã hàng hóa
+          processRow[10], // Tên hàng hóa (Vie)
+          processRow[11], // Tên hàng hóa (En)
+          processRow[12], // Mã liên hệ giao hàng
+          processRow[13], // Mã DVT
+          processRow[14], // Số lượng (DVT bán hàng)
+          processRow[15], // SP Trọng lượng net
+          processRow[16], // HĐ Trọng lượng (Net)
+          processRow[17], // Round(MT)
           // 18-19: Tấn/ Hóa đơn, Tấn/ Chuyến
           tanHoaDon,      // Tấn/ Hóa đơn
           tanChuyen,      // Tấn/ Chuyến
@@ -855,10 +871,10 @@ export async function processDeliveryDataFromRows(
           mcc,
           clv,
           ndfc,
-          // 25-26: Col1/Col2 (shift từ 23-24 của processRow)
+          // 25-26: Col1/Col2 (từ processRow[23-24])
           isFirstRowOfGroup ? processRow[23] : '', // Col1 (tổng đầu khối — blank trên non-first rows)
           isFirstRowOfGroup ? processRow[24] : '', // Col2 (blank trên non-first rows)
-          // 27-42: metadata (shift từ 25-40 của processRow)
+          // 27-42: metadata (từ processRow[25-40])
           processRow[25], // Tài xế
           processRow[26], // Thông tin bổ sung
           processRow[27], // Slot
@@ -886,9 +902,9 @@ export async function processDeliveryDataFromRows(
 
     if (groupIndex < sortedGroups.length - 1) {
       const separatorRow: (string | number)[] = new Array(OUTPUT_HEADERS.length).fill('');
-      separatorRow[15] = groupRoundMTSum;
-      // col 16: Khung giá — để trống trên separator row
-      // col 17: Đơn vị tính — để trống trên separator row
+      separatorRow[17] = groupRoundMTSum;
+      // col 7:  Khung giá — để trống trên separator row
+      // col 8:  Đơn vị tính — để trống trên separator row
       separatorRow[18] = groupFactorySums['CLF'] || '';
       separatorRow[19] = groupFactorySums['VFM'] || '';
       separatorRow[20] = groupFactorySums['MCC'] || '';
@@ -901,16 +917,16 @@ export async function processDeliveryDataFromRows(
 
       // Add separator rows to each factory sheet that had data rows in this group
       // Factory separator rows: 46 cols, indices theo FACTORY_OUTPUT_HEADERS
-      // col 15: Round(MT) sum, col 16-17: empty (Khung giá & Đơn vị tính blank on separator)
+      // col 17: Round(MT) sum, col 7-8: empty (Khung giá & Đơn vị tính blank on separator)
       // col 18-19: empty (Tấn/ Hóa đơn & Tấn/ Chuyến blank on separator)
       // col 20-24: CLF/VFM/MCC/CLV/NDFC empty, col 25-26: Col1/Col2
       FACTORY_NAMES.forEach((factory) => {
         if (factoryGroupHasRows[factory]) {
           const fSeparatorRow: (string | number)[] = new Array(FACTORY_OUTPUT_HEADERS.length).fill('');
           const fRoundMTSum = factoryGroupRoundMTSums[factory];
-          fSeparatorRow[15] = fRoundMTSum;
-          // col 16 (Khung giá): để trống trên separator row
-          // col 17 (Đơn vị tính): để trống trên separator row
+          fSeparatorRow[17] = fRoundMTSum;
+          // col 7 (Khung giá): để trống trên separator row
+          // col 8 (Đơn vị tính): để trống trên separator row
           // col 18-19 (Tấn/ Hóa đơn, Tấn/ Chuyến): để trống trên separator row
           // Các cột CLF/VFM/MCC/CLV/NDFC: để trống trên separator row
           fSeparatorRow[25] = fRoundMTSum;
