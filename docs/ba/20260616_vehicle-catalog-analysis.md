@@ -3,13 +3,13 @@
 **Ngày:** 2026-06-16
 **Feature:** Danh mục xe
 **Parent menu:** Quản lý danh mục (sidebar group mới)
-**Trigger:** Upload file Excel sheet "xe" để import danh sách biển số xe + mã tài xế, có kiểm tra trùng và chuẩn hóa biển số về format `XXY-XXXXX`.
+**Trigger:** Upload file Excel sheet "xe" để import danh sách biển số xe + mã tài xế, có kiểm tra trùng và chuẩn hóa biển số về format `XXYXXXXX` (X = số, Y = chữ cái, không dấu gạch ngang), đồng bộ với format `driver_invoices.so_xe`.
 
 ---
 
 ## 1. Tổng quan
 
-Module "Danh mục xe" cho phép người dùng upload file Excel (sheet `xe`) chứa danh sách xe — mỗi dòng là 1 xe gồm mã tài xế (driver code) và biển số xe (plate number). Hệ thống sẽ chuẩn hóa biển số về định dạng `XXY-XXXXX` (X = chữ số, Y = chữ cái), kiểm tra trùng và lưu vào DB.
+Module "Danh mục xe" cho phép người dùng upload file Excel (sheet `xe`) chứa danh sách xe — mỗi dòng là 1 xe gồm mã tài xế (driver code) và biển số xe (plate number). Hệ thống sẽ chuẩn hóa biển số về định dạng `XXYXXXXX` (X = chữ số, Y = chữ cái, không dấu gạch ngang), kiểm tra trùng và lưu vào DB. Chuẩn hóa theo cùng logic với `driver_invoices.so_xe` (`normalizeSoXe()`).
 
 Trang còn có chức năng xem danh sách, tìm kiếm, và xóa (soft delete) từng xe.
 
@@ -23,7 +23,7 @@ flowchart TD
     C -->|Upload Excel| D[Chọn/kéo thả file .xlsx]
     D --> E[Parse sheet 'xe']
     E --> F[Đọc từng dòng: MA + SỐ XE]
-    F --> G[Chuẩn hóa biển số về XXY-XXXXX]
+    F --> G[Chuẩn hóa biển số về XXYXXXXX]
     G --> H{Kiểm tra trùng}
     H -->|Có trùng| I[Đánh dấu lỗi - tiếp tục dòng tiếp]
     H -->|Không trùng| J[Thêm vào danh sách hợp lệ]
@@ -44,10 +44,10 @@ flowchart TD
 
 | ID | Rule |
 |----|------|
-| BR-001 | Biển số xe được chuẩn hóa: xóa hết khoảng trắng, dấu chấm, dấu phẩy → lấy 3 ký tự đầu (XXY) + dấu gạch ngang + phần còn lại (XXXXX). VD: `51H -88294` → `51H-88294`, `50H 87442` → `50H-87442`, `50E-164,61` → `50E-16461` |
+| BR-001 | Biển số xe được chuẩn hóa theo logic `normalizeSoXe()` của `driverInvoiceService`: (1) strip prefix non-digit, (2) bỏ `[-,\s.]`, (3) truncate sau `/`, (4) uppercase. Phải khớp pattern `^\d{2}[A-Z]\d{4,}$`. VD: `51H -88294` → `51H88294`, `50H 87442` → `50H87442`, `50E-164,61` → `50E16461` |
 | BR-002 | `plate_number` (đã chuẩn hóa) là unique key trong DB. Trùng → báo lỗi |
 | BR-003 | Upload theo cơ chế fail-fast (atomic): nếu có bất kỳ dòng nào lỗi → không lưu dòng nào, trả về toàn bộ danh sách lỗi |
-| BR-004 | Lỗi có thể gồm: biển số rỗng, biển số không đúng format sau khi chuẩn hóa (<7 ký tự), biển số trùng trong file, biển số trùng trong DB |
+| BR-004 | Lỗi có thể gồm: biển số rỗng, biển số không khớp pattern `^\d{2}[A-Z]\d{4,}$` sau chuẩn hóa, biển số trùng trong file, biển số trùng trong DB |
 | BR-005 | Dòng có `MA` hoặc `SỐ XE` rỗng → bỏ qua (không tính là lỗi, không import) |
 | BR-006 | Dòng header (dòng đầu tiên: "MA" / "SỐ XE") → bỏ qua |
 | BR-007 | Soft delete: UPDATE SET status='deactive' (không xóa vật lý) |
@@ -95,7 +95,7 @@ Query: ?search=xxx&page=1&limit=20
     "vehicles": [
       {
         "id": 1,
-        "plate_number": "50H-70216",
+        "plate_number": "50H70216",
         "driver_name": "B Tâm",
         "status": "active",
         "created_at": "2026-06-16T00:00:00Z",
@@ -132,9 +132,9 @@ Body: file (Excel .xlsx)
   "success": false,
   "message": "Có 3 lỗi trong dữ liệu — không có dòng nào được lưu",
   "errors": [
-    { "row": 8, "driver_name": "V Luân", "plate_number": "51H -88294", "reason": "Biển số đã tồn tại: 51H-88294" },
+    { "row": 8, "driver_name": "V Luân", "plate_number": "51H -88294", "reason": "Biển số đã tồn tại: 51H88294" },
     { "row": 12, "driver_name": "Ư Lừa", "plate_number": "50E-164,61", "reason": "Biển số không đúng định dạng sau chuẩn hóa" },
-    { "row": 15, "driver_name": "N Quốc", "plate_number": "50H-50999", "reason": "Biển số trùng với dòng 7: 50H-50999" }
+    { "row": 15, "driver_name": "N Quốc", "plate_number": "50H-50999", "reason": "Biển số trùng với dòng 7: 50H50999" }
   ]
 }
 ```
@@ -162,7 +162,7 @@ DELETE /api/vehicles/:id
 
 - File Excel không có sheet "xe" → báo lỗi "Không tìm thấy sheet 'xe' trong file"
 - Sheet "xe" trống (không có dữ liệu sau khi bỏ header + dòng rỗng) → báo lỗi "Không có dữ liệu hợp lệ"
-- Biển số sau chuẩn hóa có độ dài < 7 (ví dụ: "50H" mà không có phần sau) → báo lỗi "Biển số không đúng định dạng"
+- Biển số sau chuẩn hóa không khớp pattern `^\d{2}[A-Z]\d{4,}$` → báo lỗi "Biển số không đúng định dạng"
 - Trùng biển số trong cùng 1 file → báo lỗi trùng với dòng nào
 - Trùng biển số với DB (active record) → báo lỗi "Biển số đã tồn tại"
 - Biển số đã có trong DB nhưng status=deactive → re-activate (không báo lỗi)

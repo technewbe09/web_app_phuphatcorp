@@ -50,14 +50,15 @@ flowchart TD
 |----|------|
 | BR-001 | Cho phép tạo mới 1 dòng driver_invoice thủ công qua API `POST /api/driver-invoices`. |
 | BR-002 | Khi tạo mới: validate đầy đủ các trường bắt buộc: `ma`, `ten_tx`, `ngay`, `so_xe`, `noi_giao`, `so_hoa_don` (mảng). |
-| BR-003 | `so_xe` được chuẩn hóa theo cùng quy tắc: `regexp_replace(regexp_replace(so_xe, '^[^\d]*', ''), '[-,\s]', '', 'g')`. |
-| BR-004 | Khi tạo mới/sửa: với mỗi số hóa đơn trong `so_hoa_don`, tìm trong `accountant_invoices` khớp 3 điều kiện: `ngay` bằng nhau + `so_xe` chuẩn hóa bằng nhau + fuzzy match số hóa đơn. |
-| BR-005 | Fuzzy match số HĐ: strip leading zeros cả 2 bên, kiểm tra bằng hoặc prefix của nhau. VD: "78097" match "00078097". |
+| BR-003 | `so_xe` được chuẩn hóa 3 bước: (1) bỏ prefix không phải số (`^[^0-9]*`), (2) bỏ gạch ngang/phẩy/khoảng trắng, (3) bỏ hậu tố `/.*`. VD: `PPH-50H 88294/L2` → `50H88294`. Trong SQL dùng `regexp_replace`, trong JS dùng `.replace()`. |
+| BR-004 | Khi tạo mới/sửa: với mỗi số hóa đơn trong `so_hoa_don`, tìm trong `accountant_invoices` khớp 3 điều kiện: `ngay` bằng nhau + `so_xe` chuẩn hóa bằng nhau + fuzzy match số hóa đơn (BR-005). |
+| BR-005 | Fuzzy match số HĐ: strip leading zeros cả 2 bên, kiểm tra 4 mức: (a) bằng chính xác, (b) A là prefix của B, (c) B là prefix của A, (d) A chứa B hoặc B chứa A (substring `LIKE '%...%'`). VD: "7979" match "00077979" vì "77979" chứa "7979". |
 | BR-006 | Nếu tìm thấy dòng `accountant_invoices` có `trang_thai = 'không có'` → UPDATE thành `'đã có'`. |
 | BR-007 | Nếu tìm thấy dòng `accountant_invoices` có `trang_thai = 'đã có'` → bỏ qua (không thay đổi). |
-| BR-008 | Logic đối chiếu áp dụng cả khi CREATE và UPDATE số hóa đơn. |
-| BR-009 | Reconcile và INSERT driver_invoices trong cùng 1 transaction. |
-| BR-010 | Trả về số lượng dòng `accountant_invoices` đã được cập nhật trong response. |
+| BR-008 | Khi EDIT `so_hoa_don`: **reset toàn bộ** `accountant_invoices` của `so_xe` + `ngay` đó về `'không có'` → sau đó reconcile lại từ `so_hoa_don` mới. Điều này đảm bảo số HĐ bị xóa khỏi `so_hoa_don` sẽ revert về `'không có'`. |
+| BR-009 | Reconcile và INSERT/UPDATE driver_invoices trong cùng 1 transaction. |
+| BR-010 | Trả về `reconciled_count` trong response — số lượng dòng `accountant_invoices` đã được cập nhật. |
+| BR-011 | Khi DELETE driver_invoice: với mỗi số HĐ của dòng bị xóa, tìm trong `accountant_invoices` (cùng fuzzy match), nếu `trang_thai = 'đã có'` → UPDATE về `'không có'`. Tất cả trong 1 transaction. |
 
 ---
 
@@ -141,6 +142,21 @@ Response 200:
 }
 ```
 
+### 5.3 Xóa hóa đơn tài xế (UPDATED — thêm reverse reconcile)
+
+```
+DELETE /api/driver-invoices/:id
+Auth: JWT (accounting_data.manage)
+
+Hành vi: Trước khi DELETE, với mỗi số HĐ của dòng bị xóa:
+  - Tìm trong accountant_invoices (fuzzy match BR-005, cùng ngay + so_xe)
+  - Nếu trang_thai = 'đã có' → UPDATE về 'không có'
+  - Sau đó mới DELETE driver_invoices
+  - Tất cả trong 1 transaction
+
+Response 200 như hiện tại, không thay đổi API contract.
+```
+
 ---
 
 ## 6. UI Screens
@@ -161,11 +177,13 @@ Response 200:
 | EC-02 | Trùng lặp với driver_invoice đã có (cùng ma + ngay + so_xe + ghi_chu) | Trả lỗi 409 như logic upload hiện tại |
 | EC-03 | accountant_invoices không có dòng nào khớp | Vẫn INSERT thành công, reconciled_count = 0 |
 | EC-04 | Số hóa đơn trong driver_invoice có format khác (có chữ, ký tự đặc biệt) | Strip leading zeros, giữ nguyên phần còn lại để so sánh |
-| EC-05 | Sửa driver_invoice nhưng số hóa đơn cũ đã reconcile trước đó | Không "rollback" trạng thái cũ. Chỉ reconcile ở chiều thuận (không có → đã có) |
+| EC-05 | Sửa driver_invoice, xóa một số HĐ khỏi `so_hoa_don` | BR-008: Reset toàn bộ về `'không có'` rồi reconcile lại → số HĐ bị xóa sẽ revert đúng. |
 
 ---
 
 ## 8. Performance
 
-- Reconcile query dùng cùng pattern như import: 1 query UPDATE `accountant_invoices` dùng EXISTS + fuzzy match
-- Tổng: 1 INSERT/UPDATE driver_invoices + 1 UPDATE accountant_invoices = 2 queries
+- Reconcile query: 1 UPDATE `accountant_invoices` dùng fuzzy match 4 mức + normalize so_xe.
+- CREATE: 1 UPDATE reconcile + 1 INSERT driver_invoices = 2 queries.
+- UPDATE: 1 UPDATE reset all + 1 UPDATE reconcile + 1 UPDATE driver_invoices = 3 queries.
+- DELETE: 1 UPDATE reverse reconcile (per so_hd) + 1 DELETE driver_invoices.

@@ -261,6 +261,8 @@ User upload file .xlsx ERP (Delivery Report)
 | Mã khách hàng | 21 | MA_KH |
 | Tên khách hàng | 22 | TEN_KH |
 | Địa chỉ giao hàng | 15 | DIA_CHI |
+| Khung giá | — | Phân loại: ≤2.5 / >8-16 / >16-23 / Pallet dựa trên tổng Round(MT) nhóm |
+| Đơn vị tính | — | "Chuyến" nếu Khung giá = "≤2.5 tấn", còn lại "Tấn" |
 | Mã hàng hóa | 23 | MA_HANG |
 | Tên hàng hóa (Vie) | 16 | TEN_HANG_HOA |
 | Tên hàng hóa (En) | 24 | TEN_HANG_EN |
@@ -270,14 +272,13 @@ User upload file .xlsx ERP (Delivery Report)
 | SP Trọng lượng net | 18 | SP_TRONG_LUONG |
 | HĐ Trọng lượng (Net) | 19 | HD_TRONG_LUONG |
 | Round(MT) | — | HD_TRONG_LUONG / 1000 per row, làm tròn 3 chữ số thập phân |
-| Đơn vị tính | — | "Chuyến" nếu Khung giá = "≤2.5 tấn", còn lại "Tấn" |
-| Col1 (không tiêu đề) | — | Dòng đầu tiên của khối = tổng Round(MT) khối; các dòng còn lại = 0 |
-| Col2 (không tiêu đề) | — | Tất cả dòng trong khối = tổng Round(MT) khối |
-| CLF | — | Factory col: first row of invoice = SUM(Round(MT)) nếu MA_NCC=2000000001, else 0; other rows = 0; inactive factories = '' |
+| CLF | — | Factory col: first row of invoice = SUM(Round(MT)) nếu MA_NCC=2000000001, else 0 |
 | VFM | — | Factory col: MA_NCC=2100000002 |
 | MCC | — | Factory col: MA_NCC=2000000007 |
 | CLV | — | Factory col: MA_NCC không khớp bất kỳ factory nào |
 | NDFC | — | Factory col: MA_NCC=2000000008 |
+| Col1 (không tiêu đề) | — | Dòng đầu tiên của khối = tổng Round(MT) khối; các dòng còn lại = 0 |
+| Col2 (không tiêu đề) | — | Tất cả dòng trong khối = tổng Round(MT) khối |
 | Tài xế | 29 | TAI_XE |
 | Thông tin bổ sung | 33 | THONG_TIN_BS |
 | Slot | 4 | SLOT |
@@ -645,7 +646,7 @@ frontend/src/components/admin/UploadCustomersModal.tsx
 
 ---
 
-### 11.3 Hóa đơn tài xế (/accounting-data/driver-invoices)
+### 11.3 Hóa đơn tài xế (/vehicle-data/driver-invoices)
 
 **Mục đích:** Upload file Excel hóa đơn từ tài xế (format "Xe Nhỏ"), tự động parse cột G để tách số hóa đơn, lưu vào database có kiểm tra trùng.
 
@@ -672,14 +673,17 @@ driver_invoices (
 - BR-002a: so_xe được normalize: bỏ `-`, `,`, space (vd: "50H-55116" → "50H55116")
 - BR-003: Bỏ qua dòng có cột B (Mã) rỗng hoặc cột G rỗng
 - BR-004: Parse cột G: tách bằng "+" → filter chỉ giữ số nguyên dương
-- BR-005: Lưu raw text vào `so_hoa_don_goc`, kết quả parse vào `so_hoa_don` (JSONB)
+- BR-005: Lưu raw text vào `ghi_chu`, kết quả parse vào `so_hoa_don` (JSONB)
+- BR-005a: Dedup nội bộ trong payload trước khi INSERT (tránh UNIQUE violation)
 - BR-006: Check trùng theo composite key `(ma, ngay, so_xe, ghi_chu)`
 - BR-007: Upload fail-soft: nếu có trùng → trả 409 + list duplicates, user chọn skip
-- BR-008: Hard delete (không soft-update/soft-delete)
+- BR-008: Upload fail-soft + dedup nội bộ: check trùng với DB + trong payload. User chọn skip nếu có trùng.
+- BR-009: Edit hỗ trợ qua PUT endpoint: sửa text fields + thêm/sửa/xóa số hóa đơn
+- BR-010: Hard delete cho DELETE endpoint. Edit = full update.
 
 **API Endpoints:**
 ```
-GET    /api/driver-invoices           → list + pagination + filters (ma, ten_tx, so_xe, so_hoa_don, ghi_chu, ngay_from/to)
+GET    /api/driver-invoices           → list + pagination + filters (ma, ten_tx, so_xe, noi_giao, so_hoa_don, ghi_chu, ngay_from/to)
 POST   /api/driver-invoices/upload     → parse & bulk insert (accounting_data.manage)
                                          → 409 nếu có duplicate (skip_duplicates=false)
 GET    /api/driver-invoices/:id        → single record (accounting_data.view)
@@ -701,6 +705,7 @@ User chọn file .xlsx
 **Files:**
 ```
 backend/src/migrations/014_create_driver_invoices.sql
+backend/src/migrations/015_normalize_so_xe.sql
 backend/src/services/driverInvoiceService.ts
 backend/src/controllers/driverInvoiceController.ts
 backend/src/routes/driverInvoices.ts
@@ -709,12 +714,14 @@ frontend/src/hooks/useDriverInvoices.ts
 frontend/src/utils/parseDriverInvoiceFile.ts
 frontend/src/pages/admin/accounting-data/DriverInvoicesPage.tsx
 frontend/src/components/accounting-data/DriverInvoiceUploadModal.tsx
+frontend/src/components/accounting-data/DriverInvoiceEditModal.tsx
 frontend/src/components/accounting-data/DuplicateConfirmDialog.tsx
+frontend/src/components/accounting-data/InvoiceNumbersPopup.tsx
 ```
 
 **Permissions:** Same as weight-adjustments — `accounting_data.view` / `accounting_data.manage`
 
-**Access:** Route `/accounting-data/driver-invoices`, sidebar menu "Quản lý dữ liệu kế toán" → "Hóa đơn tài xế"
+**Access:** Route `/vehicle-data/driver-invoices`, sidebar menu "Quản lý dữ liệu xe" → "Hóa đơn tài xế"
 
 ---
 

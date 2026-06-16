@@ -90,13 +90,15 @@ BR-005: Chỉ giữ các giá trị là số nguyên dương (number), bỏ qua 
 BR-006: Lưu cột G gốc vào `ghi_chu` (TEXT, hiển thị là "Ghi chú"), kết quả parse vào `so_hoa_don` (JSONB)
 BR-007: Check trùng theo composite key (ma, ngay, so_xe, ghi_chu)
 BR-007a: so_xe được normalize khi insert: bỏ `-`, `,`, space (vd: "50H-55116" → "50H55116")
-BR-008: Upload fail-soft: nếu có dòng trùng → return 409 + danh sách duplicates,
-        user có thể skip duplicates để chỉ insert dòng mới
+BR-008: Upload fail-soft + dedup nội bộ: check trùng với DB + dedup trong payload.
+        Nếu có trùng → return 409, user chọn skip để chỉ insert dòng mới.
 BR-009: Có quyền skip_duplicates=true: backend bỏ qua dòng đã tồn tại, chỉ insert dòng mới
 BR-010: Lưu thông tin file: original_filename, uploaded_by, uploaded_at
-BR-011: KHÔNG soft-update/soft-delete cho bảng này. Delete = hard delete.
-BR-012: Ngày từ Excel: parse linh hoạt (Date object hoặc string), output YYYY-MM-DD
-BR-013: Xử lý merge cell trong Excel (như file mẫu có merge cell ở row 1-5)
+BR-011: Edit hỗ trợ qua PUT /api/driver-invoices/:id — cập nhật text fields + thêm/sửa/xóa số hóa đơn
+BR-012: Hard delete cho DELETE. Edit = full update toàn bộ fields.
+BR-013: Ngày từ Excel: parse linh hoạt (Date object hoặc string), output YYYY-MM-DD
+BR-014: so_xe được normalize khi insert: bỏ `-`, `,`, space (vd: "50H-55116" → "50H55116")
+BR-015: Xử lý merge cell trong Excel (như file mẫu có merge cell ở row 1-5)
 ```
 
 ---
@@ -216,7 +218,7 @@ Auth: JWT + accounting_data.view
 
 Query params:
   page=1, limit=20,
-  ma, ten_tx, ngay_from, ngay_to, so_xe, so_hoa_don
+  ma, ten_tx, ngay_from, ngay_to, so_xe, noi_giao, so_hoa_don, ghi_chu
 
 Response:
 {
