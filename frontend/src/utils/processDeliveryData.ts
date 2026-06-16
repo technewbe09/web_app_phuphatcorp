@@ -76,6 +76,14 @@ function getFactory(maNcc: string): string {
   return FACTORY_BY_NCC[maNcc] ?? 'CLV';
 }
 
+// ─── Helper: Strip " /L2" suffix from vehicle number ──────────────────────────
+function normalizeVehicle(soTauXe: string): string {
+  if (soTauXe.length >= 4 && soTauXe.slice(-4) === ' /L2') {
+    return soTauXe.slice(0, -4);
+  }
+  return soTauXe;
+}
+
 // ─── Helper: Compare vehicle numbers with natural sorting ──────────────────────
 /**
  * Compare two vehicle numbers using natural sorting rules.
@@ -574,6 +582,14 @@ export async function processDeliveryDataFromRows(
       warnings.push(`${rowRef} Thiếu Số hóa đơn${detail ? ` — ${detail}` : ''}`);
     }
   });
+
+  // Normalize vehicle numbers — strip " /L2" suffix for consistent group key + display
+  for (const row of dataRows) {
+    const raw = cell(row, COL.SO_TAU_XE);
+    if (raw) {
+      row[COL.SO_TAU_XE] = normalizeVehicle(raw);
+    }
+  }
 
   // ── Step 1: Group by (Số tàu/xe + Ngày hóa đơn + Tên khách hàng) ──────────
   // Bước 1a: Group sơ bộ theo (Số tàu/xe + Ngày HĐ + Tên KH)

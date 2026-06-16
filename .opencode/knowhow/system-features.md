@@ -232,20 +232,23 @@ User upload file .xlsx ERP (Delivery Report)
     → processDeliveryData(file: File) [src/utils/processDeliveryData.ts]
       → Đọc file qua FileReader → ArrayBuffer
       → XLSX.read() parse workbook
-      → Bỏ qua 4 dòng đầu (metadata ERP), row 5 = header, row 6+ = data
+      → Bỏ qua 4 dòng đầu (metadata ERP), row 4 = header, row 5+ = data
       → Filter dòng trống
+      → Lọc dòng có Diễn giải chứa "thay thế" / "điều chỉnh" (filterExcludedRows)
+      → Verify trọng lượng với masterdata weight_adjustments (nếu có thay đổi → confirm dialog)
+      → Normalize Số tàu/xe: strip suffix " /L2" nếu có (normalizeVehicle)
       → Group theo key = (Số tàu/xe + Ngày HĐ + Tên KH)
         - Nếu SUM(HĐ Trọng lượng)/1000 >= 13 và Thông tin bổ sung có 2+ giá trị → add "Thông tin bổ sung" vào key
       → Sort mỗi nhóm theo Số HĐ ASC (numeric-aware), rồi Mã NCC ASC
       → Final sort các nhóm theo Số tàu/xe ASC (natural sort: prefix numeric-aware → number numeric)
       → Tính Round(MT) = SUM(HĐ Trọng lượng Net) / 1000 per group
-      → Build output XLSX:
-          Sheet "Processed": tất cả dòng, header row + data rows + separator row màu xám giữa các nhóm
-          Sheet "CLF": chỉ dòng có factoryVals['CLF'] !== '' (kể cả = 0) + separator cùng style
-          Sheet "VFM": chỉ dòng có factoryVals['VFM'] !== ''
-          Sheet "MCC": chỉ dòng có factoryVals['MCC'] !== ''
-          Sheet "CLV": chỉ dòng có factoryVals['CLV'] !== ''
-          Sheet "NDFC": chỉ dòng có factoryVals['NDFC'] !== ''
+      → Build output XLSX (6 sheets):
+          Sheet "Processed": tất cả dòng (44 cols), header + data + separator xám giữa nhóm
+          Sheet "CLF": chỉ dòng factory CLF (46 cols), thêm Tấn/Hóa đơn & Tấn/Chuyến
+          Sheet "VFM": chỉ dòng factory VFM (46 cols)
+          Sheet "MCC": chỉ dòng factory MCC (46 cols)
+          Sheet "CLV": chỉ dòng factory CLV (46 cols)
+          Sheet "NDFC": chỉ dòng factory NDFC (46 cols)
       → Return: { outputBlob, outputFilename, processedRows, groupCount, dateRange, warnings }
   → User tải file output xuống
 ```
@@ -257,7 +260,7 @@ User upload file .xlsx ERP (Delivery Report)
 | Mã nhà cung cấp | 20 | MA_NCC |
 | Số hóa đơn | 32 | SO_HD — dùng để sort ASC trong nhóm |
 | Ngày hóa đơn | 31 | NGAY_HD — dùng làm group key; convert từ Excel serial |
-| Số tàu | 28 | SO_TAU_XE — dùng làm group key |
+| Số tàu | 28 | SO_TAU_XE — dùng làm group key; strip " /L2" suffix nếu có; hiển thị `.slice(-9)` |
 | Mã khách hàng | 21 | MA_KH |
 | Tên khách hàng | 22 | TEN_KH |
 | Địa chỉ giao hàng | 15 | DIA_CHI |
@@ -296,33 +299,37 @@ User upload file .xlsx ERP (Delivery Report)
 | Số seri | 14 | SO_SERI |
 | Loại hàng | 25 | LOAI_HANG |
 
-**Sheets CLF / VFM / MCC / CLV / NDFC (41 cols = 39 + 2 extra):**
+**Sheets CLF / VFM / MCC / CLV / NDFC (46 cols):**
 
-Giống sheet Processed, nhưng có thêm logic riêng:
+Giống sheet Processed, nhưng chèn thêm 2 cột giữa "Đơn vị tính" và "CLF": "Tấn/ Hóa đơn" (col 18) và "Tấn/ Chuyến" (col 19). Các cột CLF..NDFC bị đẩy sang col 20-24.
 
 | Khác biệt | Mô tả |
 |------------|-------|
-| Cột CLF/VFM/MCC/CLV/NDFC (col 16-20) — **dòng đầu tiên của khối** | Hiển thị sum của **toàn bộ group** (tất cả factories), giống separator row ở sheet Process. Các dòng còn lại giữ nguyên giá trị invoice-level |
-| Col 39: **Tấn/ Chuyến** | Chỉ hiển thị ở dòng đầu tiên của mỗi khối = tổng tấn của factory tương ứng trong khối đó (sheet VFM → tổng tấn VFM). Các dòng còn lại = '' |
-| Col 40: **Tấn/ Hóa đơn** | Hiển thị ở dòng đầu tiên của mỗi hóa đơn (invoice+factory) = tổng tấn của invoice đó cho factory tương ứng. Các dòng còn lại = '' |
+| Cột CLF/VFM/MCC/CLV/NDFC (col 20-24) — **dòng đầu tiên của khối** | Hiển thị sum của **toàn bộ group** (tất cả factories), giống separator row ở sheet Process. Các dòng còn lại giữ nguyên giá trị invoice-level |
+| Col 18: **Tấn/ Hóa đơn** | Hiển thị ở dòng đầu tiên của mỗi invoice+factory = tổng tấn của invoice đó cho factory tương ứng. Các dòng còn lại = '' |
+| Col 19: **Tấn/ Chuyến** | Chỉ hiển thị ở dòng đầu khối = tổng tấn của factory đó trong khối. Các dòng còn lại = '' |
 
 ### 5.3 Business Rules
 
 - **BR-000:** ⚠️ DEPRECATED (removed 2026-04-25) — Pre-sort rows by vehicle+date+invoice was removed. Final sort groups by vehicle is now performed in BR-003.
 - **BR-001:** Grouping key ban đầu = Số tàu/xe + Ngày hóa đơn + Tên khách hàng
+  - Số tàu/xe được normalize: strip suffix `" /L2"` nếu có trước khi dùng làm group key (BR-010)
   - Tính SUM(HĐ Trọng lượng) / 1000 của group sơ bộ
   - Nếu < 13: giữ nguyên group key (Số tàu/xe + Ngày HĐ + Tên KH)
   - Nếu >= 13: kiểm tra cột "Thông tin bổ sung"
     - Có từ 2 giá trị trở lên (phân tách bằng dấu phẩy/xuống dòng) → group key = Số tàu/xe + Ngày HĐ + Tên KH + Thông tin bổ sung
     - Chỉ có 1 giá trị hoặc rỗng → giữ nguyên group key
 - **BR-002:** Trong mỗi nhóm, sort rows theo Số HĐ ASC (numeric-aware localeCompare), sau đó Mã nhà cung cấp ASC (numeric-aware)
-- **BR-003:** Final sort groups theo **biển số hiển thị** (`.slice(-9)` của Số tàu/xe) ASC. Dùng `compareVehicleNumbers(a.vehicle.slice(-9), b.vehicle.slice(-9))` — sort theo biển số đã cắt prefix PPH, không phải full source string. Lý do: source data có nhiều format prefix khác nhau (`PPH `, `PPH-`, `PPH-P-`, `PPH-G-`, `PPH-ND-`, etc.) gây sai thứ tự nếu sort full string. ✅ UPDATED 2026-04-26: sort key = `.slice(-9)` display value
-- **BR-004:** Round(MT) = HD_TRONG_LUONG (col 19) / 1000, làm tròn 2 chữ số thập phân — tính per row (không phải per group)
-- **BR-005:** Output có 1 separator row giữa các nhóm (không có giữa row cuối và end-of-file). Separator row hiển thị SUM tại các cột: Round(MT), CLF, VFM, MCC, CLV, NDFC ('' nếu factory đó không có invoice trong nhóm)
+- **BR-003:** Final sort groups theo **biển số hiển thị** (`.slice(-9)` của Số tàu/xe đã normalize) ASC. Dùng `compareVehicleNumbers()` — sort theo prefix alphabetically → number numerically. Lý do: source data có nhiều format prefix khác nhau (`PPH `, `PPH-`, `PPH-P-`, `PPH-G-`, `PPH-ND-`, etc.) gây sai thứ tự nếu sort full string.
+- **BR-004:** Round(MT) = HD_TRONG_LUONG (col 19) / 1000, làm tròn 3 chữ số thập phân — tính per row (không phải per group)
+- **BR-005:** Output có 1 separator row giữa các nhóm (không có giữa row cuối và end-of-file). Separator row hiển thị SUM tại các cột: Round(MT), CLF, VFM, MCC, CLV, NDFC.
 - **BR-006:** Ngày HĐ là Excel serial number → convert sang DD/MM/YYYY string trong output
 - **BR-007:** Factory sheets (CLF/VFM/MCC/CLV/NDFC) — dòng đầu tiên của mỗi khối: cột CLF/VFM/MCC/CLV/NDFC hiển thị sum toàn group (giống separator row ở Process sheet)
-- **BR-008:** Factory sheets — cột "Tấn/ Chuyến" (col 39): chỉ hiển thị ở dòng đầu khối = tổng tấn của factory đó trong khối
-- **BR-009:** Factory sheets — cột "Tấn/ Hóa đơn" (col 40): hiển thị ở dòng đầu tiên của mỗi invoice+factory = tổng tấn invoice đó theo factory đó
+- **BR-008:** Factory sheets — cột "Tấn/ Hóa đơn" (col 18): hiển thị ở dòng đầu tiên của mỗi invoice+factory = tổng tấn invoice đó theo factory đó
+- **BR-009:** Factory sheets — cột "Tấn/ Chuyến" (col 19): chỉ hiển thị ở dòng đầu khối = tổng tấn của factory đó trong khối
+- **BR-010:** Normalize Số tàu/xe: nếu 4 ký tự cuối là `" /L2"` → strip suffix này trước khi dùng làm group key, sort, và hiển thị
+- **BR-011:** Cột "Khung giá" và "Đơn vị tính" nằm ngay sau "Địa chỉ giao hàng". "Khung giá" phân loại dựa trên tổng Round(MT) nhóm: ≤2.5 / >8-16 / >16-23 / Pallet. "Đơn vị tính" = "Chuyến" nếu Khung giá = "≤2.5 tấn", còn lại "Tấn".
+- **BR-012:** Lọc dòng trước khi xử lý: dòng có cột "Diễn giải" chứa "thay thế" hoặc "điều chỉnh" bị loại bỏ (filterExcludedRows). Đây là các hóa đơn chỉnh sửa, không phải giao hàng thực tế.
 
 ### 5.4 Verify trọng lượng (Weight Adjustment Check)
 
