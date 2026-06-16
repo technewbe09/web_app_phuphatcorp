@@ -1,22 +1,29 @@
 import { Router } from 'express';
-import {
-  vehicleController,
-  vehicleCreateSchema,
-  vehicleUpdateSchema,
-  vehicleDeleteSchema,
-  vehicleUploadSchema,
-} from '../controllers/vehicleController';
+import multer from 'multer';
+import { vehicleController, vehicleDeleteSchema } from '../controllers/vehicleController';
+import { authenticateToken } from '../middleware/auth';
 import { validate } from '../middleware/validate';
-import { authenticateToken, requirePermission } from '../middleware/auth';
 
 const router = Router();
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    if (
+      file.mimetype === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' ||
+      file.originalname.endsWith('.xlsx')
+    ) {
+      cb(null, true);
+    } else {
+      cb(new Error('Chỉ chấp nhận file .xlsx'));
+    }
+  },
+});
 
 router.use(authenticateToken);
 
-router.get('/', vehicleController.list);
-router.post('/', requirePermission('transport.manage'), ...validate(vehicleCreateSchema), vehicleController.create);
-router.put('/:id', requirePermission('transport.manage'), ...validate(vehicleUpdateSchema), vehicleController.update);
-router.delete('/:id', requirePermission('transport.manage'), ...validate(vehicleDeleteSchema), vehicleController.remove);
-router.post('/upload', requirePermission('transport.manage'), ...validate(vehicleUploadSchema), vehicleController.upload);
+router.get('/', vehicleController.getAll);
+router.post('/upload', upload.single('file'), vehicleController.upload);
+router.delete('/:id', ...validate(vehicleDeleteSchema), vehicleController.remove);
 
 export default router;

@@ -31,8 +31,8 @@ Hệ thống dùng **RBAC** (Role-Based Access Control) — mỗi user gắn 1 r
 | roles.view | Xem Roles |
 | roles.manage | Quản lý Roles |
 | permissions.manage | Quản lý Permissions |
-| transport.view | Xem dữ liệu vận tải (trip codes, xe, tài xế) |
-| transport.manage | Quản lý dữ liệu vận tải (CRUD trip codes, xe, tài xế) |
+| transport.view | Xem dữ liệu vận tải (lịch đi hàng) |
+| transport.manage | Quản lý dữ liệu vận tải (CRUD lịch đi hàng) |
 | dispatch.view | Xem bảng điều phối xe |
 | dispatch.manage | Tạo/xóa lịch điều phối xe |
 
@@ -363,140 +363,13 @@ src/api/weightAdjustmentApi.ts     ← fetchAll() dùng để load masterdata
 
 ## 7. Quản lý dữ liệu xe
 
-Module "Quản lý dữ liệu xe" có nhiều sub-menu, mỗi sub-menu là một bảng masterdata.
+Module "Quản lý dữ liệu xe" chứa sub-menu Lịch đi hàng.
 
-### 7.1 Mã chuyến (/vehicle-data/trip-codes)
+### 7.1 Lịch đi hàng (/vehicle-data/delivery-schedule)
 
-**Mục đích:** Quản lý danh sách mã chuyến vận chuyển.
+**Mục đích:** Quản lý lịch đi hàng theo ngày.
 
-**Data model — bảng `trip_codes`:**
-```sql
-trip_codes (id, ma, tuyen, so_tien, status, start_date, end_date, boc_xep, ghi_chu, created_at, updated_at)
-```
-
-**Business Rules:**
-- Soft update: update → deactivate old row (status=deactive, end_date=now) + insert new row
-- Soft delete: UPDATE SET status=deactive, end_date=now (không xóa vật lý)
-- Mã case-sensitive unique among active rows (enforced at service layer, NOT DB constraint)
-- Upload Excel: parse ở frontend (xlsx lib) → gửi JSON array lên backend → backend check duplicate → bulk insert
-- Upload fail-fast: nếu bất kỳ dòng nào lỗi → không insert gì cả, trả về chi tiết lỗi từng dòng
-
-**API Endpoints:**
-```
-GET    /api/trip-codes          → list active rows
-POST   /api/trip-codes          → create (409 if duplicate ma)
-PUT    /api/trip-codes/:id      → soft-update (transaction: deactivate + insert)
-DELETE /api/trip-codes/:id      → soft-delete
-POST   /api/trip-codes/upload   → bulk insert JSON rows ({ rows: [...] })
-```
-
-**Files:**
-```
-backend/src/migrations/003_create_trip_codes.sql
-backend/src/services/tripCodeService.ts
-backend/src/controllers/tripCodeController.ts
-backend/src/routes/tripCodes.ts
-frontend/src/api/tripCodeApi.ts
-frontend/src/hooks/useTripCodes.ts
-frontend/src/components/vehicle-data/TripCodeFormModal.tsx
-frontend/src/components/vehicle-data/TripCodeUploadModal.tsx
-frontend/src/pages/admin/vehicle-data/TripCodePage.tsx
-```
-
-**Access:** Tất cả authenticated users. Route: `/vehicle-data/trip-codes`
-
----
-
-### 7.2 Dữ liệu xe (/vehicle-data/vehicles)
-
-**Mục đích:** Quản lý danh sách xe vận chuyển (biển số, loại xe, tài xế).
-
-**Data model — bảng `vehicles`:**
-```sql
-vehicles (id, bien_so, loai, tai_xe JSONB, status, start_date, end_date, created_at, updated_at)
-```
-
-**Business Rules:**
-- Soft update: deactivate old row (status=deactive, end_date=now) + insert new row (transaction)
-- Soft delete: UPDATE SET status=deactive, end_date=now
-- Biển số case-sensitive unique among active rows (service layer, NOT DB constraint)
-- tai_xe: JSONB array of driver name strings; empty array [] if no driver
-- Loại: one of 'Xe lớn' | 'Xe nhỏ' (validated at service + controller)
-- Upload: FE parses Excel → JSON rows → backend validates → bulk insert
-  - Excel Tài xế column: comma-separated → split to array
-  - Fail-fast: any error → no insert, return all errors with row numbers
-
-**API Endpoints:**
-```
-GET    /api/vehicles          → list active rows (DESC start_date)
-POST   /api/vehicles          → create (409 if duplicate bien_so)
-PUT    /api/vehicles/:id      → soft-update (transaction: deactivate + insert)
-DELETE /api/vehicles/:id      → soft-delete
-POST   /api/vehicles/upload   → bulk insert JSON rows ({ rows: [...] })
-```
-
-**Files:**
-```
-backend/src/migrations/005_create_vehicles.sql
-backend/src/services/vehicleService.ts
-backend/src/controllers/vehicleController.ts
-backend/src/routes/vehicles.ts
-frontend/src/api/vehicleApi.ts
-frontend/src/hooks/useVehicles.ts
-frontend/src/components/vehicle-data/VehicleFormModal.tsx
-frontend/src/components/vehicle-data/VehicleUploadModal.tsx
-frontend/src/pages/admin/vehicle-data/VehiclePage.tsx
-```
-
-**Access:** Tất cả authenticated users. Route: `/vehicle-data/vehicles`
-
----
-
-### 7.3 Thông tin tài xế (/vehicle-data/drivers)
-
-**Mục đích:** Quản lý hồ sơ tài xế (master data) — tích hợp với VehicleFormModal để chọn tài xế từ dropdown.
-
-**Data model:**
-```sql
-drivers (id, ten_ky_hieu VARCHAR(100) NOT NULL UNIQUE, ho_ten, lien_he, cccd, ghi_chu, status, created_at, updated_at)
-driver_documents (id, driver_id FK→drivers, file_name, mime_type, file_data TEXT(base64), file_size, created_at)
-```
-
-**Business Rules:**
-- ten_ky_hieu: DB UNIQUE constraint (across all rows, active + deactive) — dùng làm identifier trong vehicles.tai_xe
-- Delete driver → soft delete (status=deactive), không xóa vật lý
-- Update driver → standard UPDATE (no soft-update / versioning)
-- vehicles.tai_xe vẫn lưu string[] của ten_ky_hieu; VehicleFormModal dùng multi-select searchable dropdown từ active drivers
-- Document upload: base64 JSON (no multer), max 5MB. FE validate trước khi gửi. Lưu TEXT trong DB.
-- Deactivated driver trong vehicles.tai_xe → hiển thị với "(đã xóa)" hint trong VehicleFormModal
-
-**API Endpoints:**
-```
-GET    /api/drivers                          → list active drivers (ORDER BY ten_ky_hieu ASC)
-POST   /api/drivers                          → create (409 if duplicate ten_ky_hieu)
-PUT    /api/drivers/:id                      → update (409 if duplicate ten_ky_hieu)
-DELETE /api/drivers/:id                      → soft-delete
-GET    /api/drivers/:id/documents            → list docs metadata (no file_data)
-POST   /api/drivers/:id/documents            → upload doc (base64 JSON, max 5MB)
-DELETE /api/drivers/:id/documents/:docId     → delete doc
-GET    /api/drivers/:id/documents/:docId     → download doc (with file_data)
-```
-
-**Files:**
-```
-backend/src/migrations/006_create_drivers.sql
-backend/src/services/driverService.ts
-backend/src/controllers/driverController.ts
-backend/src/routes/drivers.ts
-frontend/src/api/driverApi.ts
-frontend/src/hooks/useDrivers.ts
-frontend/src/hooks/useDriverDocuments.ts
-frontend/src/components/vehicle-data/DriverFormModal.tsx
-frontend/src/components/vehicle-data/DriverDocumentsModal.tsx
-frontend/src/pages/admin/vehicle-data/DriverPage.tsx
-```
-
-**Access:** Tất cả authenticated users. Route: `/vehicle-data/drivers`
+**Access:** Tất cả authenticated users. Route: `/vehicle-data/delivery-schedule`
 
 ---
 
@@ -645,6 +518,59 @@ frontend/src/components/admin/UploadCustomersModal.tsx
 ---
 
 
+## 12. Quản lý danh mục
+
+Nhóm tính năng "Quản lý danh mục" trong sidebar — collapsible accordion, hiển thị cho mọi authenticated user.
+
+### 12.1 Danh mục xe (/catalog/vehicles)
+
+**Mục đích:** Quản lý danh sách xe (biển số + tài xế) — upload từ Excel, xem danh sách, soft delete.
+
+**Data model — bảng `vehicles`:**
+```sql
+vehicles (
+  id SERIAL PK,
+  plate_number VARCHAR(20) NOT NULL,          -- Biển số, unique (active), format XXYXXXXX (e.g. 50H70216)
+  driver_name VARCHAR(255) NOT NULL,           -- Tên/mã tài xế
+  status VARCHAR(20) DEFAULT 'active',         -- 'active' | 'deactive'
+  created_at TIMESTAMPTZ, updated_at TIMESTAMPTZ
+)
+```
+
+**Business Rules:**
+- BR-001: Biển số chuẩn hóa về format `XXYXXXXX` (strip prefix non-digit, bỏ `[-,\s.]`, truncate `/`). Cùng format với `driver_invoices.so_xe`.
+- BR-002: `plate_number` unique trong active records (partial unique index)
+- BR-003: Upload fail-fast (atomic): có lỗi → không lưu dòng nào
+- BR-004: Dòng rỗng (MA rỗng hoặc SỐ XE rỗng) → bỏ qua
+- BR-005: Soft delete: UPDATE status='deactive'
+- BR-006: Upload lại xe đã deactive → re-activate + update driver_name
+
+**Excel format (sheet "xe"):** Cột MA (mã tài xế), cột SỐ XE (biển số)
+
+**API Endpoints:**
+```
+GET    /api/vehicles?search=&page=1&limit=20  → { vehicles, total, page, limit }
+POST   /api/vehicles/upload                    → multipart file upload (fail-fast)
+DELETE /api/vehicles/:id                       → soft delete
+```
+
+**Files (planned):**
+```
+backend/src/migrations/017_create_vehicles.sql
+backend/src/services/vehicleService.ts
+backend/src/controllers/vehicleController.ts
+backend/src/routes/vehicles.ts
+frontend/src/api/vehicleCatalogApi.ts
+frontend/src/hooks/useVehicleCatalog.ts
+frontend/src/pages/admin/catalog/VehicleCatalogPage.tsx
+frontend/src/components/catalog/UploadVehiclesModal.tsx
+frontend/src/components/catalog/DeleteVehicleDialog.tsx
+```
+
+**Access:** Tất cả authenticated users. Route: `/catalog/vehicles`
+
+---
+
 - [ ] Trang Sổ kế toán (/accounting) — CRUD phiếu thu/chi, nhật ký chứng từ
 - [ ] Trang Báo cáo (/reports) — báo cáo tài chính, biểu đồ doanh thu
 - [ ] Trang Cài đặt (/settings) — quản lý tài khoản, đổi mật khẩu
@@ -656,6 +582,7 @@ frontend/src/components/admin/UploadCustomersModal.tsx
 - [ ] Export báo cáo (PDF, Excel)
 - [x] Dark/Light Mode — toggle button ở sidebar (MainLayout) và AuthLayout, persist localStorage
 - [x] Bảng điều phối xe (/dispatch/schedule) — tạo/xóa chuyến xe theo ngày
+- [ ] Danh mục xe (/catalog/vehicles) — upload Excel, quản lý biển số + tài xế (PLANNED — docs/ba/20260616_vehicle-catalog-analysis.md)
 
 ---
 
@@ -672,30 +599,23 @@ Nhóm tính năng "Điều hành vận tải" trong sidebar — collapsible acco
 dispatch_schedules (
   id, ngay DATE, loai_tuyen VARCHAR(20),  -- 'Tuyến cố định' | 'Tuyến ngoài'
   loai_xe VARCHAR(10), xe_type VARCHAR(10),
-  bien_so VARCHAR(50) NOT NULL,  -- text value, NOT FK
-  tai_xe TEXT,                   -- text value, NOT FK
-  ma_chuyen VARCHAR(100),        -- text value, NOT FK
   diem_nhan TEXT, diem_tra TEXT, gio_nhan TIME, ghi_chu TEXT,
-  vehicle_id FK nullable, trip_code_id FK nullable,  -- convenience refs only
   created_by FK nullable, created_at, updated_at
 )
 ```
 
 **Business Rules:**
-- BR-001: Lưu text values (bien_so, tai_xe, ma_chuyen) — KHÔNG lưu FK ID. Dữ liệu lịch sử theo ngày phải giữ nguyên kể cả khi masterdata thay đổi.
-- BR-002: `loai_xe = 'Xe nhỏ'` → hiển thị bảng "Lịch xe nhỏ"; `'Xe lớn'` → "Lịch xe lớn"
-- BR-003: `xe_type = 'Xe nhà'` → biển số chọn từ vehicles; `'Xe ngoài'` → nhập tay
-- BR-004: Tài xế (Xe nhà): tự điền từ `vehicle.tai_xe[0]`, read-only
-- BR-005: Sort theo `gio_nhan ASC` trong mỗi bảng — backend sort trước khi trả về
-- BR-006: Hard delete — không có soft delete cho dispatch_schedules
-- BR-007: `loai_tuyen = 'Tuyến cố định'` → xuất hiện trong "Lịch xe nhỏ" hoặc "Lịch xe lớn" tùy loai_xe; `'Tuyến ngoài'` → xuất hiện trong "Lịch tuyến ngoài" (riêng biệt, bao gồm cả xe nhỏ lẫn xe lớn)
+- BR-001: `loai_xe = 'Xe nhỏ'` → hiển thị bảng "Lịch xe nhỏ"; `'Xe lớn'` → "Lịch xe lớn"
+- BR-002: Sort theo `gio_nhan ASC` trong mỗi bảng — backend sort trước khi trả về
+- BR-003: Hard delete — không có soft delete cho dispatch_schedules
+- BR-004: `loai_tuyen = 'Tuyến cố định'` → xuất hiện trong "Lịch xe nhỏ" hoặc "Lịch xe lớn" tùy loai_xe; `'Tuyến ngoài'` → xuất hiện trong "Lịch tuyến ngoài" (riêng biệt, bao gồm cả xe nhỏ lẫn xe lớn)
 
 **Flow — Tạo chuyến (4-step wizard):**
 ```
 Step 1: Chọn loai_tuyen (Tuyến cố định / Tuyến ngoài)
   → Step 2: Chọn xe_type (Xe nhà / Xe ngoài)
     → Step 3: Chọn loai_xe (Xe nhỏ / Xe lớn)
-      → Step 4: Form (diem_nhan, diem_tra, gio_nhan, ma_chuyen, bien_so, tai_xe, ghi_chu)
+      → Step 4: Form (diem_nhan, diem_tra, gio_nhan, ghi_chu)
         → POST /api/dispatch-schedules
         → Toast success → Modal đóng → Refresh bảng
 ```
@@ -704,7 +624,7 @@ Step 1: Chọn loai_tuyen (Tuyến cố định / Tuyến ngoài)
 ```
 GET    /api/dispatch-schedules?date=YYYY-MM-DD  → { xe_nho: [], xe_lon: [], tuyen_ngoai: [] }
 POST   /api/dispatch-schedules                  → create schedule
-PUT    /api/dispatch-schedules/:id              → update editable fields (bien_so, tai_xe, ma_chuyen, diem_nhan, diem_tra, gio_nhan, ghi_chu, vehicle_id, trip_code_id)
+PUT    /api/dispatch-schedules/:id              → update editable fields (diem_nhan, diem_tra, gio_nhan, ghi_chu)
 DELETE /api/dispatch-schedules/:id              → hard delete
 ```
 

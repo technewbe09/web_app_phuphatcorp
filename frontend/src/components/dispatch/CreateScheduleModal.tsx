@@ -4,8 +4,6 @@ import { useI18n } from '../../i18n/useI18n';
 import { Modal } from '../ui/Modal';
 import { Button } from '../ui/Button';
 import { cn } from '../../utils/cn';
-import { useGetVehicles } from '../../hooks/useVehicles';
-import { useGetTripCodes } from '../../hooks/useTripCodes';
 import type { CreateDispatchScheduleRequest } from '../../api/dispatchApi';
 
 interface CreateScheduleModalProps {
@@ -24,31 +22,20 @@ interface FormData {
   diem_nhan: string;
   diem_tra: string;
   gio_nhan: string;
-  ma_chuyen: string;
-  bien_so: string;
-  tai_xe: string;
   ghi_chu: string;
-  vehicle_id: number | null;
-  trip_code_id: number | null;
 }
 
 const initialForm: FormData = {
   diem_nhan: '',
   diem_tra: '',
   gio_nhan: '',
-  ma_chuyen: '',
-  bien_so: '',
-  tai_xe: '',
   ghi_chu: '',
-  vehicle_id: null,
-  trip_code_id: null,
 };
 
 interface FieldErrors {
   diem_nhan?: string;
   diem_tra?: string;
   gio_nhan?: string;
-  bien_so?: string;
 }
 
 export function CreateScheduleModal({
@@ -65,14 +52,6 @@ export function CreateScheduleModal({
   const [loai_xe, setLoaiXe] = useState<LoaiXe | null>(null);
   const [form, setForm] = useState<FormData>(initialForm);
   const [errors, setErrors] = useState<FieldErrors>({});
-
-  const { data: vehiclesData } = useGetVehicles();
-  const { data: tripCodesData } = useGetTripCodes();
-
-  const filteredVehicles =
-    vehiclesData?.filter((v) => v.loai === loai_xe && v.status === 'active') ?? [];
-
-  const activeTripCodes = tripCodesData?.filter((tc) => tc.status === 'active') ?? [];
 
   const handleClose = () => {
     setStep(1);
@@ -101,31 +80,6 @@ export function CreateScheduleModal({
     setStep(4);
   };
 
-  const handleVehicleSelect = (vehicleId: string) => {
-    const vehicle = filteredVehicles.find((v) => v.id === parseInt(vehicleId, 10));
-    if (vehicle) {
-      setForm((prev) => ({
-        ...prev,
-        bien_so: vehicle.bien_so,
-        tai_xe: vehicle.tai_xe[0] ?? '',
-        vehicle_id: vehicle.id,
-      }));
-    }
-  };
-
-  const handleTripCodeSelect = (tripCodeId: string) => {
-    const tc = activeTripCodes.find((tc) => tc.id === parseInt(tripCodeId, 10));
-    if (tc) {
-      setForm((prev) => ({
-        ...prev,
-        ma_chuyen: tc.ma,
-        trip_code_id: tc.id,
-      }));
-    } else {
-      setForm((prev) => ({ ...prev, ma_chuyen: '', trip_code_id: null }));
-    }
-  };
-
   const validate = (): boolean => {
     const newErrors: FieldErrors = {};
     if (!form.diem_nhan.trim()) {
@@ -136,12 +90,6 @@ export function CreateScheduleModal({
     }
     if (!form.gio_nhan) {
       newErrors.gio_nhan = t('dispatch.validation.gioNhanRequired' as never);
-    }
-    if (xe_type === 'Xe ngoài' && !form.bien_so.trim()) {
-      newErrors.bien_so = t('dispatch.validation.bienSoRequired' as never);
-    }
-    if (xe_type === 'Xe nhà' && !form.bien_so) {
-      newErrors.bien_so = t('dispatch.validation.bienSoSelectRequired' as never);
     }
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -155,15 +103,10 @@ export function CreateScheduleModal({
       loai_tuyen,
       loai_xe,
       xe_type,
-      bien_so: form.bien_so,
-      tai_xe: form.tai_xe || null,
-      ma_chuyen: form.ma_chuyen || null,
       diem_nhan: form.diem_nhan,
       diem_tra: form.diem_tra,
       gio_nhan: form.gio_nhan,
       ghi_chu: form.ghi_chu || null,
-      vehicle_id: form.vehicle_id,
-      trip_code_id: form.trip_code_id,
     });
   };
 
@@ -319,111 +262,24 @@ export function CreateScheduleModal({
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
-                {t('dispatch.createModal.gioNhan' as never)}{' '}
-                <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="time"
-                value={form.gio_nhan}
-                onChange={(e) => setForm((p) => ({ ...p, gio_nhan: e.target.value }))}
-                className={cn(
-                  'w-full px-3 py-2 rounded-lg border text-sm bg-white dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100 outline-none transition-colors',
-                  errors.gio_nhan
-                    ? 'border-red-400 focus:border-red-500'
-                    : 'border-neutral-300 dark:border-neutral-600 focus:border-neutral-500 dark:focus:border-neutral-400',
-                )}
-              />
-              {errors.gio_nhan && (
-                <p className="mt-1 text-xs text-red-500">{errors.gio_nhan}</p>
-              )}
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
-                {t('dispatch.createModal.maChuyen' as never)}
-              </label>
-              <select
-                value={form.trip_code_id?.toString() ?? ''}
-                onChange={(e) => handleTripCodeSelect(e.target.value)}
-                className="w-full px-3 py-2 rounded-lg border border-neutral-300 dark:border-neutral-600 text-sm bg-white dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100 outline-none focus:border-neutral-500 dark:focus:border-neutral-400 transition-colors"
-              >
-                <option value="">{t('dispatch.createModal.maChuyenPlaceholder' as never)}</option>
-                {activeTripCodes.map((tc) => (
-                  <option key={tc.id} value={tc.id}>
-                    {tc.ma} — {tc.tuyen}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          {/* Biển số — Xe nhà: select, Xe ngoài: text input */}
           <div>
             <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
-              {t('dispatch.createModal.bienSo' as never)}{' '}
+              {t('dispatch.createModal.gioNhan' as never)}{' '}
               <span className="text-red-500">*</span>
             </label>
-            {xe_type === 'Xe nhà' ? (
-              <select
-                value={form.vehicle_id?.toString() ?? ''}
-                onChange={(e) => handleVehicleSelect(e.target.value)}
-                className={cn(
-                  'w-full px-3 py-2 rounded-lg border text-sm bg-white dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100 outline-none transition-colors',
-                  errors.bien_so
-                    ? 'border-red-400 focus:border-red-500'
-                    : 'border-neutral-300 dark:border-neutral-600 focus:border-neutral-500 dark:focus:border-neutral-400',
-                )}
-              >
-                <option value="">{t('dispatch.createModal.bienSoPlaceholder' as never)}</option>
-                {filteredVehicles.map((v) => (
-                  <option key={v.id} value={v.id}>
-                    {v.bien_so}
-                    {v.tai_xe.length > 0 ? ` — ${v.tai_xe[0]}` : ''}
-                  </option>
-                ))}
-              </select>
-            ) : (
-              <input
-                type="text"
-                value={form.bien_so}
-                onChange={(e) => setForm((p) => ({ ...p, bien_so: e.target.value }))}
-                placeholder={t('dispatch.createModal.bienSoInputPlaceholder' as never)}
-                className={cn(
-                  'w-full px-3 py-2 rounded-lg border text-sm bg-white dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100 outline-none transition-colors',
-                  errors.bien_so
-                    ? 'border-red-400 focus:border-red-500'
-                    : 'border-neutral-300 dark:border-neutral-600 focus:border-neutral-500 dark:focus:border-neutral-400',
-                )}
-              />
-            )}
-            {errors.bien_so && (
-              <p className="mt-1 text-xs text-red-500">{errors.bien_so}</p>
-            )}
-          </div>
-
-          {/* Tài xế */}
-          <div>
-            <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
-              {t('dispatch.createModal.taiXe' as never)}
-            </label>
-            {xe_type === 'Xe nhà' ? (
-              <input
-                type="text"
-                value={form.tai_xe}
-                readOnly
-                placeholder={t('dispatch.createModal.taiXePlaceholder' as never)}
-                className="w-full px-3 py-2 rounded-lg border border-neutral-200 dark:border-neutral-700 text-sm bg-neutral-50 dark:bg-neutral-800/50 text-neutral-500 dark:text-neutral-400 cursor-not-allowed"
-              />
-            ) : (
-              <input
-                type="text"
-                value={form.tai_xe}
-                onChange={(e) => setForm((p) => ({ ...p, tai_xe: e.target.value }))}
-                placeholder={t('dispatch.createModal.taiXeInputPlaceholder' as never)}
-                className="w-full px-3 py-2 rounded-lg border border-neutral-300 dark:border-neutral-600 text-sm bg-white dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100 outline-none focus:border-neutral-500 dark:focus:border-neutral-400 transition-colors"
-              />
+            <input
+              type="time"
+              value={form.gio_nhan}
+              onChange={(e) => setForm((p) => ({ ...p, gio_nhan: e.target.value }))}
+              className={cn(
+                'w-full px-3 py-2 rounded-lg border text-sm bg-white dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100 outline-none transition-colors',
+                errors.gio_nhan
+                  ? 'border-red-400 focus:border-red-500'
+                  : 'border-neutral-300 dark:border-neutral-600 focus:border-neutral-500 dark:focus:border-neutral-400',
+              )}
+            />
+            {errors.gio_nhan && (
+              <p className="mt-1 text-xs text-red-500">{errors.gio_nhan}</p>
             )}
           </div>
 

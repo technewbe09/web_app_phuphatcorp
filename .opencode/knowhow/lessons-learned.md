@@ -412,6 +412,33 @@ description: Ghi lại các bài học kinh nghiệm, bug đã fix, và pitfalls
 
 ---
 
+## Change: Driver Invoices — Đổi label Ghi chú + popup số HĐ + format so_xe
+- **Ngày:** 2026-06-15
+- **Severity:** Medium
+- **Feature liên quan:** Hóa đơn tài xế (Driver Invoices)
+- **Thay đổi:**
+  1. Đổi label cột "Số HĐ (gốc)" → "Ghi chú", thêm filter "Ghi chú..." vào filter bar
+  2. Badge HĐ `[5]` clickable → popup `InvoiceNumbersPopup` hiển thị danh sách số hóa đơn
+  3. Format `so_xe` khi insert: bỏ `-`, `,`, space → VD "50H-55116" → "50H55116"
+- **Thực hiện:**
+  - Migration 015: `UPDATE driver_invoices SET so_xe = regexp_replace(...)` normalize dữ liệu cũ
+  - BE: thêm `ghi_chu` filter vào `driverInvoiceService.list()` + `driverInvoiceController`
+  - FE: thêm `ghi_chu` vào `DriverInvoiceFilters` type + API params
+  - FE: hàm `normalizeSoXe()` trong `parseDriverInvoiceFile.ts`
+  - FE: component `InvoiceNumbersPopup` mới — modal nhỏ hiển thị badge numbers
+  - FE: `DriverInvoicesPage` — đổi header cột, thêm filter input, grid 6→7 cols, badge thành button
+- **Cần chú ý:** Khi normalize dữ liệu cũ, phải chạy migration TRƯỚC khi thay đổi parser để đảm bảo duplicate check hoạt động đúng (UNIQUE index dùng `so_xe`). Nếu không, dữ liệu cũ `"50H-55116"` và mới `"50H55116"` sẽ là 2 record khác nhau.
+
+## Bug: Driver Invoice Upload 400 — rows with empty B (Mã) not skipped
+- **Ngày:** 2026-06-15
+- **Severity:** High
+- **Feature liên quan:** Hóa đơn tài xế — Upload Excel
+- **Triệu chứng:** Upload file "Kê Xe Nhỏ 03_2026.xlsx" → `POST /api/driver-invoices/upload 400`. File "Xe Nhỏ 05_2026.xlsx" upload bình thường.
+- **Root cause:** File 03 có 5 dòng với cột B (Mã) rỗng (thường là dòng "thu hồi hàng"). Parser chỉ skip khi TẤT CẢ field (ma, ten_tx, ngay, so_xe, noi_giao) đều rỗng, nhưng các dòng này có ten_tx, ngay, noi_giao, ghi_chu đầy đủ → không bị skip → gửi lên backend với `ma=''` → backend validation `notEmpty()` reject 400.
+- **Fix:** Thêm `if (!ma) continue` trong parser — skip mọi dòng thiếu Mã trước khi xử lý tiếp. File: `frontend/src/utils/parseDriverInvoiceFile.ts`
+- **Bug follow-up:** Sau khi fix 400, xuất hiện 500 do file 03 có 2 dòng trùng lặp nội bộ (cùng key trong chính file Excel). `checkDuplicates()` chỉ check với DB, không dedup internal. Fix: dedup `rowsToInsert` bằng Map trước khi INSERT. File: `backend/src/services/driverInvoiceService.ts`
+- **Cần chú ý:** (1) Khi validate row-level data từ Excel, nên kiểm tra TỪNG field bắt buộc riêng rẽ. (2) Khi bulk insert từ file upload, luôn dedup nội bộ trong payload trước khi INSERT để tránh vi phạm UNIQUE constraint — dữ liệu từ Excel thường có dòng trùng.
+
 ## Anti-patterns Tránh Lặp Lại
 
 ### 1. Không để import ở dưới cùng file

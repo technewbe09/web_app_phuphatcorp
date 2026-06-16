@@ -6,15 +6,10 @@ export interface DispatchSchedule {
   loai_tuyen: 'Tuyến cố định' | 'Tuyến ngoài';
   loai_xe: 'Xe lớn' | 'Xe nhỏ';
   xe_type: 'Xe nhà' | 'Xe ngoài';
-  bien_so: string;
-  tai_xe: string | null;
-  ma_chuyen: string | null;
   diem_nhan: string;
   diem_tra: string;
   gio_nhan: string;
   ghi_chu: string | null;
-  vehicle_id: number | null;
-  trip_code_id: number | null;
   created_at: string;
 }
 
@@ -29,27 +24,17 @@ export interface CreateDispatchScheduleRequest {
   loai_tuyen: 'Tuyến cố định' | 'Tuyến ngoài';
   loai_xe: 'Xe lớn' | 'Xe nhỏ';
   xe_type: 'Xe nhà' | 'Xe ngoài';
-  bien_so: string;
-  tai_xe?: string | null;
-  ma_chuyen?: string | null;
   diem_nhan: string;
   diem_tra: string;
   gio_nhan: string;
   ghi_chu?: string | null;
-  vehicle_id?: number | null;
-  trip_code_id?: number | null;
 }
 
 export interface UpdateDispatchScheduleRequest {
-  bien_so: string;
-  tai_xe?: string | null;
-  ma_chuyen?: string | null;
   diem_nhan: string;
   diem_tra: string;
   gio_nhan: string;
   ghi_chu?: string | null;
-  vehicle_id?: number | null;
-  trip_code_id?: number | null;
 }
 
 export const dispatchApi = {

@@ -338,10 +338,8 @@
   },
   "vehicleData": {
     "menuTitle": "Vehicle Data",
-    "tripCodes": "Trip Codes",
-    "vehicles": "Vehicles",
-    "drivers": "Drivers",
-    "deliverySchedule": "Delivery Schedule"
+    "deliverySchedule": "Delivery Schedule",
+    "driverInvoices": "Driver Invoices"
   },
   "deliverySchedule": {
     "title": "Delivery Schedule",
@@ -427,10 +425,8 @@
       "columns": {
         "diemNhan": "Pickup",
         "diemTra": "Dropoff",
-        "bienSo": "Plate No.",
         "loaiXe": "Vehicle Type",
         "gioNhan": "Time",
-        "maChuyen": "Trip Code",
         "ghiChu": "Note"
       }
     },
@@ -452,14 +448,6 @@
       "diemNhan": "Pickup Point",
       "diemTra": "Dropoff Point",
       "gioNhan": "Pickup Time",
-      "maChuyen": "Trip Code",
-      "maChuyenPlaceholder": "Select trip code",
-      "bienSo": "Plate Number",
-      "bienSoPlaceholder": "Select vehicle",
-      "bienSoInputPlaceholder": "Enter plate number",
-      "taiXe": "Driver",
-      "taiXePlaceholder": "No driver",
-      "taiXeInputPlaceholder": "Enter driver name (optional)",
       "ghiChu": "Note",
       "ghiChuPlaceholder": "Additional notes...",
       "createSuccess": "Trip created successfully",
@@ -483,9 +471,7 @@
     "validation": {
       "diemNhanRequired": "Pickup point is required",
       "diemTraRequired": "Dropoff point is required",
-      "gioNhanRequired": "Pickup time is required",
-      "bienSoRequired": "Plate number is required",
-      "bienSoSelectRequired": "Please select a vehicle"
+      "gioNhanRequired": "Pickup time is required"
     }
   },
   "customers": {
@@ -547,5 +533,9 @@
       "diemTraHangDuplicate": "Delivery point already exists",
       "notFound": "Customer not found"
     }
+  },
+  "catalog": {
+    "menuTitle": "Catalog Management",
+    "vehicles": "Vehicle Catalog"
   }
 }

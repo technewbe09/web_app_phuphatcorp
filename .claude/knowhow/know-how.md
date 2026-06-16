@@ -259,8 +259,8 @@ Base URL: `/api`
 | Method | Path | Auth | Body/Query | Response |
 |--------|------|------|------------|----------|
 | GET | /dispatch-schedules | JWT | query: `date=YYYY-MM-DD` (required) | `{ success, data: { xe_nho: DispatchSchedule[], xe_lon: DispatchSchedule[], tuyen_ngoai: DispatchSchedule[] } }` |
-| POST | /dispatch-schedules | JWT | `{ ngay, loai_tuyen, loai_xe, xe_type, bien_so, tai_xe?, ma_chuyen?, diem_nhan, diem_tra, gio_nhan, ghi_chu?, vehicle_id?, trip_code_id? }` | `{ success, data: DispatchSchedule }` |
-| PUT | /dispatch-schedules/:id | JWT + dispatch.manage | `{ bien_so, tai_xe?, ma_chuyen?, diem_nhan, diem_tra, gio_nhan, ghi_chu?, vehicle_id?, trip_code_id? }` | `{ success, data: DispatchSchedule }` |
+| POST | /dispatch-schedules | JWT | `{ ngay, loai_tuyen, loai_xe, xe_type, diem_nhan, diem_tra, gio_nhan, ghi_chu? }` | `{ success, data: DispatchSchedule }` |
+| PUT | /dispatch-schedules/:id | JWT + dispatch.manage | `{ diem_nhan, diem_tra, gio_nhan, ghi_chu? }` | `{ success, data: DispatchSchedule }` |
 | DELETE | /dispatch-schedules/:id | JWT + dispatch.manage | — | `{ success, message }` |
 
 ### Customers — /customers
@@ -313,9 +313,6 @@ Base URL: `/api`
 | /reports | MainLayout | Protected | Placeholder |
 | /settings | MainLayout | Protected | Placeholder |
 | /delivery-data | MainLayout | Protected | DeliveryDataPage |
-| /vehicle-data/trip-codes | MainLayout | Protected | TripCodePage |
-| /vehicle-data/vehicles | MainLayout | Protected | VehiclePage |
-| /vehicle-data/drivers | MainLayout | Protected | DriverPage |
 | /dispatch/schedule | MainLayout | Protected | SchedulePage (Bảng điều phối xe) |
 | /accounting-data/weight-adjustments | MainLayout | Protected | WeightAdjustmentPage (Điều chỉnh trọng lượng) |
 | /accounting-data/customers | MainLayout | Protected | CustomersPage (Danh sách khách nhận hàng) |
