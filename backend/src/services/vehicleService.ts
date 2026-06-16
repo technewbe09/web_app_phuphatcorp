@@ -1,116 +1,99 @@
 import { pool } from '../config/database';
+import * as XLSX from 'xlsx';
 
 export interface Vehicle {
   id: number;
-  bien_so: string;
-  loai: string;
-  tai_xe: string[];
+  plate_number: string;
+  driver_name: string;
   status: 'active' | 'deactive';
-  start_date: string;
-  end_date: string | null;
   created_at: string;
   updated_at: string;
 }
 
-export interface CreateVehicleData {
-  bien_so: string;
-  loai: string;
-  tai_xe?: string[];
+export interface VehicleListResult {
+  vehicles: Vehicle[];
+  total: number;
+  page: number;
+  limit: number;
 }
 
-const VALID_LOAI = ['Xe lớn', 'Xe nhỏ'] as const;
+export interface UploadResult {
+  imported: number;
+  reactivated: number;
+}
+
+export interface UploadError {
+  row: number;
+  driver_name: string;
+  plate_number: string;
+  reason: string;
+}
+
+const SELECT_COLS = `
+  id, plate_number, driver_name, status, created_at, updated_at
+`;
+
+function normalizePlateNumber(raw: string): string | null {
+  const cleaned = raw
+    .replace(/^[^\d]*/, '')
+    .replace(/[-,\s.]/g, '')
+    .replace(/\/.*$/, '')
+    .toUpperCase();
+
+  if (!/^\d{2}[A-Z]\d{4,}$/.test(cleaned)) return null;
+
+  return cleaned;
+}
 
 export const vehicleService = {
-  async list(): Promise<Vehicle[]> {
-    const result = await pool.query<Vehicle>(
-      `SELECT id, bien_so, loai, tai_xe, status, start_date, end_date, created_at, updated_at
-       FROM vehicles
-       WHERE status = 'active'
-       ORDER BY start_date DESC`,
-    );
-    return result.rows;
-  },
+  async getAll(
+    search?: string,
+    page: number = 1,
+    limit: number = 20,
+  ): Promise<VehicleListResult> {
+    const offset = (page - 1) * limit;
+    const params: unknown[] = [];
+    let whereClause = "WHERE status = 'active'";
+    let countWhereClause = "WHERE status = 'active'";
 
-  async findActiveByBienSo(bien_so: string): Promise<Vehicle | null> {
-    const result = await pool.query<Vehicle>(
-      `SELECT id FROM vehicles WHERE bien_so = $1 AND status = 'active' LIMIT 1`,
-      [bien_so],
+    if (search) {
+      const q = `%${search}%`;
+      params.push(q, q);
+      whereClause += ` AND (plate_number ILIKE $${params.length - 1} OR driver_name ILIKE $${params.length})`;
+      countWhereClause += ` AND (plate_number ILIKE $1 OR driver_name ILIKE $2)`;
+    }
+
+    const countResult = await pool.query<{ count: string }>(
+      `SELECT COUNT(*) as count FROM vehicles ${countWhereClause}`,
+      search ? [search] : [],
     );
-    return result.rows[0] || null;
+    const total = parseInt(countResult.rows[0].count, 10);
+
+    params.push(limit, offset);
+    const dataResult = await pool.query<Vehicle>(
+      `SELECT ${SELECT_COLS} FROM vehicles ${whereClause}
+       ORDER BY plate_number ASC
+       LIMIT $${params.length - 1} OFFSET $${params.length}`,
+      params,
+    );
+
+    return { vehicles: dataResult.rows, total, page, limit };
   },
 
   async findById(id: number): Promise<Vehicle | null> {
     const result = await pool.query<Vehicle>(
-      `SELECT id, bien_so, loai, tai_xe, status, start_date, end_date, created_at, updated_at
-       FROM vehicles WHERE id = $1`,
+      `SELECT ${SELECT_COLS} FROM vehicles WHERE id = $1`,
       [id],
     );
     return result.rows[0] || null;
   },
 
-  async create(data: CreateVehicleData): Promise<Vehicle> {
-    if (!VALID_LOAI.includes(data.loai as typeof VALID_LOAI[number])) {
-      throw { code: 'INVALID_LOAI', loai: data.loai };
-    }
-
-    const existing = await this.findActiveByBienSo(data.bien_so);
-    if (existing) {
-      throw { code: 'DUPLICATE_BIEN_SO', bien_so: data.bien_so };
-    }
-
-    const taiXe = data.tai_xe ?? [];
+  async findByPlateNumber(plateNumber: string): Promise<Vehicle | null> {
     const result = await pool.query<Vehicle>(
-      `INSERT INTO vehicles (bien_so, loai, tai_xe)
-       VALUES ($1, $2, $3)
-       RETURNING id, bien_so, loai, tai_xe, status, start_date, end_date, created_at, updated_at`,
-      [data.bien_so, data.loai, JSON.stringify(taiXe)],
+      `SELECT ${SELECT_COLS} FROM vehicles WHERE plate_number = $1 AND status = 'active'`,
+      [plateNumber],
     );
-    return result.rows[0];
-  },
-
-  async softUpdate(id: number, data: CreateVehicleData): Promise<Vehicle> {
-    const existing = await this.findById(id);
-    if (!existing || existing.status !== 'active') {
-      throw { code: 'NOT_FOUND' };
-    }
-
-    if (!VALID_LOAI.includes(data.loai as typeof VALID_LOAI[number])) {
-      throw { code: 'INVALID_LOAI', loai: data.loai };
-    }
-
-    // Check if new bien_so conflicts with another active row
-    if (data.bien_so !== existing.bien_so) {
-      const duplicate = await this.findActiveByBienSo(data.bien_so);
-      if (duplicate) {
-        throw { code: 'DUPLICATE_BIEN_SO', bien_so: data.bien_so };
-      }
-    }
-
-    const taiXe = data.tai_xe ?? [];
-    const client = await pool.connect();
-    try {
-      await client.query('BEGIN');
-
-      await client.query(
-        `UPDATE vehicles SET status = 'deactive', end_date = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = $1`,
-        [id],
-      );
-
-      const insertResult = await client.query<Vehicle>(
-        `INSERT INTO vehicles (bien_so, loai, tai_xe)
-         VALUES ($1, $2, $3)
-         RETURNING id, bien_so, loai, tai_xe, status, start_date, end_date, created_at, updated_at`,
-        [data.bien_so, data.loai, JSON.stringify(taiXe)],
-      );
-
-      await client.query('COMMIT');
-      return insertResult.rows[0];
-    } catch (err) {
-      await client.query('ROLLBACK');
-      throw err;
-    } finally {
-      client.release();
-    }
+    return result.rows[0] || null;
   },
 
   async softDelete(id: number): Promise<void> {
@@ -120,63 +103,119 @@ export const vehicleService = {
     }
 
     await pool.query(
-      `UPDATE vehicles SET status = 'deactive', end_date = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = $1`,
+      `UPDATE vehicles SET status = 'deactive' WHERE id = $1`,
       [id],
     );
   },
 
-  async uploadMany(rows: CreateVehicleData[]): Promise<{ inserted: number }> {
-    // Check duplicates within the uploaded rows (case-sensitive)
-    const seenBienSos = new Set<string>();
-    const inFileErrors: { row: number; bien_so: string; reason: string }[] = [];
-    rows.forEach((row, idx) => {
-      if (seenBienSos.has(row.bien_so)) {
-        inFileErrors.push({ row: idx + 2, bien_so: row.bien_so, reason: 'Biển số trùng trong file' });
-      } else {
-        seenBienSos.add(row.bien_so);
-      }
-    });
+  async uploadFromExcel(
+    fileBuffer: Buffer,
+  ): Promise<{ result?: UploadResult; errors?: UploadError[] }> {
+    const wb = XLSX.read(fileBuffer, { type: 'buffer' });
+    const sheetName = wb.SheetNames.find(
+      (s) => s.toLowerCase().trim() === 'xe',
+    );
 
-    // Validate loai values
-    const loaiErrors: { row: number; bien_so: string; reason: string }[] = [];
-    rows.forEach((row, idx) => {
-      if (!VALID_LOAI.includes(row.loai as typeof VALID_LOAI[number])) {
-        if (!inFileErrors.some((e) => e.row === idx + 2)) {
-          loaiErrors.push({ row: idx + 2, bien_so: row.bien_so, reason: `Loại '${row.loai}' không hợp lệ` });
-        }
-      }
-    });
-
-    // Check duplicates against DB (active rows)
-    const dbErrors: { row: number; bien_so: string; reason: string }[] = [];
-    const uniqueBienSos = Array.from(seenBienSos);
-    if (uniqueBienSos.length > 0) {
-      const result = await pool.query<{ bien_so: string }>(
-        `SELECT bien_so FROM vehicles WHERE bien_so = ANY($1::text[]) AND status = 'active'`,
-        [uniqueBienSos],
-      );
-      const existingBienSos = new Set(result.rows.map((r) => r.bien_so));
-      rows.forEach((row, idx) => {
-        if (existingBienSos.has(row.bien_so) && !inFileErrors.some((e) => e.row === idx + 2)) {
-          dbErrors.push({ row: idx + 2, bien_so: row.bien_so, reason: 'Biển số đã tồn tại trong hệ thống' });
-        }
-      });
+    if (!sheetName) {
+      return {
+        errors: [{ row: 0, driver_name: '', plate_number: '', reason: "Không tìm thấy sheet 'xe' trong file" }],
+      };
     }
 
-    const allErrors = [...inFileErrors, ...loaiErrors, ...dbErrors];
-    if (allErrors.length > 0) {
-      throw { code: 'UPLOAD_ERRORS', errors: allErrors };
+    const ws = wb.Sheets[sheetName];
+    const rawRows = XLSX.utils.sheet_to_json<unknown[]>(ws, { header: 1, defval: null });
+
+    const errors: UploadError[] = [];
+    const rowsToInsert: { driver_name: string; plate_number: string }[] = [];
+    const seenPlates = new Map<string, number>();
+
+    for (let i = 0; i < rawRows.length; i++) {
+      const row = rawRows[i] as unknown[];
+      const rowNum = i + 1;
+
+      if (row.length === 0) continue;
+
+      const col0 = String(row[0] ?? '').trim();
+      const col1 = String(row[1] ?? '').trim();
+
+      if (!col0 && !col1) continue;
+
+      const normalized0 = col0.toLowerCase().replace(/[^a-z0-9]/g, '');
+      const normalized1 = col1.toLowerCase().replace(/[^a-z0-9]/g, '');
+      if ((col0 === 'MA' && normalized1 === 'soxe') || (normalized0 === 'ma' && col1 === 'SỐ XE')) {
+        continue;
+      }
+
+      if (!col0 || !col1) continue;
+
+      const normalized = normalizePlateNumber(col1);
+      if (!normalized) {
+        errors.push({
+          row: rowNum,
+          driver_name: col0,
+          plate_number: col1,
+          reason: `Biển số không đúng định dạng sau chuẩn hóa: ${col1}`,
+        });
+        continue;
+      }
+
+      if (seenPlates.has(normalized)) {
+        errors.push({
+          row: rowNum,
+          driver_name: col0,
+          plate_number: col1,
+          reason: `Biển số trùng với dòng ${seenPlates.get(normalized)}: ${normalized}`,
+        });
+        continue;
+      }
+      seenPlates.set(normalized, rowNum);
+
+      const existing = await this.findByPlateNumber(normalized);
+      if (existing) {
+        errors.push({
+          row: rowNum,
+          driver_name: col0,
+          plate_number: col1,
+          reason: `Biển số đã tồn tại: ${normalized}`,
+        });
+        continue;
+      }
+
+      rowsToInsert.push({ driver_name: col0, plate_number: normalized });
     }
 
+    if (rowsToInsert.length === 0 && errors.length === 0) {
+      return { errors: [{ row: 0, driver_name: '', plate_number: '', reason: 'Không có dữ liệu hợp lệ trong sheet xe' }] };
+    }
+
+    if (errors.length > 0) {
+      return { errors };
+    }
+
+    let imported = 0;
+    let reactivated = 0;
     const client = await pool.connect();
     try {
       await client.query('BEGIN');
-      for (const row of rows) {
-        const taiXe = row.tai_xe ?? [];
-        await client.query(
-          `INSERT INTO vehicles (bien_so, loai, tai_xe) VALUES ($1, $2, $3)`,
-          [row.bien_so, row.loai, JSON.stringify(taiXe)],
+      for (const row of rowsToInsert) {
+        const deactivated = await client.query<Vehicle>(
+          `SELECT id FROM vehicles WHERE plate_number = $1 AND status = 'deactive'`,
+          [row.plate_number],
         );
+
+        if (deactivated.rows.length > 0) {
+          await client.query(
+            `UPDATE vehicles SET status = 'active', driver_name = $1 WHERE id = $2`,
+            [row.driver_name, deactivated.rows[0].id],
+          );
+          reactivated++;
+        } else {
+          await client.query(
+            `INSERT INTO vehicles (plate_number, driver_name) VALUES ($1, $2)`,
+            [row.plate_number, row.driver_name],
+          );
+          imported++;
+        }
       }
       await client.query('COMMIT');
     } catch (err) {
@@ -186,6 +225,6 @@ export const vehicleService = {
       client.release();
     }
 
-    return { inserted: rows.length };
+    return { result: { imported, reactivated } };
   },
 };

@@ -645,6 +645,78 @@ frontend/src/components/admin/UploadCustomersModal.tsx
 
 ---
 
+### 11.3 Hóa đơn tài xế (/accounting-data/driver-invoices)
+
+**Mục đích:** Upload file Excel hóa đơn từ tài xế (format "Xe Nhỏ"), tự động parse cột G để tách số hóa đơn, lưu vào database có kiểm tra trùng.
+
+**Data model — bảng `driver_invoices`:**
+```sql
+driver_invoices (
+  id SERIAL PK,
+  ma VARCHAR(50) NOT NULL,
+  ten_tx VARCHAR(255) NOT NULL,
+  ngay DATE NOT NULL,
+  so_xe VARCHAR(50) NOT NULL,
+  noi_giao VARCHAR(255) NOT NULL,
+  ghi_chu TEXT,                            -- Ghi chú — raw text cột G từ file Excel
+  so_hoa_don JSONB DEFAULT '[]'::jsonb,    -- Array số hóa đơn đã parse (click để xem popup)
+  original_filename VARCHAR(255),
+  uploaded_by INTEGER FK→users.id,
+  uploaded_at TIMESTAMPTZ DEFAULT NOW()
+)
+```
+
+**Business Rules:**
+- BR-001: Upload file .xlsx, đọc sheet "XE NHỎ", dữ liệu từ row 8+
+- BR-002: Columns: B=Mã, C=Tên TX, D=Ngày, E=Số xe, F=Nơi giao, G=Ghi chú (raw)
+- BR-002a: so_xe được normalize: bỏ `-`, `,`, space (vd: "50H-55116" → "50H55116")
+- BR-003: Bỏ qua dòng có cột B (Mã) rỗng hoặc cột G rỗng
+- BR-004: Parse cột G: tách bằng "+" → filter chỉ giữ số nguyên dương
+- BR-005: Lưu raw text vào `so_hoa_don_goc`, kết quả parse vào `so_hoa_don` (JSONB)
+- BR-006: Check trùng theo composite key `(ma, ngay, so_xe, ghi_chu)`
+- BR-007: Upload fail-soft: nếu có trùng → trả 409 + list duplicates, user chọn skip
+- BR-008: Hard delete (không soft-update/soft-delete)
+
+**API Endpoints:**
+```
+GET    /api/driver-invoices           → list + pagination + filters (ma, ten_tx, so_xe, so_hoa_don, ghi_chu, ngay_from/to)
+POST   /api/driver-invoices/upload     → parse & bulk insert (accounting_data.manage)
+                                         → 409 nếu có duplicate (skip_duplicates=false)
+GET    /api/driver-invoices/:id        → single record (accounting_data.view)
+PUT    /api/driver-invoices/:id        → update record (accounting_data.manage)
+DELETE /api/driver-invoices/:id        → hard delete (accounting_data.manage)
+```
+
+**Flow — Upload Excel:**
+```
+User chọn file .xlsx
+  → Frontend parse (xlsx lib): đọc sheet "XE NHỎ", rows 8+
+  → Parse cột G: split("+") → filter /^\d+$/ → so_hoa_don
+  → Preview: hiện 10 dòng đầu + tổng số dòng/tổng số hóa đơn
+  → User confirm → POST /api/driver-invoices/upload { rows, original_filename, skip_duplicates }
+  → Không trùng → 200 "Đã import N bản ghi"
+  → Có trùng + skip_duplicates=false → 409 → DuplicateConfirmDialog → user chọn skip → import dòng mới
+```
+
+**Files:**
+```
+backend/src/migrations/014_create_driver_invoices.sql
+backend/src/services/driverInvoiceService.ts
+backend/src/controllers/driverInvoiceController.ts
+backend/src/routes/driverInvoices.ts
+frontend/src/api/driverInvoiceApi.ts
+frontend/src/hooks/useDriverInvoices.ts
+frontend/src/utils/parseDriverInvoiceFile.ts
+frontend/src/pages/admin/accounting-data/DriverInvoicesPage.tsx
+frontend/src/components/accounting-data/DriverInvoiceUploadModal.tsx
+frontend/src/components/accounting-data/DuplicateConfirmDialog.tsx
+```
+
+**Permissions:** Same as weight-adjustments — `accounting_data.view` / `accounting_data.manage`
+
+**Access:** Route `/accounting-data/driver-invoices`, sidebar menu "Quản lý dữ liệu kế toán" → "Hóa đơn tài xế"
+
+---
 
 - [ ] Trang Sổ kế toán (/accounting) — CRUD phiếu thu/chi, nhật ký chứng từ
 - [ ] Trang Báo cáo (/reports) — báo cáo tài chính, biểu đồ doanh thu

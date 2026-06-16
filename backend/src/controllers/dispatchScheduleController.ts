@@ -33,13 +33,6 @@ export const dispatchCreateSchema: ValidationChain[] = [
     .withMessage('Loại sở hữu là bắt buộc')
     .isIn(['Xe nhà', 'Xe ngoài'])
     .withMessage("Loại sở hữu phải là 'Xe nhà' hoặc 'Xe ngoài'"),
-  body('bien_so')
-    .notEmpty()
-    .withMessage('Biển số là bắt buộc')
-    .isLength({ max: 50 })
-    .withMessage('Biển số tối đa 50 ký tự'),
-  body('tai_xe').optional({ nullable: true }).isString().isLength({ max: 200 }),
-  body('ma_chuyen').optional({ nullable: true }).isString().isLength({ max: 100 }),
   body('diem_nhan').notEmpty().withMessage('Điểm nhận là bắt buộc'),
   body('diem_tra').notEmpty().withMessage('Điểm trả là bắt buộc'),
   body('gio_nhan')
@@ -48,19 +41,10 @@ export const dispatchCreateSchema: ValidationChain[] = [
     .matches(/^\d{2}:\d{2}(:\d{2})?$/)
     .withMessage('Giờ nhận phải có định dạng HH:MM'),
   body('ghi_chu').optional({ nullable: true }).isString(),
-  body('vehicle_id').optional({ nullable: true }).isInt({ min: 1 }),
-  body('trip_code_id').optional({ nullable: true }).isInt({ min: 1 }),
 ];
 
 export const dispatchUpdateSchema: ValidationChain[] = [
   param('id').isInt({ min: 1 }).withMessage('ID không hợp lệ'),
-  body('bien_so')
-    .notEmpty()
-    .withMessage('Biển số là bắt buộc')
-    .isLength({ max: 50 })
-    .withMessage('Biển số tối đa 50 ký tự'),
-  body('tai_xe').optional({ nullable: true }).isString().isLength({ max: 200 }),
-  body('ma_chuyen').optional({ nullable: true }).isString().isLength({ max: 100 }),
   body('diem_nhan').notEmpty().withMessage('Điểm nhận là bắt buộc'),
   body('diem_tra').notEmpty().withMessage('Điểm trả là bắt buộc'),
   body('gio_nhan')
@@ -69,8 +53,6 @@ export const dispatchUpdateSchema: ValidationChain[] = [
     .matches(/^\d{2}:\d{2}(:\d{2})?$/)
     .withMessage('Giờ nhận phải có định dạng HH:MM'),
   body('ghi_chu').optional({ nullable: true }).isString(),
-  body('vehicle_id').optional({ nullable: true }).isInt({ min: 1 }),
-  body('trip_code_id').optional({ nullable: true }).isInt({ min: 1 }),
 ];
 
 export const dispatchDeleteSchema: ValidationChain[] = [

@@ -7,16 +7,17 @@ import { RegisterPage } from './pages/auth/RegisterPage';
 import { DashboardPage } from './pages/dashboard/DashboardPage';
 import { UserManagementPage } from './pages/admin/UserManagementPage';
 import { DeliveryDataPage } from './pages/admin/DeliveryDataPage';
-import { TripCodePage } from './pages/admin/vehicle-data/TripCodePage';
-import { VehiclePage } from './pages/admin/vehicle-data/VehiclePage';
-import { DriverPage } from './pages/admin/vehicle-data/DriverPage';
 import { RoleManagementPage } from './pages/admin/RoleManagementPage';
 import { PermissionManagementPage } from './pages/admin/PermissionManagementPage';
 import { SchedulePage } from './pages/dispatch/SchedulePage';
 import { WeightAdjustmentPage } from './pages/admin/accounting-data/WeightAdjustmentPage';
 import { CustomersPage } from './pages/admin/accounting-data/CustomersPage';
+import { DriverInvoicesPage } from './pages/admin/accounting-data/DriverInvoicesPage';
 import { DeliverySchedulePage } from './pages/admin/vehicle-data/DeliverySchedulePage';
 import { RiceDeliveryDataPage } from './pages/admin/RiceDeliveryDataPage';
+import { DeliveryImportPage } from './pages/admin/accounting-data/DeliveryImportPage';
+import { InvoiceMatchingPage } from './pages/admin/accounting-data/InvoiceMatchingPage';
+import { VehicleCatalogPage } from './pages/admin/catalog/VehicleCatalogPage';
 
 function PlaceholderPage({ title }: { title: string }) {
   return (
@@ -51,15 +52,17 @@ export function Router() {
             <Route path="/delivery-data/5-houses" element={<DeliveryDataPage />} />
             <Route path="/delivery-data/rice" element={<RiceDeliveryDataPage />} />
             {/* Vehicle Data */}
-            <Route path="/vehicle-data/trip-codes" element={<TripCodePage />} />
-            <Route path="/vehicle-data/vehicles" element={<VehiclePage />} />
-            <Route path="/vehicle-data/drivers" element={<DriverPage />} />
             <Route path="/vehicle-data/delivery-schedule" element={<DeliverySchedulePage />} />
+            <Route path="/vehicle-data/driver-invoices" element={<DriverInvoicesPage />} />
             {/* Dispatch */}
             <Route path="/dispatch/schedule" element={<SchedulePage />} />
             {/* Accounting Data */}
             <Route path="/accounting-data/weight-adjustments" element={<WeightAdjustmentPage />} />
             <Route path="/accounting-data/customers" element={<CustomersPage />} />
+            <Route path="/accounting-data/delivery-import" element={<DeliveryImportPage />} />
+            <Route path="/accounting-data/invoice-matching" element={<InvoiceMatchingPage />} />
+            {/* Catalog */}
+            <Route path="/catalog/vehicles" element={<VehicleCatalogPage />} />
           </Route>
         </Route>
 

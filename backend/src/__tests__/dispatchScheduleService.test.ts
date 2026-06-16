@@ -13,15 +13,10 @@ const mockScheduleRow = {
   loai_tuyen: 'Tuyến cố định',
   loai_xe: 'Xe nhỏ',
   xe_type: 'Xe nhà',
-  bien_so: '51B-123.45',
-  tai_xe: 'Nguyễn Văn A',
-  ma_chuyen: 'TC001',
   diem_nhan: 'Kho A',
   diem_tra: 'Kho B',
   gio_nhan: '08:00',
   ghi_chu: null,
-  vehicle_id: 10,
-  trip_code_id: 5,
   created_by: 1,
   created_at: '2026-04-07T01:00:00Z',
   updated_at: '2026-04-07T01:00:00Z',
@@ -71,14 +66,9 @@ describe('dispatchScheduleService.create', () => {
         loai_tuyen: 'Tuyến cố định',
         loai_xe: 'Xe nhỏ',
         xe_type: 'Xe nhà',
-        bien_so: '51B-123.45',
-        tai_xe: 'Nguyễn Văn A',
-        ma_chuyen: 'TC001',
         diem_nhan: 'Kho A',
         diem_tra: 'Kho B',
         gio_nhan: '08:00',
-        vehicle_id: 10,
-        trip_code_id: 5,
       },
       1,
     );
@@ -87,30 +77,8 @@ describe('dispatchScheduleService.create', () => {
     expect(mockPool.query).toHaveBeenCalledTimes(1);
   });
 
-  it('stores bien_so as text value (not FK)', async () => {
-    mockPool.query.mockResolvedValueOnce({ rows: [mockScheduleRow] } as never);
-
-    await dispatchScheduleService.create(
-      {
-        ngay: '2026-04-07',
-        loai_tuyen: 'Tuyến cố định',
-        loai_xe: 'Xe nhỏ',
-        xe_type: 'Xe nhà',
-        bien_so: '51B-123.45',
-        diem_nhan: 'A',
-        diem_tra: 'B',
-        gio_nhan: '09:00',
-      },
-      null,
-    );
-
-    const callArgs = mockPool.query.mock.calls[0];
-    // params: $1=ngay, $2=loai_tuyen, $3=loai_xe, $4=xe_type, $5=bien_so → index 4
-    expect(callArgs[1]![4]).toBe('51B-123.45');
-  });
-
   it('handles optional fields as null', async () => {
-    const rowWithNulls = { ...mockScheduleRow, tai_xe: null, ma_chuyen: null, ghi_chu: null };
+    const rowWithNulls = { ...mockScheduleRow, ghi_chu: null };
     mockPool.query.mockResolvedValueOnce({ rows: [rowWithNulls] } as never);
 
     const result = await dispatchScheduleService.create(
@@ -119,7 +87,6 @@ describe('dispatchScheduleService.create', () => {
         loai_tuyen: 'Tuyến ngoài',
         loai_xe: 'Xe lớn',
         xe_type: 'Xe ngoài',
-        bien_so: '79A-999.88',
         diem_nhan: 'X',
         diem_tra: 'Y',
         gio_nhan: '10:30',
@@ -127,8 +94,7 @@ describe('dispatchScheduleService.create', () => {
       null,
     );
 
-    expect(result.tai_xe).toBeNull();
-    expect(result.ma_chuyen).toBeNull();
+    expect(result.ghi_chu).toBeNull();
   });
 });
 
@@ -138,7 +104,6 @@ describe('dispatchScheduleService.update', () => {
     mockPool.query.mockResolvedValueOnce({ rows: [updatedRow] } as never);
 
     const result = await dispatchScheduleService.update(1, {
-      bien_so: '51B-123.45',
       diem_nhan: 'Kho C',
       diem_tra: 'Kho B',
       gio_nhan: '10:00',
@@ -153,7 +118,6 @@ describe('dispatchScheduleService.update', () => {
     mockPool.query.mockResolvedValueOnce({ rows: [] } as never);
 
     const result = await dispatchScheduleService.update(999, {
-      bien_so: 'XX-000',
       diem_nhan: 'A',
       diem_tra: 'B',
       gio_nhan: '08:00',
@@ -166,7 +130,6 @@ describe('dispatchScheduleService.update', () => {
     mockPool.query.mockResolvedValueOnce({ rows: [mockScheduleRow] } as never);
 
     await dispatchScheduleService.update(1, {
-      bien_so: '51B-123.45',
       diem_nhan: 'A',
       diem_tra: 'B',
       gio_nhan: '08:00',

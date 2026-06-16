@@ -338,10 +338,8 @@
   },
   "vehicleData": {
     "menuTitle": "Quản lý dữ liệu xe",
-    "tripCodes": "Mã chuyến",
-    "vehicles": "Dữ liệu xe",
-    "drivers": "Thông tin tài xế",
-    "deliverySchedule": "Lịch đi hàng"
+    "deliverySchedule": "Lịch đi hàng",
+    "driverInvoices": "Hóa đơn tài xế"
   },
   "deliverySchedule": {
     "title": "Lịch đi hàng",
@@ -427,10 +425,8 @@
       "columns": {
         "diemNhan": "Điểm nhận",
         "diemTra": "Điểm trả",
-        "bienSo": "Biển số",
         "loaiXe": "Loại xe",
         "gioNhan": "Giờ nhận",
-        "maChuyen": "Mã chuyến",
         "ghiChu": "Ghi chú"
       }
     },
@@ -452,14 +448,6 @@
       "diemNhan": "Điểm nhận",
       "diemTra": "Điểm trả",
       "gioNhan": "Giờ nhận",
-      "maChuyen": "Mã chuyến",
-      "maChuyenPlaceholder": "Chọn mã chuyến",
-      "bienSo": "Biển số",
-      "bienSoPlaceholder": "Chọn biển số xe",
-      "bienSoInputPlaceholder": "Nhập biển số xe",
-      "taiXe": "Tài xế",
-      "taiXePlaceholder": "Không có tài xế",
-      "taiXeInputPlaceholder": "Nhập tên tài xế (tùy chọn)",
       "ghiChu": "Ghi chú",
       "ghiChuPlaceholder": "Ghi chú thêm...",
       "createSuccess": "Tạo chuyến thành công",
@@ -483,9 +471,7 @@
     "validation": {
       "diemNhanRequired": "Điểm nhận là bắt buộc",
       "diemTraRequired": "Điểm trả là bắt buộc",
-      "gioNhanRequired": "Giờ nhận là bắt buộc",
-      "bienSoRequired": "Biển số là bắt buộc",
-      "bienSoSelectRequired": "Vui lòng chọn biển số xe"
+      "gioNhanRequired": "Giờ nhận là bắt buộc"
     }
   },
   "customers": {
@@ -547,5 +533,9 @@
       "diemTraHangDuplicate": "Điểm trả hàng đã tồn tại",
       "notFound": "Không tìm thấy khách hàng"
     }
+  },
+  "catalog": {
+    "menuTitle": "Quản lý danh mục",
+    "vehicles": "Danh mục xe"
   }
 }

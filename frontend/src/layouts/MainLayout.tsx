@@ -11,7 +11,6 @@ import {
   Car,
   ChevronDown,
   ChevronUp,
-  Route,
   Shield,
   Lock,
   Settings,
@@ -19,6 +18,10 @@ import {
   BookOpen,
   Scale,
   FileSpreadsheet,
+  ReceiptText,
+  Upload,
+  FileSearch,
+  FolderOpen,
 } from 'lucide-react';
 import { cn } from '../utils/cn';
 import { useAuth } from '../hooks/useAuth';
@@ -29,6 +32,7 @@ const USER_SETTINGS_ROUTES = ['/users', '/roles', '/permissions'];
 const DISPATCH_ROUTES = ['/dispatch'];
 const ACCOUNTING_DATA_ROUTES = ['/accounting-data'];
 const DELIVERY_DATA_ROUTES = ['/delivery-data'];
+const CATALOG_ROUTES = ['/catalog'];
 
 export function MainLayout() {
   const { user, logout, hasPermission, hasAnyPermission } = useAuth();
@@ -47,6 +51,9 @@ export function MainLayout() {
   );
   const [deliveryDataOpen, setDeliveryDataOpen] = useState(
     DELIVERY_DATA_ROUTES.some((p) => location.pathname.startsWith(p)),
+  );
+  const [catalogOpen, setCatalogOpen] = useState(
+    CATALOG_ROUTES.some((p) => location.pathname.startsWith(p)),
   );
   const [userSettingsOpen, setUserSettingsOpen] = useState(
     USER_SETTINGS_ROUTES.some((p) => location.pathname.startsWith(p)),
@@ -67,10 +74,8 @@ export function MainLayout() {
   ];
 
   const vehicleDataSubItems = [
-    { to: '/vehicle-data/trip-codes', icon: Route, label: t('vehicleData.tripCodes') },
-    { to: '/vehicle-data/vehicles', icon: Car, label: t('vehicleData.vehicles') },
-    { to: '/vehicle-data/drivers', icon: Users, label: t('vehicleData.drivers') },
     { to: '/vehicle-data/delivery-schedule', icon: FileSpreadsheet, label: t('vehicleData.deliverySchedule' as never) },
+    { to: '/vehicle-data/driver-invoices', icon: ReceiptText, label: t('vehicleData.driverInvoices' as never) },
   ];
 
   const dispatchSubItems = [
@@ -107,10 +112,17 @@ export function MainLayout() {
   const isDispatchActive = DISPATCH_ROUTES.some((p) => location.pathname.startsWith(p));
   const isAccountingDataActive = ACCOUNTING_DATA_ROUTES.some((p) => location.pathname.startsWith(p));
   const isDeliveryDataActive = DELIVERY_DATA_ROUTES.some((p) => location.pathname.startsWith(p));
+  const isCatalogActive = CATALOG_ROUTES.some((p) => location.pathname.startsWith(p));
 
   const accountingDataSubItems = [
     { to: '/accounting-data/weight-adjustments', icon: Scale, label: t('accountingData.weightAdjustment' as never) },
     { to: '/accounting-data/customers', icon: Users, label: t('customers.title' as never) },
+    { to: '/accounting-data/delivery-import', icon: Upload, label: 'Import 5 nhà' },
+    { to: '/accounting-data/invoice-matching', icon: FileSearch, label: 'Đối chiếu HĐ' },
+  ];
+
+  const catalogSubItems = [
+    { to: '/catalog/vehicles', icon: Car, label: t('catalog.vehicles') },
   ];
 
   const renderSubGroup = (
@@ -310,6 +322,16 @@ export function MainLayout() {
               () => setUserSettingsOpen((o) => !o),
               isUserSettingsActive,
             )}
+
+          {/* Quản lý danh mục collapsible group */}
+          {renderSubGroup(
+            t('catalog.menuTitle'),
+            FolderOpen,
+            catalogSubItems,
+            catalogOpen,
+            () => setCatalogOpen((o) => !o),
+            isCatalogActive,
+          )}
         </nav>
 
         {/* User */}
