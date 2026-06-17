@@ -1,5 +1,10 @@
 import axiosClient from './axiosClient';
 
+export interface SupplierBrief {
+  supplier_code: string;
+  name: string;
+}
+
 export interface Customer {
   id: number;
   diem_tra_hang: string;
@@ -8,6 +13,8 @@ export interface Customer {
   tuyen_cu: string | null;
   dia_chi_giao_hang: string | null;
   boc_xep: boolean;
+  supplier_code: string | null;
+  supplier: SupplierBrief | null;
   status: 'active' | 'deactive';
   created_at: string;
   updated_at: string;
@@ -20,6 +27,7 @@ export interface CustomerData {
   tuyen_cu?: string | null;
   dia_chi_giao_hang?: string | null;
   boc_xep: boolean;
+  supplier_code?: string | null;
 }
 
 export interface UploadCustomerRow {
@@ -29,6 +37,7 @@ export interface UploadCustomerRow {
   tuyen_cu?: string | null;
   dia_chi_giao_hang?: string | null;
   boc_xep: boolean;
+  supplier_code?: string | null;
 }
 
 export interface CustomerUploadError {

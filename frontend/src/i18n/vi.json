@@ -489,6 +489,7 @@
       "tuyenCu": "Tuyến-cũ",
       "diaChiGiaoHang": "Địa chỉ giao hàng",
       "bocXep": "Bốc xếp",
+      "nhaCungCap": "Nhà cung cấp",
       "actions": "Hành động"
     },
     "bocXep": {
@@ -525,7 +526,8 @@
       "tuyenPhuong": "Tuyến-phường",
       "tuyenCu": "Tuyến-cũ",
       "diaChiGiaoHang": "Địa chỉ giao hàng",
-      "bocXep": "Có bốc xếp"
+      "bocXep": "Có bốc xếp",
+      "supplierCode": "Mã nhà cung cấp"
     },
     "errors": {
       "diemTraHangRequired": "Điểm trả hàng không được rỗng",
@@ -536,6 +538,7 @@
   },
   "catalog": {
     "menuTitle": "Quản lý danh mục",
-    "vehicles": "Danh mục xe"
+    "vehicles": "Danh mục xe",
+    "suppliers": "Danh mục NCC"
   }
 }

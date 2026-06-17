@@ -179,6 +179,7 @@ export function CustomersPage() {
                     <TableHead className="w-48 hidden md:table-cell">{t('customers.columns.tuyenPhuong')}</TableHead>
                     <TableHead className="w-36 hidden lg:table-cell">{t('customers.columns.tuyenCu')}</TableHead>
                     <TableHead className="w-20 text-center">{t('customers.columns.bocXep')}</TableHead>
+                    <TableHead className="hidden lg:table-cell">{t('customers.columns.nhaCungCap')}</TableHead>
                     {canManage && <TableHead className="w-20">{t('customers.columns.actions')}</TableHead>}
                   </TableRow>
                 </TableHeader>
@@ -215,6 +216,18 @@ export function CustomersPage() {
                           <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-neutral-100 dark:bg-neutral-800 text-neutral-400 dark:text-neutral-500">
                             <X className="w-3 h-3" />
                           </span>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-neutral-600 dark:text-neutral-400 hidden lg:table-cell">
+                        {row.supplier ? (
+                          <span
+                            className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300"
+                            title={row.supplier.supplier_code}
+                          >
+                            {row.supplier.name}
+                          </span>
+                        ) : (
+                          <span className="text-neutral-400 dark:text-neutral-600">—</span>
                         )}
                       </TableCell>
                       {canManage && (

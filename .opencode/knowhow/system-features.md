@@ -606,10 +606,23 @@ customers (
 - BR-006: Cột boc_xep trong Excel: "Không"/"Khong" (case-insensitive) → false; rỗng/other → true
 - BR-007: Excel column order (positional, col index từ 0): col0=Điểm trả hàng, col1=Tuyến-phường, col2=Tuyến-cũ, col3=bỏ qua, col4=Tên khách hàng, col5=Địa chỉ giao hàng, col6=Bốc xếp
 - BR-008: fetchAll → chỉ trả active records
+- BR-009: Liên kết N-N với `suppliers` qua junction table `customer_suppliers`, tự động populate khi import `delivery_data` (match `ten_kh` → `ten_khach_hang`, `ma_ncc` → `supplier_code`)
+- BR-010: Response `list()` include `suppliers: [{ supplier_code, name }]` dạng JSON array
+
+**Junction table — `customer_suppliers`:**
+```sql
+customer_suppliers (
+  id SERIAL PK,
+  customer_id INTEGER FK→customers(id) ON DELETE CASCADE,
+  supplier_id INTEGER FK→suppliers(id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(customer_id, supplier_id)
+)
+```
 
 **API Endpoints:**
 ```
-GET    /api/customers          → list active rows (accounting_data.view)
+GET    /api/customers          → list active rows + suppliers[] (accounting_data.view)
 POST   /api/customers          → create (accounting_data.manage) → 409 if duplicate diem_tra_hang
 PUT    /api/customers/:id      → update (accounting_data.manage) → 409 if conflict, 404 if not found
 DELETE /api/customers/:id      → soft-delete (accounting_data.manage) → 404 if not found
@@ -634,7 +647,9 @@ User chọn/kéo thả .xlsx
 **Files:**
 ```
 backend/src/migrations/012_create_customers.sql
+backend/src/migrations/019_create_customer_suppliers.sql
 backend/src/services/customerService.ts
+backend/src/services/deliveryDataService.ts  (gọi populateCustomerSuppliers sau import)
 backend/src/controllers/customerController.ts
 backend/src/routes/customers.ts
 backend/src/__tests__/customerService.test.ts  (17 tests)

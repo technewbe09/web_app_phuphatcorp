@@ -24,6 +24,7 @@ const schema = yup.object({
   tuyen_cu: yup.string().nullable().optional(),
   dia_chi_giao_hang: yup.string().nullable().optional(),
   boc_xep: yup.boolean().required(),
+  supplier_code: yup.string().nullable().optional(),
 });
 
 type FormValues = {
@@ -33,6 +34,7 @@ type FormValues = {
   tuyen_cu?: string | null;
   dia_chi_giao_hang?: string | null;
   boc_xep: boolean;
+  supplier_code?: string | null;
 };
 
 export function EditCustomerModal({ isOpen, onClose, onSuccess, onError, customer }: Props) {
@@ -58,6 +60,7 @@ export function EditCustomerModal({ isOpen, onClose, onSuccess, onError, custome
         tuyen_cu: customer.tuyen_cu ?? '',
         dia_chi_giao_hang: customer.dia_chi_giao_hang ?? '',
         boc_xep: customer.boc_xep,
+        supplier_code: customer.supplier_code ?? '',
       });
     }
   }, [customer, reset]);
@@ -76,6 +79,7 @@ export function EditCustomerModal({ isOpen, onClose, onSuccess, onError, custome
       tuyen_cu: values.tuyen_cu || null,
       dia_chi_giao_hang: values.dia_chi_giao_hang || null,
       boc_xep: values.boc_xep,
+      supplier_code: values.supplier_code || null,
     };
     try {
       await updateCustomer.mutateAsync({ id: customer.id, data });
@@ -157,6 +161,13 @@ export function EditCustomerModal({ isOpen, onClose, onSuccess, onError, custome
           <label htmlFor="boc_xep_edit" className="text-sm text-neutral-700 dark:text-neutral-300">
             {t('customers.fields.bocXep')}
           </label>
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
+            {t('customers.fields.supplierCode')}
+          </label>
+          <Input {...register('supplier_code')} placeholder="VD: 2000000001" />
         </div>
 
         <div className="flex justify-end gap-3 pt-2">
