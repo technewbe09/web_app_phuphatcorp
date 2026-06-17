@@ -22,9 +22,14 @@ export interface AccountantInvoiceFilters {
   trang_thai?: string;
 }
 
+export interface MissingInvoice {
+  so_hoa_don: string;
+  ten_kh: string;
+}
+
 export interface MissingDateGroup {
   ngay: string;
-  so_hoa_don: string[];
+  invoices: MissingInvoice[];
 }
 
 export interface MissingVehicle {
