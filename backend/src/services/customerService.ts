@@ -1,5 +1,10 @@
 import { pool } from '../config/database';
 
+export interface SupplierBrief {
+  supplier_code: string;
+  name: string;
+}
+
 export interface Customer {
   id: number;
   diem_tra_hang: string;
@@ -8,6 +13,8 @@ export interface Customer {
   tuyen_cu: string | null;
   dia_chi_giao_hang: string | null;
   boc_xep: boolean;
+  supplier_code: string | null;
+  supplier: SupplierBrief | null;
   status: 'active' | 'deactive';
   created_at: string;
   updated_at: string;
@@ -20,37 +27,49 @@ export interface CustomerData {
   tuyen_cu?: string | null;
   dia_chi_giao_hang?: string | null;
   boc_xep: boolean;
+  supplier_code?: string | null;
 }
 
 const SELECT_COLS = `
-  id, diem_tra_hang, ten_khach_hang, tuyen_phuong, tuyen_cu,
-  dia_chi_giao_hang, boc_xep, status, created_at, updated_at
+  c.id, c.diem_tra_hang, c.ten_khach_hang, c.tuyen_phuong, c.tuyen_cu,
+  c.dia_chi_giao_hang, c.boc_xep, c.supplier_code, c.status, c.created_at, c.updated_at
 `;
 
 export const customerService = {
   async list(): Promise<Customer[]> {
-    const result = await pool.query<Customer>(
-      `SELECT ${SELECT_COLS}
-       FROM customers
-       WHERE status = 'active'
-       ORDER BY diem_tra_hang ASC`,
+    const result = await pool.query(
+      `SELECT
+         ${SELECT_COLS},
+         CASE WHEN s.id IS NOT NULL
+           THEN jsonb_build_object('supplier_code', s.supplier_code, 'name', s.name)
+           ELSE NULL
+         END AS supplier
+       FROM customers c
+       LEFT JOIN suppliers s ON s.supplier_code = c.supplier_code AND s.status = 'active'
+       WHERE c.status = 'active'
+       ORDER BY c.diem_tra_hang ASC`,
     );
-    return result.rows;
+    return result.rows.map((r) => ({
+      ...r,
+      supplier: r.supplier as SupplierBrief | null,
+    }));
   },
 
   async findById(id: number): Promise<Customer | null> {
-    const result = await pool.query<Customer>(
-      `SELECT ${SELECT_COLS} FROM customers WHERE id = $1`,
+    const result = await pool.query(
+      `SELECT ${SELECT_COLS}
+       FROM customers c
+       WHERE id = $1`,
       [id],
     );
     return result.rows[0] || null;
   },
 
   async create(data: CustomerData): Promise<Customer> {
-    const result = await pool.query<Customer>(
+    const result = await pool.query(
       `INSERT INTO customers
-         (diem_tra_hang, ten_khach_hang, tuyen_phuong, tuyen_cu, dia_chi_giao_hang, boc_xep)
-       VALUES ($1, $2, $3, $4, $5, $6)
+         (diem_tra_hang, ten_khach_hang, tuyen_phuong, tuyen_cu, dia_chi_giao_hang, boc_xep, supplier_code)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
        RETURNING ${SELECT_COLS}`,
       [
         data.diem_tra_hang,
@@ -59,6 +78,7 @@ export const customerService = {
         data.tuyen_cu ?? null,
         data.dia_chi_giao_hang ?? null,
         data.boc_xep,
+        data.supplier_code ?? null,
       ],
     );
     return result.rows[0];
@@ -70,11 +90,11 @@ export const customerService = {
       throw { code: 'NOT_FOUND' };
     }
 
-    const result = await pool.query<Customer>(
+    const result = await pool.query(
       `UPDATE customers
        SET diem_tra_hang = $1, ten_khach_hang = $2, tuyen_phuong = $3,
-           tuyen_cu = $4, dia_chi_giao_hang = $5, boc_xep = $6
-       WHERE id = $7
+           tuyen_cu = $4, dia_chi_giao_hang = $5, boc_xep = $6, supplier_code = $7
+       WHERE id = $8
        RETURNING ${SELECT_COLS}`,
       [
         data.diem_tra_hang,
@@ -83,6 +103,7 @@ export const customerService = {
         data.tuyen_cu ?? null,
         data.dia_chi_giao_hang ?? null,
         data.boc_xep,
+        data.supplier_code ?? null,
         id,
       ],
     );
@@ -108,8 +129,8 @@ export const customerService = {
       for (const row of rows) {
         await client.query(
           `INSERT INTO customers
-             (diem_tra_hang, ten_khach_hang, tuyen_phuong, tuyen_cu, dia_chi_giao_hang, boc_xep)
-           VALUES ($1, $2, $3, $4, $5, $6)`,
+             (diem_tra_hang, ten_khach_hang, tuyen_phuong, tuyen_cu, dia_chi_giao_hang, boc_xep, supplier_code)
+           VALUES ($1, $2, $3, $4, $5, $6, $7)`,
           [
             row.diem_tra_hang,
             row.ten_khach_hang,
@@ -117,6 +138,7 @@ export const customerService = {
             row.tuyen_cu ?? null,
             row.dia_chi_giao_hang ?? null,
             row.boc_xep,
+            row.supplier_code ?? null,
           ],
         );
       }

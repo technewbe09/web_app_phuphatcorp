@@ -21,6 +21,9 @@ export const customerCreateSchema: ValidationChain[] = [
     .optional({ nullable: true }),
   body('boc_xep')
     .isBoolean().withMessage('Bốc xếp phải là boolean'),
+  body('supplier_code')
+    .optional({ nullable: true })
+    .isLength({ max: 20 }).withMessage('Mã nhà cung cấp tối đa 20 ký tự'),
 ];
 
 export const customerUpdateSchema: ValidationChain[] = [
@@ -42,6 +45,9 @@ export const customerUploadSchema: ValidationChain[] = [
     .isLength({ max: 500 }).withMessage('Tên khách hàng tối đa 500 ký tự'),
   body('rows.*.boc_xep')
     .isBoolean().withMessage('Bốc xếp phải là boolean'),
+  body('rows.*.supplier_code')
+    .optional({ nullable: true })
+    .isLength({ max: 20 }).withMessage('Mã nhà cung cấp tối đa 20 ký tự'),
 ];
 
 export const customerController = {
@@ -57,7 +63,7 @@ export const customerController = {
 
   async create(req: AuthRequest, res: Response): Promise<void> {
     try {
-      const { diem_tra_hang, ten_khach_hang, tuyen_phuong, tuyen_cu, dia_chi_giao_hang, boc_xep } = req.body;
+      const { diem_tra_hang, ten_khach_hang, tuyen_phuong, tuyen_cu, dia_chi_giao_hang, boc_xep, supplier_code } = req.body;
       const row = await customerService.create({
         diem_tra_hang,
         ten_khach_hang,
@@ -65,6 +71,7 @@ export const customerController = {
         tuyen_cu,
         dia_chi_giao_hang,
         boc_xep,
+        supplier_code,
       });
       sendSuccess(res, row, 'Thêm khách hàng thành công', 201);
     } catch (err: unknown) {
@@ -76,7 +83,7 @@ export const customerController = {
   async update(req: AuthRequest, res: Response): Promise<void> {
     try {
       const id = parseInt(req.params.id, 10);
-      const { diem_tra_hang, ten_khach_hang, tuyen_phuong, tuyen_cu, dia_chi_giao_hang, boc_xep } = req.body;
+      const { diem_tra_hang, ten_khach_hang, tuyen_phuong, tuyen_cu, dia_chi_giao_hang, boc_xep, supplier_code } = req.body;
       const row = await customerService.update(id, {
         diem_tra_hang,
         ten_khach_hang,
@@ -84,6 +91,7 @@ export const customerController = {
         tuyen_cu,
         dia_chi_giao_hang,
         boc_xep,
+        supplier_code,
       });
       sendSuccess(res, row, 'Cập nhật khách hàng thành công');
     } catch (err: unknown) {

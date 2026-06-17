@@ -536,6 +536,7 @@
   },
   "catalog": {
     "menuTitle": "Catalog Management",
-    "vehicles": "Vehicle Catalog"
+    "vehicles": "Vehicle Catalog",
+    "suppliers": "Supplier Catalog"
   }
 }

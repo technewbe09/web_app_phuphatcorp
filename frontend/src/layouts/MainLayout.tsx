@@ -22,6 +22,7 @@ import {
   Upload,
   FileSearch,
   FolderOpen,
+  Factory,
 } from 'lucide-react';
 import { cn } from '../utils/cn';
 import { useAuth } from '../hooks/useAuth';
@@ -123,6 +124,7 @@ export function MainLayout() {
 
   const catalogSubItems = [
     { to: '/catalog/vehicles', icon: Car, label: t('catalog.vehicles') },
+    { to: '/catalog/suppliers', icon: Factory, label: t('catalog.suppliers') },
   ];
 
   const renderSubGroup = (

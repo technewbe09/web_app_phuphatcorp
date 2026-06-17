@@ -217,6 +217,19 @@ VITE_API_URL=http://localhost:3021/api
 **Soft delete:** `status = 'deactive'` (không xóa cứng)
 **Migration:** `012_create_customers.sql`
 
+### customer_suppliers (junction N-N: customers ↔ suppliers)
+| Column | Type | Constraints |
+|--------|------|-------------|
+| id | SERIAL | PRIMARY KEY |
+| customer_id | INTEGER | NOT NULL, FK → customers(id) ON DELETE CASCADE |
+| supplier_id | INTEGER | NOT NULL, FK → suppliers(id) ON DELETE CASCADE |
+| created_at | TIMESTAMPTZ | DEFAULT CURRENT_TIMESTAMP |
+
+**Constraints:** UNIQUE(customer_id, supplier_id)
+**Indexes:** `idx_customer_suppliers_customer`, `idx_customer_suppliers_supplier`
+**Populate:** Auto-populated khi import `delivery_data` (match `ten_kh` → `customers.ten_khach_hang`, `ma_ncc` → `suppliers.supplier_code`)
+**Migration:** `019_create_customer_suppliers.sql`
+
 **Roles:** `ADMIN`, `ACCOUNTANT`, `VIEWER`
 
 **Admin account:**

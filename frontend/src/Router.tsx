@@ -18,6 +18,7 @@ import { RiceDeliveryDataPage } from './pages/admin/RiceDeliveryDataPage';
 import { DeliveryImportPage } from './pages/admin/accounting-data/DeliveryImportPage';
 import { InvoiceMatchingPage } from './pages/admin/accounting-data/InvoiceMatchingPage';
 import { VehicleCatalogPage } from './pages/admin/catalog/VehicleCatalogPage';
+import { SupplierCatalogPage } from './pages/admin/catalog/SupplierCatalogPage';
 
 function PlaceholderPage({ title }: { title: string }) {
   return (
@@ -63,6 +64,7 @@ export function Router() {
             <Route path="/accounting-data/invoice-matching" element={<InvoiceMatchingPage />} />
             {/* Catalog */}
             <Route path="/catalog/vehicles" element={<VehicleCatalogPage />} />
+            <Route path="/catalog/suppliers" element={<SupplierCatalogPage />} />
           </Route>
         </Route>
 
