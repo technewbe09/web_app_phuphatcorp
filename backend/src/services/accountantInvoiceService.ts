@@ -45,16 +45,21 @@ function rowToInvoice(row: Record<string, unknown>): AccountantInvoice {
   };
 }
 
+export interface MissingInvoice {
+  so_hoa_don: string;
+  ten_kh: string;
+}
+
+export interface MissingDateGroup {
+  ngay: string;
+  invoices: MissingInvoice[];
+}
+
 export interface MissingVehicle {
   so_xe: string;
   missing_count: number;
   in_catalog: boolean;
   dates: MissingDateGroup[];
-}
-
-export interface MissingDateGroup {
-  ngay: string;
-  so_hoa_don: string[];
 }
 
 export const accountantInvoiceService = {
@@ -138,9 +143,11 @@ export const accountantInvoiceService = {
       so_xe: string;
       ngay: string;
       so_hoa_don: string;
+      ten_kh: string;
       in_catalog: boolean;
     }>(
       `SELECT ai.so_xe, ai.ngay::text as ngay, ai.so_hoa_don,
+              COALESCE(MIN(dd.ten_kh), '') AS ten_kh,
               (v.id IS NOT NULL) AS in_catalog
        FROM accountant_invoices ai
        LEFT JOIN vehicles v ON
@@ -152,12 +159,23 @@ export const accountantInvoiceService = {
            '/.*$', ''
          ) = ai.so_xe
          AND v.status = 'active'
+       LEFT JOIN delivery_data dd ON
+         dd.ngay_hd = ai.ngay
+         AND regexp_replace(
+               regexp_replace(
+                 regexp_replace(dd.so_tau_xe, '^[^0-9]*', ''),
+                 '[-,\\s]', '', 'g'
+               ),
+               '/.*$', ''
+             ) = ai.so_xe
+         AND trim(dd.so_hd) = ai.so_hoa_don
        WHERE ${whereClause}
+       GROUP BY ai.so_xe, ai.ngay, ai.so_hoa_don, v.id
        ORDER BY ai.so_xe ASC, ai.ngay DESC, ai.so_hoa_don ASC`,
       params,
     );
 
-    const vehicleMap = new Map<string, { dates: Map<string, string[]>; in_catalog: boolean }>();
+    const vehicleMap = new Map<string, { dates: Map<string, MissingInvoice[]>; in_catalog: boolean }>();
 
     for (const row of result.rows) {
       let vehicle = vehicleMap.get(row.so_xe);
@@ -168,18 +186,18 @@ export const accountantInvoiceService = {
 
       const dateList = vehicle.dates.get(row.ngay);
       if (dateList) {
-        dateList.push(row.so_hoa_don);
+        dateList.push({ so_hoa_don: row.so_hoa_don, ten_kh: row.ten_kh });
       } else {
-        vehicle.dates.set(row.ngay, [row.so_hoa_don]);
+        vehicle.dates.set(row.ngay, [{ so_hoa_don: row.so_hoa_don, ten_kh: row.ten_kh }]);
       }
     }
 
     return Array.from(vehicleMap.entries()).map(([so_xe, v]) => {
       const dates: MissingDateGroup[] = Array.from(v.dates.entries()).map(([ngay, invoices]) => ({
         ngay,
-        so_hoa_don: invoices,
+        invoices,
       }));
-      const missing_count = dates.reduce((sum, d) => sum + d.so_hoa_don.length, 0);
+      const missing_count = dates.reduce((sum, d) => sum + d.invoices.length, 0);
       return { so_xe, missing_count, in_catalog: v.in_catalog, dates };
     });
   },

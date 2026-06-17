@@ -381,11 +381,18 @@ function MissingInvoicesTab() {
                     {vehicle.dates.map((d) => (
                       <div key={d.ngay} className="pl-7">
                         <p className="text-xs font-medium text-neutral-500 dark:text-neutral-400 mb-1">{d.ngay}</p>
-                        <div className="flex flex-wrap gap-1.5">
-                          {d.so_hoa_don.map((so) => (
-                            <span key={so} className="inline-flex items-center px-2 py-0.5 rounded text-xs font-mono bg-white dark:bg-neutral-700 border border-neutral-200 dark:border-neutral-600 text-neutral-700 dark:text-neutral-300">
-                              {so}
-                            </span>
+                        <div className="space-y-1">
+                          {d.invoices.map((inv) => (
+                            <div key={inv.so_hoa_don} className="flex items-center gap-2">
+                              <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-mono bg-white dark:bg-neutral-700 border border-neutral-200 dark:border-neutral-600 text-neutral-700 dark:text-neutral-300">
+                                {inv.so_hoa_don}
+                              </span>
+                              {inv.ten_kh && (
+                                <span className="text-xs text-neutral-400 dark:text-neutral-500 truncate max-w-[300px]" title={inv.ten_kh}>
+                                  {inv.ten_kh}
+                                </span>
+                              )}
+                            </div>
                           ))}
                         </div>
                       </div>
@@ -432,7 +439,7 @@ function MonthView({ data }: { data: MissingVehicle[] }) {
         entry.vehicles.set(vehicle.so_xe, { ...vehicle, dates: [] });
       }
       entry.vehicles.get(vehicle.so_xe)!.dates.push(d);
-      entry.totalMissing += d.so_hoa_don.length;
+      entry.totalMissing += d.invoices.length;
     }
   }
 
@@ -482,7 +489,7 @@ function MonthView({ data }: { data: MissingVehicle[] }) {
                       </span>
                     )}
                     <span className="text-xs text-red-600 dark:text-red-400">
-                      {vehicle.dates.reduce((s, d) => s + d.so_hoa_don.length, 0)} thiếu
+                      {vehicle.dates.reduce((s, d) => s + d.invoices.length, 0)} thiếu
                     </span>
                   </button>
                   {expandedInMonth.has(month + '|' + soXe) && (
@@ -490,11 +497,18 @@ function MonthView({ data }: { data: MissingVehicle[] }) {
                       {vehicle.dates.map((d) => (
                         <div key={d.ngay}>
                           <p className="text-[11px] font-medium text-neutral-400 mb-0.5">{d.ngay}</p>
-                          <div className="flex flex-wrap gap-1">
-                            {d.so_hoa_don.map((so) => (
-                              <span key={so} className="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-mono bg-white dark:bg-neutral-700 border border-neutral-200 dark:border-neutral-600 text-neutral-600 dark:text-neutral-400">
-                                {so}
-                              </span>
+                          <div className="space-y-0.5">
+                            {d.invoices.map((inv) => (
+                              <div key={inv.so_hoa_don} className="flex items-center gap-2">
+                                <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-mono bg-white dark:bg-neutral-700 border border-neutral-200 dark:border-neutral-600 text-neutral-600 dark:text-neutral-400">
+                                  {inv.so_hoa_don}
+                                </span>
+                                {inv.ten_kh && (
+                                  <span className="text-[11px] text-neutral-400 dark:text-neutral-500 truncate max-w-[200px]" title={inv.ten_kh}>
+                                    {inv.ten_kh}
+                                  </span>
+                                )}
+                              </div>
                             ))}
                           </div>
                         </div>
