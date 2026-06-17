@@ -48,6 +48,8 @@ function rowToInvoice(row: Record<string, unknown>): AccountantInvoice {
 export interface MissingInvoice {
   so_hoa_don: string;
   ten_kh: string;
+  dia_chi: string;
+  nha_cung_cap: string;
 }
 
 export interface MissingDateGroup {
@@ -144,10 +146,17 @@ export const accountantInvoiceService = {
       ngay: string;
       so_hoa_don: string;
       ten_kh: string;
+      dia_chi: string;
+      nha_cung_cap: string;
       in_catalog: boolean;
     }>(
       `SELECT ai.so_xe, ai.ngay::text as ngay, ai.so_hoa_don,
               COALESCE(MIN(dd.ten_kh), '') AS ten_kh,
+              COALESCE(MIN(dd.dia_chi), '') AS dia_chi,
+              COALESCE(
+                MIN(s.name),
+                (SELECT name FROM suppliers WHERE supplier_code = 'default' AND status = 'active')
+              ) AS nha_cung_cap,
               (v.id IS NOT NULL) AS in_catalog
        FROM accountant_invoices ai
        LEFT JOIN vehicles v ON
@@ -159,16 +168,17 @@ export const accountantInvoiceService = {
            '/.*$', ''
          ) = ai.so_xe
          AND v.status = 'active'
-       LEFT JOIN delivery_data dd ON
-         dd.ngay_hd = ai.ngay
-         AND regexp_replace(
-               regexp_replace(
-                 regexp_replace(dd.so_tau_xe, '^[^0-9]*', ''),
-                 '[-,\\s]', '', 'g'
-               ),
-               '/.*$', ''
-             ) = ai.so_xe
-         AND trim(dd.so_hd) = ai.so_hoa_don
+        LEFT JOIN delivery_data dd ON
+          dd.ngay_hd = ai.ngay
+          AND regexp_replace(
+                regexp_replace(
+                  regexp_replace(dd.so_tau_xe, '^[^0-9]*', ''),
+                  '[-,\\s]', '', 'g'
+                ),
+                '/.*$', ''
+              ) = ai.so_xe
+          AND trim(dd.so_hd) = ai.so_hoa_don
+        LEFT JOIN suppliers s ON s.supplier_code = dd.ma_ncc AND s.status = 'active'
        WHERE ${whereClause}
        GROUP BY ai.so_xe, ai.ngay, ai.so_hoa_don, v.id
        ORDER BY ai.so_xe ASC, ai.ngay DESC, ai.so_hoa_don ASC`,
@@ -186,9 +196,9 @@ export const accountantInvoiceService = {
 
       const dateList = vehicle.dates.get(row.ngay);
       if (dateList) {
-        dateList.push({ so_hoa_don: row.so_hoa_don, ten_kh: row.ten_kh });
+        dateList.push({ so_hoa_don: row.so_hoa_don, ten_kh: row.ten_kh, dia_chi: row.dia_chi, nha_cung_cap: row.nha_cung_cap });
       } else {
-        vehicle.dates.set(row.ngay, [{ so_hoa_don: row.so_hoa_don, ten_kh: row.ten_kh }]);
+        vehicle.dates.set(row.ngay, [{ so_hoa_don: row.so_hoa_don, ten_kh: row.ten_kh, dia_chi: row.dia_chi, nha_cung_cap: row.nha_cung_cap }]);
       }
     }
 

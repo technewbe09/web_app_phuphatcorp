@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { CheckCircle2, XCircle, FileSpreadsheet, ChevronDown, ChevronRight, Truck, ShieldCheck, ShieldQuestion, CalendarDays } from 'lucide-react';
+import { CheckCircle2, XCircle, FileSpreadsheet, ChevronDown, ChevronRight, Truck, ShieldCheck, ShieldQuestion, CalendarDays, X, MapPin, Building2 } from 'lucide-react';
 import { Card, CardContent, CardHeader } from '../../../components/ui/Card';
 import { Button } from '../../../components/ui/Button';
 import { Input } from '../../../components/ui/Input';
@@ -8,7 +8,7 @@ import { Select } from '../../../components/ui/Select';
 import { Pagination } from '../../../components/ui/Pagination';
 import { useGetAccountantInvoices, useGetMissingSummary } from '../../../hooks/useAccountantInvoices';
 import { useGetBatches } from '../../../hooks/useDeliveryData';
-import type { AccountantInvoiceFilters } from '../../../api/accountantInvoiceApi';
+import type { AccountantInvoiceFilters, MissingInvoice } from '../../../api/accountantInvoiceApi';
 
 type TabId = 'all' | 'missing';
 
@@ -227,6 +227,7 @@ function MissingInvoicesTab() {
   const [inCatalogFilter, setInCatalogFilter] = useState<string>('');
   const [expandedVehicles, setExpandedVehicles] = useState<Set<string>>(new Set());
   const [expandedMonths, setExpandedMonths] = useState<Set<string>>(new Set());
+  const [selectedInvoice, setSelectedInvoice] = useState<MissingInvoice | null>(null);
 
   const { data: batchesData } = useGetBatches(1, 100);
 
@@ -384,9 +385,12 @@ function MissingInvoicesTab() {
                         <div className="space-y-1">
                           {d.invoices.map((inv) => (
                             <div key={inv.so_hoa_don} className="flex items-center gap-2">
-                              <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-mono bg-white dark:bg-neutral-700 border border-neutral-200 dark:border-neutral-600 text-neutral-700 dark:text-neutral-300">
+                              <button
+                                onClick={(e) => { e.stopPropagation(); setSelectedInvoice(inv); }}
+                                className="inline-flex items-center px-2 py-0.5 rounded text-xs font-mono bg-white dark:bg-neutral-700 border border-neutral-200 dark:border-neutral-600 text-neutral-700 dark:text-neutral-300 hover:border-blue-400 dark:hover:border-blue-500 hover:text-blue-600 dark:hover:text-blue-400 cursor-pointer transition-colors"
+                              >
                                 {inv.so_hoa_don}
-                              </span>
+                              </button>
                               {inv.ten_kh && (
                                 <span className="text-xs text-neutral-400 dark:text-neutral-500 truncate max-w-[300px]" title={inv.ten_kh}>
                                   {inv.ten_kh}
@@ -407,13 +411,18 @@ function MissingInvoicesTab() {
 
       {/* Month View */}
       {viewMode === 'month' && (
-        <MonthView data={data} />
+        <MonthView data={data} setSelectedInvoice={setSelectedInvoice} />
+      )}
+
+      {/* Invoice Detail Popup */}
+      {selectedInvoice && (
+        <InvoicePopup invoice={selectedInvoice} onClose={() => setSelectedInvoice(null)} />
       )}
     </Card>
   );
 }
 
-function MonthView({ data }: { data: MissingVehicle[] }) {
+function MonthView({ data, setSelectedInvoice }: { data: MissingVehicle[]; setSelectedInvoice: (inv: MissingInvoice | null) => void }) {
   const [expandedMonths, setExpandedMonths] = useState<Set<string>>(new Set());
   const [expandedInMonth, setExpandedInMonth] = useState<Set<string>>(new Set());
 
@@ -500,9 +509,12 @@ function MonthView({ data }: { data: MissingVehicle[] }) {
                           <div className="space-y-0.5">
                             {d.invoices.map((inv) => (
                               <div key={inv.so_hoa_don} className="flex items-center gap-2">
-                                <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-mono bg-white dark:bg-neutral-700 border border-neutral-200 dark:border-neutral-600 text-neutral-600 dark:text-neutral-400">
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); setSelectedInvoice(inv); }}
+                                  className="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-mono bg-white dark:bg-neutral-700 border border-neutral-200 dark:border-neutral-600 text-neutral-600 dark:text-neutral-400 hover:border-blue-400 dark:hover:border-blue-500 hover:text-blue-600 dark:hover:text-blue-400 cursor-pointer transition-colors"
+                                >
                                   {inv.so_hoa_don}
-                                </span>
+                                </button>
                                 {inv.ten_kh && (
                                   <span className="text-[11px] text-neutral-400 dark:text-neutral-500 truncate max-w-[200px]" title={inv.ten_kh}>
                                     {inv.ten_kh}
@@ -522,5 +534,60 @@ function MonthView({ data }: { data: MissingVehicle[] }) {
         </div>
       ))}
     </CardContent>
+  );
+}
+
+function InvoicePopup({ invoice, onClose }: { invoice: MissingInvoice; onClose: () => void }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30" onClick={onClose}>
+      <div
+        className="bg-white dark:bg-neutral-900 rounded-xl shadow-2xl border border-neutral-200 dark:border-neutral-700 w-full max-w-md mx-4 overflow-hidden"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between px-5 py-4 border-b border-neutral-100 dark:border-neutral-800">
+          <h3 className="font-semibold text-neutral-900 dark:text-neutral-100">
+            Số hóa đơn: <span className="font-mono text-blue-600 dark:text-blue-400">{invoice.so_hoa_don}</span>
+          </h3>
+          <button
+            onClick={onClose}
+            className="p-1 rounded-lg text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+        <div className="px-5 py-4 space-y-3">
+          {invoice.ten_kh && (
+            <div className="flex items-start gap-3">
+              <Building2 className="w-4 h-4 text-neutral-400 mt-0.5 flex-shrink-0" />
+              <div>
+                <p className="text-xs text-neutral-400 dark:text-neutral-500">Khách hàng</p>
+                <p className="text-sm text-neutral-900 dark:text-neutral-100">{invoice.ten_kh}</p>
+              </div>
+            </div>
+          )}
+          {invoice.dia_chi && (
+            <div className="flex items-start gap-3">
+              <MapPin className="w-4 h-4 text-neutral-400 mt-0.5 flex-shrink-0" />
+              <div>
+                <p className="text-xs text-neutral-400 dark:text-neutral-500">Địa chỉ giao hàng</p>
+                <p className="text-sm text-neutral-900 dark:text-neutral-100">{invoice.dia_chi}</p>
+              </div>
+            </div>
+          )}
+          {invoice.nha_cung_cap && (
+            <div className="flex items-start gap-3">
+              <Truck className="w-4 h-4 text-neutral-400 mt-0.5 flex-shrink-0" />
+              <div>
+                <p className="text-xs text-neutral-400 dark:text-neutral-500">Nhà cung cấp</p>
+                <p className="text-sm font-medium text-neutral-900 dark:text-neutral-100">{invoice.nha_cung_cap}</p>
+              </div>
+            </div>
+          )}
+          {!invoice.ten_kh && !invoice.dia_chi && !invoice.nha_cung_cap && (
+            <p className="text-sm text-neutral-400 text-center py-4">Không có thông tin chi tiết</p>
+          )}
+        </div>
+      </div>
+    </div>
   );
 }

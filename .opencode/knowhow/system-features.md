@@ -298,6 +298,14 @@ User upload file .xlsx ERP (Delivery Report)
 | Chứng từ ghi sổ | 13 | SO_CHUNG_TU |
 | Số seri | 14 | SO_SERI |
 | Loại hàng | 25 | LOAI_HANG |
+| Tuyến cũ | — | Tra từ `customers.tuyen_cu` qua `lookupCustomer(TEN_KH, DIA_CHI)` |
+| Tuyến mới | — | Tra từ `customers.tuyen_phuong` qua `lookupCustomer(TEN_KH, DIA_CHI)` |
+| Tuyến lên hóa đơn | — | Ghép: `tuyenPhuong + " " + khungGia + " (" + soXe + ")"`; rỗng nếu không có tuyenPhuong |
+
+**Customer lookup priority (BR-013):** Khi `MA_NCC = 2000000007` (MCC) hoặc `2000000008` (NDFC) và `Slot = "UNI 1"`:
+- Ưu tiên tra customer bằng `TEN_KH + DIA_CHI + MA_NCC` (khớp với `customers.supplier_code`)
+- Nếu không tìm thấy → fallback tra bằng `TEN_KH + DIA_CHI` như bình thường
+- Các trường hợp khác: tra bằng `TEN_KH + DIA_CHI`
 
 **Sheets CLF / VFM / MCC / CLV / NDFC (46 cols):**
 
@@ -330,6 +338,7 @@ Giống sheet Processed, nhưng chèn thêm 2 cột giữa "Đơn vị tính" v�
 - **BR-010:** Normalize Số tàu/xe: nếu 4 ký tự cuối là `" /L2"` → strip suffix này trước khi dùng làm group key, sort, và hiển thị
 - **BR-011:** Cột "Khung giá" và "Đơn vị tính" nằm ngay sau "Địa chỉ giao hàng". "Khung giá" phân loại dựa trên tổng Round(MT) nhóm: ≤2.5 / >8-16 / >16-23 / Pallet. "Đơn vị tính" = "Chuyến" nếu Khung giá = "≤2.5 tấn", còn lại "Tấn".
 - **BR-012:** Lọc dòng trước khi xử lý: dòng có cột "Diễn giải" chứa "thay thế" hoặc "điều chỉnh" bị loại bỏ (filterExcludedRows). Đây là các hóa đơn chỉnh sửa, không phải giao hàng thực tế.
+- **BR-013:** Customer lookup cho tuyến: mặc định tra bằng `TEN_KH + DIA_CHI`. Nếu `MA_NCC = 2000000007` hoặc `2000000008` và `Slot = "UNI 1"` → ưu tiên tra bằng `TEN_KH + DIA_CHI + MA_NCC` (khớp `customers.supplier_code`), nếu không có thì fallback về key mặc định.
 
 ### 5.4 Verify trọng lượng (Weight Adjustment Check)
 
