@@ -13,7 +13,7 @@ const router = Router();
 
 router.use(authenticateToken);
 
-router.get('/', ...validate(dispatchListQuerySchema), dispatchScheduleController.list);
+router.get('/', requirePermission('dispatch.view'), ...validate(dispatchListQuerySchema), dispatchScheduleController.list);
 router.post('/', requirePermission('dispatch.manage'), ...validate(dispatchCreateSchema), dispatchScheduleController.create);
 router.put('/:id', requirePermission('dispatch.manage'), ...validate(dispatchUpdateSchema), dispatchScheduleController.update);
 router.delete('/:id', requirePermission('dispatch.manage'), ...validate(dispatchDeleteSchema), dispatchScheduleController.remove);

@@ -99,31 +99,32 @@
     "adminReadonly": "Vai trò ADMIN luôn có toàn bộ quyền",
     "modules": {
       "dashboard": "Dashboard",
-      "delivery_data": "Dữ liệu giao hàng",
+      "delivery_data": "Xử lý Data Giao Hàng",
+      "transport": "Quản lý dữ liệu xe",
+      "dispatch": "Điều hành vận tải",
+      "accounting_data": "Quản lý dữ liệu kế toán",
       "users": "Người dùng",
       "roles": "Vai trò",
       "permissions": "Quyền hạn",
-      "reports": "Báo cáo",
-      "transport": "Vận tải",
-      "dispatch": "Điều hành vận tải",
-      "accounting_data": "Dữ liệu kế toán"
+      "catalog": "Quản lý danh mục"
     },
     "permCodes": {
       "dashboard_view": "Xem Dashboard",
       "delivery_data_view": "Xem dữ liệu giao hàng",
       "delivery_data_manage": "Quản lý dữ liệu giao hàng",
-      "users_view": "Xem danh sách người dùng",
-      "users_manage": "Quản lý người dùng",
-      "reports_view": "Xem báo cáo",
-      "roles_view": "Xem danh sách vai trò",
-      "roles_manage": "Quản lý vai trò",
-      "permissions_manage": "Quản lý quyền",
       "transport_view": "Xem dữ liệu vận tải",
       "transport_manage": "Quản lý dữ liệu vận tải",
       "dispatch_view": "Xem bảng điều phối",
       "dispatch_manage": "Điều phối xe",
       "accounting_data_view": "Xem dữ liệu kế toán",
-      "accounting_data_manage": "Quản lý dữ liệu kế toán"
+      "accounting_data_manage": "Quản lý dữ liệu kế toán",
+      "users_view": "Xem danh sách người dùng",
+      "users_manage": "Quản lý người dùng",
+      "roles_view": "Xem danh sách vai trò",
+      "roles_manage": "Quản lý vai trò",
+      "permissions_manage": "Quản lý quyền",
+      "catalog_view": "Xem danh mục",
+      "catalog_manage": "Quản lý danh mục"
     }
   },
   "createUser": {

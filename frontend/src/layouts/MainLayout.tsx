@@ -86,6 +86,9 @@ export function MainLayout() {
   const showUserSettings = hasAnyPermission(['users.view', 'roles.view', 'permissions.manage'])
     || user?.role === 'ADMIN';
 
+  const showCatalog = hasAnyPermission(['catalog.view', 'catalog.manage'])
+    || user?.role === 'ADMIN';
+
   const showVehicleData = hasAnyPermission(['transport.view', 'transport.manage'])
     || user?.role === 'ADMIN';
 
@@ -93,6 +96,9 @@ export function MainLayout() {
     || user?.role === 'ADMIN';
 
   const showAccountingData = hasAnyPermission(['accounting_data.view', 'accounting_data.manage'])
+    || user?.role === 'ADMIN';
+
+  const showDeliveryData = hasAnyPermission(['delivery_data.view', 'delivery_data.manage'])
     || user?.role === 'ADMIN';
 
   const userSettingsSubItems = [
@@ -275,7 +281,8 @@ export function MainLayout() {
           ))}
 
           {/* Delivery Data collapsible group */}
-          {renderSubGroup(
+          {showDeliveryData &&
+            renderSubGroup(
             t('deliveryData.menuTitle' as never),
             Truck,
             deliveryDataSubItems,
@@ -326,7 +333,8 @@ export function MainLayout() {
             )}
 
           {/* Quản lý danh mục collapsible group */}
-          {renderSubGroup(
+          {showCatalog &&
+            renderSubGroup(
             t('catalog.menuTitle'),
             FolderOpen,
             catalogSubItems,

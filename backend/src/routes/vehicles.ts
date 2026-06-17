@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import multer from 'multer';
 import { vehicleController, vehicleDeleteSchema } from '../controllers/vehicleController';
-import { authenticateToken } from '../middleware/auth';
+import { authenticateToken, requirePermission } from '../middleware/auth';
 import { validate } from '../middleware/validate';
 
 const router = Router();
@@ -22,8 +22,8 @@ const upload = multer({
 
 router.use(authenticateToken);
 
-router.get('/', vehicleController.getAll);
-router.post('/upload', upload.single('file'), vehicleController.upload);
-router.delete('/:id', ...validate(vehicleDeleteSchema), vehicleController.remove);
+router.get('/', requirePermission('catalog.view'), vehicleController.getAll);
+router.post('/upload', requirePermission('catalog.manage'), upload.single('file'), vehicleController.upload);
+router.delete('/:id', requirePermission('catalog.manage'), ...validate(vehicleDeleteSchema), vehicleController.remove);
 
 export default router;
