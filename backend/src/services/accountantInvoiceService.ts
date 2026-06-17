@@ -116,10 +116,15 @@ export const accountantInvoiceService = {
     };
   },
 
-  async getMissingSummary(batchId: string, inCatalog?: boolean): Promise<MissingVehicle[]> {
-    const conditions: string[] = ['ai.batch_id = $1', "ai.trang_thai = 'không có'"];
-    const params: unknown[] = [batchId];
-    let paramIndex = 2;
+  async getMissingSummary(batchId?: string, inCatalog?: boolean): Promise<MissingVehicle[]> {
+    const conditions: string[] = ["ai.trang_thai = 'không có'"];
+    const params: unknown[] = [];
+    let paramIndex = 1;
+
+    if (batchId) {
+      conditions.push(`ai.batch_id = $${paramIndex++}`);
+      params.push(batchId);
+    }
 
     if (inCatalog === true) {
       conditions.push('v.id IS NOT NULL');

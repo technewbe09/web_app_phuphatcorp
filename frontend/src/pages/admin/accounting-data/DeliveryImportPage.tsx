@@ -217,15 +217,15 @@ export function DeliveryImportPage() {
           <CardContent>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
               <div className="bg-neutral-50 dark:bg-neutral-800 rounded-lg p-3">
-                <p className="text-xs text-neutral-500 dark:text-neutral-400">Tổng số dòng</p>
+                <p className="text-xs text-neutral-500 dark:text-neutral-400">Dòng mới</p>
                 <p className="text-lg font-bold text-neutral-900 dark:text-neutral-100">
-                  {importResult.total_rows.toLocaleString()}
+                  {importResult.new_rows.toLocaleString()}
                 </p>
               </div>
               <div className="bg-neutral-50 dark:bg-neutral-800 rounded-lg p-3">
-                <p className="text-xs text-neutral-500 dark:text-neutral-400">Tổng hóa đơn</p>
+                <p className="text-xs text-neutral-500 dark:text-neutral-400">HĐ mới</p>
                 <p className="text-lg font-bold text-neutral-900 dark:text-neutral-100">
-                  {importResult.total_invoices.toLocaleString()}
+                  {importResult.new_invoices.toLocaleString()}
                 </p>
               </div>
               <div className="bg-green-50 dark:bg-green-900/20 rounded-lg p-3">
@@ -241,6 +241,20 @@ export function DeliveryImportPage() {
                 </p>
               </div>
             </div>
+            {(importResult.duplicate_rows > 0 || importResult.duplicate_invoices > 0) && (
+              <div className="flex flex-wrap gap-2 mb-3">
+                {importResult.duplicate_rows > 0 && (
+                  <span className="text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 px-2 py-1 rounded">
+                    Bỏ qua {importResult.duplicate_rows} dòng trùng (delivery_data)
+                  </span>
+                )}
+                {importResult.duplicate_invoices > 0 && (
+                  <span className="text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 px-2 py-1 rounded">
+                    Bỏ qua {importResult.duplicate_invoices} hóa đơn trùng (accountant_invoices)
+                  </span>
+                )}
+              </div>
+            )}
             {importResult.min_date && (
               <p className="text-xs text-neutral-500 dark:text-neutral-400 mb-3">
                 Khoảng ngày: {importResult.min_date} → {importResult.max_date}

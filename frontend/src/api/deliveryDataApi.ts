@@ -2,8 +2,10 @@ import axiosClient from './axiosClient';
 
 export interface ImportResult {
   batch_id: string;
-  total_rows: number;
-  total_invoices: number;
+  new_rows: number;
+  duplicate_rows: number;
+  new_invoices: number;
+  duplicate_invoices: number;
   matched_count: number;
   unmatched_count: number;
   min_date: string;

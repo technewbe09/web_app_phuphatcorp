@@ -215,20 +215,24 @@ export function InvoiceMatchingPage() {
 
       {/* Tab: Missing Invoices */}
       {tab === 'missing' && (
-        <MissingInvoicesTab batchId={selectedBatchId} />
+        <MissingInvoicesTab />
       )}
     </div>
   );
 }
 
-function MissingInvoicesTab({ batchId }: { batchId: string }) {
+function MissingInvoicesTab() {
+  const [batchFilter, setBatchFilter] = useState<string>('');
   const [inCatalogFilter, setInCatalogFilter] = useState<string>('');
   const [expandedVehicles, setExpandedVehicles] = useState<Set<string>>(new Set());
+
+  const { data: batchesData } = useGetBatches(1, 100);
 
   const catalogFilterValue = inCatalogFilter === ''
     ? undefined
     : inCatalogFilter === 'true';
 
+  const batchId = batchFilter || undefined;
   const { data, isLoading } = useGetMissingSummary(batchId, catalogFilterValue);
 
   const toggle = (soXe: string) => {
@@ -274,6 +278,14 @@ function MissingInvoicesTab({ batchId }: { batchId: string }) {
     { value: 'false', label: 'Ngoài danh mục' },
   ];
 
+  const batchOptions = [
+    { value: '', label: 'Tất cả batch' },
+    ...(batchesData?.data.map((b) => ({
+      value: b.batch_id,
+      label: `${b.original_filename} (${b.total_rows} dòng)`,
+    })) || []),
+  ];
+
   return (
     <Card>
       <CardHeader>
@@ -282,6 +294,12 @@ function MissingInvoicesTab({ batchId }: { batchId: string }) {
             Hóa đơn thiếu theo số xe
           </h2>
           <div className="flex items-center gap-3">
+            <Select
+              options={batchOptions}
+              value={batchFilter}
+              onChange={(e) => setBatchFilter(e.target.value)}
+              className="w-52"
+            />
             <Select
               options={catalogOptions}
               value={inCatalogFilter}

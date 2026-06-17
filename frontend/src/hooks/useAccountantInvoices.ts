@@ -14,10 +14,9 @@ export function useGetAccountantInvoices(filters: AccountantInvoiceFilters = {})
   });
 }
 
-export function useGetMissingSummary(batchId: string, inCatalog?: boolean) {
+export function useGetMissingSummary(batchId?: string, inCatalog?: boolean) {
   return useQuery({
     queryKey: [QUERY_KEY, 'missing', batchId, inCatalog],
     queryFn: () => accountantInvoiceApi.getMissingSummary(batchId, inCatalog),
-    enabled: !!batchId,
   });
 }

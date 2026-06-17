@@ -54,9 +54,9 @@ export const accountantInvoiceApi = {
     return response.data.data;
   },
 
-  getMissingSummary: async (batchId: string, inCatalog?: boolean): Promise<MissingVehicle[]> => {
+  getMissingSummary: async (batchId?: string, inCatalog?: boolean): Promise<MissingVehicle[]> => {
     const params = new URLSearchParams();
-    params.set('batch_id', batchId);
+    if (batchId) params.set('batch_id', batchId);
     if (inCatalog !== undefined) params.set('in_catalog', String(inCatalog));
     const response = await axiosClient.get<{ data: MissingVehicle[] }>(
       `/accountant-invoices/missing-summary?${params.toString()}`,

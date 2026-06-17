@@ -16,7 +16,7 @@ export const listInvoicesSchema: ValidationChain[] = [
 ];
 
 export const missingSummarySchema: ValidationChain[] = [
-  query('batch_id').notEmpty().withMessage('batch_id là bắt buộc'),
+  query('batch_id').optional().isString(),
   query('in_catalog').optional().isBoolean().withMessage('in_catalog phải là true hoặc false'),
 ];
 
@@ -43,7 +43,7 @@ export const accountantInvoiceController = {
 
   async missingSummary(req: AuthRequest, res: Response): Promise<void> {
     try {
-      const batchId = req.query.batch_id as string;
+      const batchId = req.query.batch_id as string | undefined;
       const inCatalog = req.query.in_catalog !== undefined
         ? req.query.in_catalog === 'true'
         : undefined;
