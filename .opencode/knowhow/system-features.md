@@ -675,8 +675,8 @@ driver_invoices (
 ```
 
 **Business Rules:**
-- BR-001: Upload file .xlsx, đọc sheet "XE NHỎ", dữ liệu từ row 8+
-- BR-002: Columns: B=Mã, C=Tên TX, D=Ngày, E=Số xe, F=Nơi giao, G=Ghi chú (raw)
+- BR-001: Upload file .xlsx, đọc sheet "HCM" và "Tỉnh", dữ liệu từ row 5+(0-indexed)
+- BR-002: Columns: A=Mã, B=Tên TX, C=Ngày, D=Số xe, E=Nơi giao, F=Số hóa đơn
 - BR-002a: so_xe được normalize: bỏ `-`, `,`, space (vd: "50H-55116" → "50H55116")
 - BR-003: Bỏ qua dòng có cột B (Mã) rỗng hoặc cột G rỗng
 - BR-004: Parse cột G: tách bằng "+" → filter chỉ giữ số nguyên dương
@@ -701,8 +701,8 @@ DELETE /api/driver-invoices/:id        → hard delete (accounting_data.manage)
 **Flow — Upload Excel:**
 ```
 User chọn file .xlsx
-  → Frontend parse (xlsx lib): đọc sheet "XE NHỎ", rows 8+
-  → Parse cột G: split("+") → filter /^\d+$/ → so_hoa_don
+  → Frontend parse (xlsx lib): đọc sheet "HCM" + "Tỉnh", rows 5+
+  → Parse cột F: split("+") → filter /^\d+$/ → so_hoa_don
   → Preview: hiện 10 dòng đầu + tổng số dòng/tổng số hóa đơn
   → User confirm → POST /api/driver-invoices/upload { rows, original_filename, skip_duplicates }
   → Không trùng → 200 "Đã import N bản ghi"

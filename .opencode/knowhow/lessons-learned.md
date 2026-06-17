@@ -439,6 +439,14 @@ description: Ghi lại các bài học kinh nghiệm, bug đã fix, và pitfalls
 - **Bug follow-up:** Sau khi fix 400, xuất hiện 500 do file 03 có 2 dòng trùng lặp nội bộ (cùng key trong chính file Excel). `checkDuplicates()` chỉ check với DB, không dedup internal. Fix: dedup `rowsToInsert` bằng Map trước khi INSERT. File: `backend/src/services/driverInvoiceService.ts`
 - **Cần chú ý:** (1) Khi validate row-level data từ Excel, nên kiểm tra TỪNG field bắt buộc riêng rẽ. (2) Khi bulk insert từ file upload, luôn dedup nội bộ trong payload trước khi INSERT để tránh vi phạm UNIQUE constraint — dữ liệu từ Excel thường có dòng trùng.
 
+## Change: Driver Invoices — Chuyển format import sang HCM + Tỉnh sheets
+- **Ngày:** 2026-06-17
+- **Severity:** Medium
+- **Feature liên quan:** Hóa đơn tài xế — Upload Excel
+- **Thay đổi:** Chuyển từ format cũ (sheet "XE NHỎ", rows 8+, columns B-G) sang format mới (sheets "HCM" + "Tỉnh", rows 5+(0-indexed), columns A-F). Column ngay có thể là decimal serial (Math.floor trước khi parse).
+- **Files:** `frontend/src/utils/parseDriverInvoiceFile.ts` — extract `parseSheetRows()`, đọc cả 2 sheet.
+- **Cần chú ý:** Format mới có decimal date serial (vd: 46189.62269) — cần `Math.floor(serial)` trước khi parse date code. Skip rows có `ma` rỗng, `ngay` invalid, `so_xe` rỗng, hoặc `ghi_chu` rỗng. Cột B (ten_tx) có thể chứa driver code dạng số ("0", "55129") — giữ nguyên.
+
 ## Anti-patterns Tránh Lặp Lại
 
 ### 1. Không để import ở dưới cùng file

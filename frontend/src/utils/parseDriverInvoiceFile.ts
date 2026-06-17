@@ -24,7 +24,8 @@ function parseExcelDate(value: unknown): string {
     return `${y}-${m}-${d}`;
   }
   if (typeof value === 'number' && value > 40000 && value < 60000) {
-    const date = XLSX.SSF.parse_date_code(value);
+    const serial = Math.floor(value);
+    const date = XLSX.SSF.parse_date_code(serial);
     if (date) {
       return `${date.y}-${String(date.m).padStart(2, '0')}-${String(date.d).padStart(2, '0')}`;
     }
@@ -54,6 +55,49 @@ function normalizeSoXe(raw: string): string {
   return raw.replace(/[-,\s]/g, '');
 }
 
+function parseSheetRows(rawRows: unknown[][]): ParsedInvoiceRow[] {
+  const parsedRows: ParsedInvoiceRow[] = [];
+
+  for (let i = 5; i < rawRows.length; i++) {
+    const cells = rawRows[i] as unknown[];
+
+    const ma = String(cells[0] ?? '').trim();
+    if (!ma) continue;
+
+    const ten_tx = String(cells[1] ?? '').trim();
+
+    const ngayRaw = cells[2];
+    const ngay = parseExcelDate(ngayRaw);
+    if (!ngay) continue;
+
+    const so_xe = normalizeSoXe(String(cells[3] ?? ''));
+    if (!so_xe) continue;
+
+    const noi_giao = String(cells[4] ?? '').trim();
+
+    const ghi_chu_raw = cells[5];
+    const ghi_chu = ghi_chu_raw
+      ? String(ghi_chu_raw).trim()
+      : '';
+
+    if (!ghi_chu) continue;
+
+    const so_hoa_don = parseInvoiceNumbers(ghi_chu);
+
+    parsedRows.push({
+      ma,
+      ten_tx: ten_tx || '',
+      ngay,
+      so_xe,
+      noi_giao: noi_giao || '',
+      ghi_chu,
+      so_hoa_don,
+    });
+  }
+
+  return parsedRows;
+}
+
 export function parseDriverInvoiceFile(file: File): Promise<ParseDriverInvoiceResult> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -62,67 +106,40 @@ export function parseDriverInvoiceFile(file: File): Promise<ParseDriverInvoiceRe
         const data = new Uint8Array(e.target?.result as ArrayBuffer);
         const wb = XLSX.read(data, { type: 'array', cellStyles: true });
 
-        const sheet = wb.Sheets['XE NHỎ'];
-        if (!sheet) {
-          reject(new Error("Không tìm thấy sheet 'XE NHỎ' trong file"));
-          return;
-        }
+        const dataSheets = ['HCM', 'Tỉnh'];
+        const allRows: ParsedInvoiceRow[] = [];
 
-        const rawRows = XLSX.utils.sheet_to_json<unknown[]>(sheet, {
-          header: 1,
-          defval: '',
-          raw: true,
-        });
+        let foundAny = false;
+        for (const sheetName of dataSheets) {
+          const sheet = wb.Sheets[sheetName];
+          if (!sheet) continue;
 
-        if (rawRows.length < 8) {
-          resolve({ rows: [], totalRows: 0, totalInvoices: 0 });
-          return;
-        }
-
-        const parsedRows: ParsedInvoiceRow[] = [];
-
-        for (let i = 7; i < rawRows.length; i++) {
-          const row = rawRows[i];
-          const cells = row as unknown[];
-
-          const ma = String(cells[1] ?? '').trim();
-          const ten_tx = String(cells[2] ?? '').trim();
-          const ngayRaw = cells[3];
-          const so_xe = normalizeSoXe(String(cells[4] ?? ''));
-          const noi_giao = String(cells[5] ?? '').trim();
-          const ghi_chu_raw = cells[6];
-
-          const ngay = parseExcelDate(ngayRaw);
-
-          if (!ma) continue;
-
-          const ghi_chu = ghi_chu_raw
-            ? String(ghi_chu_raw).trim()
-            : '';
-
-          if (!ghi_chu) continue;
-
-          const so_hoa_don = parseInvoiceNumbers(ghi_chu);
-
-          parsedRows.push({
-            ma: ma || '',
-            ten_tx: ten_tx || '',
-            ngay,
-            so_xe: so_xe || '',
-            noi_giao: noi_giao || '',
-            ghi_chu,
-            so_hoa_don,
+          foundAny = true;
+          const rawRows = XLSX.utils.sheet_to_json<unknown[]>(sheet, {
+            header: 1,
+            defval: '',
+            raw: true,
           });
+
+          if (rawRows.length < 6) continue;
+
+          const sheetRows = parseSheetRows(rawRows);
+          allRows.push(...sheetRows);
         }
 
-        const totalInvoices = parsedRows.reduce(
+        if (!foundAny) {
+          reject(new Error("Không tìm thấy sheet 'HCM' hoặc 'Tỉnh' trong file"));
+          return;
+        }
+
+        const totalInvoices = allRows.reduce(
           (sum, row) => sum + row.so_hoa_don.length,
           0,
         );
 
         resolve({
-          rows: parsedRows,
-          totalRows: parsedRows.length,
+          rows: allRows,
+          totalRows: allRows.length,
           totalInvoices,
         });
       } catch {

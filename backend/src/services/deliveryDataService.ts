@@ -1,6 +1,7 @@
 import * as XLSX from 'xlsx';
 import * as crypto from 'crypto';
 import { pool } from '../config/database';
+import type { PoolClient } from 'pg';
 
 interface DeliveryDataRow {
   channel: string;
@@ -54,8 +55,10 @@ interface BatchInfo {
 
 interface ImportResult {
   batch_id: string;
-  total_rows: number;
-  total_invoices: number;
+  new_rows: number;
+  duplicate_rows: number;
+  new_invoices: number;
+  duplicate_invoices: number;
   matched_count: number;
   unmatched_count: number;
   min_date: string;
@@ -169,6 +172,34 @@ function parseExcel(fileBuffer: Buffer, originalFilename: string): {
 }
 
 export const deliveryDataService = {
+  async checkDuplicates(
+    client: PoolClient,
+    rows: DeliveryDataRow[],
+  ): Promise<Set<string>> {
+    const ngayHdArr: string[] = [];
+    const soTauXeArr: string[] = [];
+    const soHdArr: string[] = [];
+
+    for (const row of rows) {
+      ngayHdArr.push(row.ngay_hd || '');
+      soTauXeArr.push(row.so_tau_xe);
+      soHdArr.push(row.so_hd);
+    }
+
+    const result = await client.query<{ ngay: string; so_tau_xe: string; so_hd: string }>(
+      `SELECT dd.ngay_hd::text as ngay, dd.so_tau_xe, dd.so_hd
+       FROM delivery_data dd
+       JOIN unnest($1::text[], $2::text[], $3::text[])
+         AS t(ngay, so_xe, so_hd)
+         ON dd.ngay_hd::text = t.ngay
+            AND dd.so_tau_xe = t.so_xe
+            AND dd.so_hd = t.so_hd`,
+      [ngayHdArr, soTauXeArr, soHdArr],
+    );
+
+    return new Set(result.rows.map((r) => `${r.ngay}|${r.so_tau_xe}|${r.so_hd}`));
+  },
+
   async importFromExcel(
     fileBuffer: Buffer,
     originalFilename: string,
@@ -186,10 +217,16 @@ export const deliveryDataService = {
     try {
       await client.query('BEGIN');
 
+      const duplicateSet = await this.checkDuplicates(client, rows);
+      const newRows = rows.filter(
+        (r) => !duplicateSet.has(`${r.ngay_hd || ''}|${r.so_tau_xe}|${r.so_hd}`),
+      );
+      const duplicateRows = rows.length - newRows.length;
+
       const colCount = 34;
       const numArrays: (string | number | null)[][] = Array.from({ length: colCount }, () => []);
 
-      for (const row of rows) {
+      for (const row of newRows) {
         numArrays[0].push(row.channel);
         numArrays[1].push(row.sub_channel);
         numArrays[2].push(row.dien_giai_ct);
@@ -226,11 +263,12 @@ export const deliveryDataService = {
         numArrays[33].push(row.thong_tin_bs);
       }
 
-      const batchIds = Array(rows.length).fill(batchId);
-      const filenames = Array(rows.length).fill(originalFilename);
-      const userIds = Array(rows.length).fill(userId);
+      const batchIds = Array(newRows.length).fill(batchId);
+      const filenames = Array(newRows.length).fill(originalFilename);
+      const userIds = Array(newRows.length).fill(userId);
 
-      await client.query(
+      if (newRows.length > 0) {
+        await client.query(
         `INSERT INTO delivery_data (
           batch_id, channel, sub_channel, dien_giai_ct, dien_giai,
           slot, waybill_no, slot_no, user_tao_hd, user_tao_pxk,
@@ -262,89 +300,137 @@ export const deliveryDataService = {
           filenames, userIds,
         ],
       );
+      }
 
-      const dateResult = await client.query<{ min_date: string; max_date: string }>(
-        `SELECT MIN(ngay_hd)::text as min_date, MAX(ngay_hd)::text as max_date
-         FROM delivery_data WHERE batch_id = $1 AND ngay_hd IS NOT NULL`,
-        [batchId],
-      );
-
-      const minDate = dateResult.rows[0]?.min_date || '';
-      const maxDate = dateResult.rows[0]?.max_date || '';
-
+      let minDate = '';
+      let maxDate = '';
       let totalInvoices = 0;
       let matchedCount = 0;
 
-      {
-        const invoiceResult = await client.query(
-          `WITH driver_invoice_flat AS (
-            SELECT DISTINCT
-              regexp_replace(
-                regexp_replace(
-                  regexp_replace(di.so_xe, '^[^0-9]*', ''),
-                  '[-,\\s]', '', 'g'
-                ),
-                '/.*$', ''
-              ) AS so_xe_normalized,
-              di.ngay,
-              regexp_replace(elem, '^0+', '') AS so_hoa_don_stripped
-            FROM driver_invoices di
-            CROSS JOIN jsonb_array_elements_text(di.so_hoa_don) AS elem
-            WHERE elem IS NOT NULL
-              AND elem != ''
-          ),
-          delivery_invoices AS (
-            SELECT DISTINCT
-              dd.ngay_hd,
-              regexp_replace(
-                regexp_replace(
-                  regexp_replace(dd.so_tau_xe, '^[^0-9]*', ''),
-                  '[-,\\s]', '', 'g'
-                ),
-                '/.*$', ''
-              ) AS so_xe_normalized,
-              trim(dd.so_hd) AS so_hd,
-              regexp_replace(trim(dd.so_hd), '^0+', '') AS so_hd_stripped
-            FROM delivery_data dd
-            WHERE dd.batch_id = $1
-              AND dd.so_hd IS NOT NULL
-              AND trim(dd.so_hd) != ''
-          )
-          INSERT INTO accountant_invoices (batch_id, ngay, so_xe, so_hoa_don, trang_thai)
-          SELECT
-            $1,
-            di.ngay_hd,
-            di.so_xe_normalized,
-            di.so_hd,
-            CASE
-              WHEN EXISTS (
-                SELECT 1 FROM driver_invoice_flat dif
-                WHERE dif.so_xe_normalized = di.so_xe_normalized
-                  AND dif.ngay::date = di.ngay_hd::date
-                  AND (
-                    dif.so_hoa_don_stripped = di.so_hd_stripped
-                    OR di.so_hd_stripped LIKE dif.so_hoa_don_stripped || '%'
-                    OR dif.so_hoa_don_stripped LIKE di.so_hd_stripped || '%'
-                    OR di.so_hd_stripped LIKE '%' || dif.so_hoa_don_stripped || '%'
-                  )
-              ) THEN 'đã có'
-              ELSE 'không có'
-            END
-          FROM delivery_invoices di
-          RETURNING trang_thai`,
+      if (newRows.length > 0) {
+        const dateResult = await client.query<{ min_date: string; max_date: string }>(
+          `SELECT MIN(ngay_hd)::text as min_date, MAX(ngay_hd)::text as max_date
+           FROM delivery_data WHERE batch_id = $1 AND ngay_hd IS NOT NULL`,
           [batchId],
         );
 
-        totalInvoices = invoiceResult.rows.length;
-        matchedCount = invoiceResult.rows.filter((r) => r.trang_thai === 'đã có').length;
+        minDate = dateResult.rows[0]?.min_date || '';
+        maxDate = dateResult.rows[0]?.max_date || '';
+
+        {
+          const invoiceResult = await client.query(
+            `WITH driver_invoice_flat AS (
+              SELECT DISTINCT
+                regexp_replace(
+                  regexp_replace(
+                    regexp_replace(di.so_xe, '^[^0-9]*', ''),
+                    '[-,\\s]', '', 'g'
+                  ),
+                  '/.*$', ''
+                ) AS so_xe_normalized,
+                di.ngay,
+                regexp_replace(elem, '^0+', '') AS so_hoa_don_stripped
+              FROM driver_invoices di
+              CROSS JOIN jsonb_array_elements_text(di.so_hoa_don) AS elem
+              WHERE elem IS NOT NULL
+                AND elem != ''
+            ),
+            delivery_invoices AS (
+              SELECT DISTINCT
+                dd.ngay_hd,
+                regexp_replace(
+                  regexp_replace(
+                    regexp_replace(dd.so_tau_xe, '^[^0-9]*', ''),
+                    '[-,\\s]', '', 'g'
+                  ),
+                  '/.*$', ''
+                ) AS so_xe_normalized,
+                trim(dd.so_hd) AS so_hd,
+                regexp_replace(trim(dd.so_hd), '^0+', '') AS so_hd_stripped
+              FROM delivery_data dd
+              WHERE dd.batch_id = $1
+                AND dd.so_hd IS NOT NULL
+                AND trim(dd.so_hd) != ''
+                AND dd.dien_giai NOT ILIKE '%thay thế%'
+                AND dd.dien_giai NOT ILIKE '%điều chỉnh%'
+                AND NOT EXISTS (
+                  SELECT 1 FROM accountant_invoices ai
+                  WHERE ai.ngay = dd.ngay_hd
+                    AND ai.so_xe = regexp_replace(
+                          regexp_replace(
+                            regexp_replace(dd.so_tau_xe, '^[^0-9]*', ''),
+                            '[-,\\s]', '', 'g'
+                          ),
+                          '/.*$', ''
+                        )
+                    AND ai.so_hoa_don = trim(dd.so_hd)
+                )
+            )
+            INSERT INTO accountant_invoices (batch_id, ngay, so_xe, so_hoa_don, trang_thai)
+            SELECT
+              $1,
+              di.ngay_hd,
+              di.so_xe_normalized,
+              di.so_hd,
+              CASE
+                WHEN EXISTS (
+                  SELECT 1 FROM driver_invoice_flat dif
+                  WHERE dif.so_xe_normalized = di.so_xe_normalized
+                    AND dif.ngay::date = di.ngay_hd::date
+                    AND (
+                      dif.so_hoa_don_stripped = di.so_hd_stripped
+                      OR di.so_hd_stripped LIKE dif.so_hoa_don_stripped || '%'
+                      OR dif.so_hoa_don_stripped LIKE di.so_hd_stripped || '%'
+                      OR di.so_hd_stripped LIKE '%' || dif.so_hoa_don_stripped || '%'
+                    )
+                ) THEN 'đã có'
+                ELSE 'không có'
+              END
+            FROM delivery_invoices di
+            RETURNING trang_thai`,
+            [batchId],
+          );
+
+          totalInvoices = invoiceResult.rows.length;
+          matchedCount = invoiceResult.rows.filter((r) => r.trang_thai === 'đã có').length;
+        }
+      }
+
+      // Count duplicate invoices by comparing with existing accountant_invoices
+      let duplicateInvoices = 0;
+      if (newRows.length > 0) {
+        const dupInvResult = await client.query<{ count: string }>(
+          `SELECT COUNT(*) as count
+           FROM (
+             SELECT DISTINCT dd.ngay_hd,
+               regexp_replace(regexp_replace(regexp_replace(dd.so_tau_xe, '^[^0-9]*', ''), '[-,\\s]', '', 'g'), '/.*$', '') AS so_xe_norm,
+               trim(dd.so_hd) AS so_hd
+             FROM delivery_data dd
+             WHERE dd.batch_id = $1
+               AND dd.so_hd IS NOT NULL
+               AND trim(dd.so_hd) != ''
+               AND dd.dien_giai NOT ILIKE '%thay thế%'
+               AND dd.dien_giai NOT ILIKE '%điều chỉnh%'
+               AND EXISTS (
+                 SELECT 1 FROM accountant_invoices ai
+                 WHERE ai.ngay = dd.ngay_hd
+                   AND ai.so_xe = regexp_replace(regexp_replace(regexp_replace(dd.so_tau_xe, '^[^0-9]*', ''), '[-,\\s]', '', 'g'), '/.*$', '')
+                   AND ai.so_hoa_don = trim(dd.so_hd)
+               )
+           ) sub`,
+          [batchId],
+        );
+        duplicateInvoices = parseInt(dupInvResult.rows[0].count, 10);
       }
 
       await client.query('COMMIT');
 
       const result: ImportResult = {
         batch_id: batchId,
-        total_rows: rows.length,
-        total_invoices: totalInvoices,
+        new_rows: newRows.length,
+        duplicate_rows: duplicateRows,
+        new_invoices: totalInvoices,
+        duplicate_invoices: duplicateInvoices,
         matched_count: matchedCount,
         unmatched_count: totalInvoices - matchedCount,
         min_date: minDate,

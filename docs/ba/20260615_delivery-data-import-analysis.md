@@ -48,8 +48,9 @@ flowchart TD
 | ID | Rule |
 |----|------|
 | BR-001 | File Excel input có format giống với chức năng "Xử lý data 5 nhà": sheet đầu tiên, bỏ qua 4 dòng header, dữ liệu từ dòng 5 trở đi. |
-| BR-002 | Dữ liệu import lưu toàn bộ 34 cột từ Excel vào bảng `delivery_data`, KHÔNG filter, KHÔNG loại trừ dòng nào. |
-| BR-003 | Mỗi lần upload tạo một `batch_id` duy nhất (UUID) để gom nhóm. |
+| BR-002 | Dữ liệu import lưu toàn bộ 34 cột từ Excel vào bảng `delivery_data`, KHÔNG filter, KHÔNG loại trừ dòng nào. **Tuy nhiên**, nếu 1 dòng đã tồn tại trong `delivery_data` (cùng `ngay_hd`, `so_tau_xe`, `so_hd`) → skip (không insert lại). |
+| BR-003 | Mỗi lần upload tạo một `batch_id` duy nhất (UUID) để gom nhóm. Check duplicate dùng **1 query UNNEST** cho toàn bộ batch, không query từng dòng. |
+| BR-003b | **Tầng 2 — `accountant_invoices`:** Mỗi cặp `(ngay, so_xe_norm, so_hd)` đã tồn tại trong `accountant_invoices` (từ bất kỳ batch nào) sẽ bị skip khi INSERT — chỉ thêm những hóa đơn **chưa từng có**. |
 | BR-004 | Hóa đơn bóc tách là tổ hợp duy nhất của (ngày hóa đơn + số xe + số hóa đơn). Cùng số hóa đơn trên cùng ngày nhưng khác xe → 2 record riêng biệt. |
 | BR-005 | `accountant_invoices.so_xe` chuẩn hóa theo 3 bước: (1) bỏ mọi ký tự không phải số từ đầu chuỗi (`^[^0-9]*`), (2) bỏ gạch ngang, phẩy, khoảng trắng (`[-,\s]`), (3) bỏ hậu tố sau `/` (`/.*$`). VD: `PPH-50H 88294/L2` → `50H88294`. |
 | BR-006 | Đối chiếu hóa đơn với 3 điều kiện đồng thời: (a) `so_xe` chuẩn hóa khớp nhau, (b) `ngay` khớp nhau, (c) số hóa đơn fuzzy match: strip leading zeros cả 2 phía, kiểm tra 4 mức: bằng chính xác → prefix → substring. VD: `00078097` khớp với `7809`, `78097`, `8097`, `097`. |
@@ -176,10 +177,12 @@ Response 200:
   "message": "Import hoàn tất",
   "data": {
     "batch_id": "uuid-string",
-    "total_rows": 1523,
-    "total_invoices": 487,
+    "new_rows": 1500,
+    "duplicate_rows": 2368,
+    "new_invoices": 450,
+    "duplicate_invoices": 37,
     "matched_count": 320,
-    "unmatched_count": 167,
+    "unmatched_count": 130,
     "min_date": "2026-06-01",
     "max_date": "2026-06-15"
   }
@@ -262,7 +265,7 @@ GET /api/accountant-invoices/missing-summary?batch_id=xxx&in_catalog=true
 Auth: JWT (accounting_data.view)
 
 Query params:
-  batch_id    (required) - UUID của batch
+  batch_id    (optional) - UUID của batch. Nếu không truyền → query TẤT CẢ batches.
   in_catalog  (optional) - true: xe trong danh mục, false: xe ngoài danh mục, bỏ trống: tất cả
 
 Response 200:
@@ -304,7 +307,7 @@ Response 200:
 | # | Screen | Route | Mô tả |
 |---|--------|-------|-------|
 | 1 | **Import Delivery Data** | `/accounting-data/delivery-import` | Upload file Excel, xem kết quả import + thống kê đối chiếu |
-| 2 | **Accountant Invoices List** | `/accounting-data/invoice-matching` | Tab "Tất cả hóa đơn": danh sách đầy đủ với filter, pagination. Tab "Hóa đơn thiếu": grouped theo số xe, drill-down từng xe xem ngày + số HĐ, phân biệt xe có/không trong danh mục (tích hợp `vehicles` table), filter `in_catalog`. |
+| 2 | **Accountant Invoices List** | `/accounting-data/invoice-matching` | Tab "Tất cả hóa đơn": danh sách đầy đủ với filter, pagination. Tab "Hóa đơn thiếu": grouped theo số xe, drill-down từng xe xem ngày + số HĐ, phân biệt xe có/không trong danh mục (tích hợp `vehicles` table). **Mặc định hiển thị tất cả batches** — có thể lọc theo batch cụ thể qua dropdown. |
 
 ---
 
@@ -326,6 +329,7 @@ Response 200:
 | EC-12 | NGAY_HD là Excel serial date number (vd: 46146) thay vì ISO date | Parse bằng `excelSerialToDate()` — dùng `getUTC*()` methods để tránh lệch múi giờ. |
 | EC-13 | Số xe trong `driver_invoices.so_xe` có ký tự "PPH-" hoặc hậu tố "/L2" | Chuẩn hóa đồng nhất 3 bước trong SQL query (BR-005). |
 | EC-14 | PostgreSQL không hỗ trợ `\d` trong regex | Dùng `[0-9]` thay vì `\d`. `^[^\d]*` → `^[^0-9]*`. |
+| EC-15 | Import lại file đã import trước đó | Tầng 1: bỏ qua rows trùng trong `delivery_data`. Tầng 2: NOT EXISTS bỏ qua hóa đơn trùng trong `accountant_invoices`. Kết quả trả về `new_rows=0`. |
 
 ---
 
@@ -337,6 +341,10 @@ Response 200:
   - `delivery_invoices`: SELECT DISTINCT từ `delivery_data` vừa insert.
   - EXISTS subquery: Khớp 3 điều kiện (so_xe_norm + ngay + fuzzy so_hoa_don) với 4 mức: exact =, prefix LIKE, substring LIKE '%...%'.
   - **Không lọc khoảng ngày** ở CTE driver_invoice_flat — EXISTS tự xử lý việc khớp ngày chính xác, tránh bỏ sót.
-- **Tổng cộng: 2 database queries** cho toàn bộ quy trình import (1 INSERT delivery_data + 1 INSERT accountant_invoices).
+- **Tổng cộng: 3-4 database queries** cho toàn bộ quy trình import:
+  1. 1 UNNEST check duplicate `delivery_data`
+  2. 1 UNNEST INSERT `delivery_data` (chỉ rows mới)
+  3. 1 INSERT `accountant_invoices` + đối chiếu (NOT EXISTS loại trừ hóa đơn đã có)
+  4. (optional) 1 query đếm `duplicate_invoices`
 - **Missing summary**: 1 query LEFT JOIN `vehicles` + group trong code thay vì query riêng từng xe.
 - **Regex caveat**: PostgreSQL không hỗ trợ `\d`, phải dùng `[0-9]` cho digit class trong SQL.

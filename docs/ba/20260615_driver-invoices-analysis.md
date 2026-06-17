@@ -12,24 +12,10 @@
 
 **Stakeholders:** Admin, Kế toán (ACCOUNTANT)
 
-**File mẫu cấu trúc — Sheet "XE NHỎ":**
-- Row 1-4: Header công ty (CÔNG TNHH DV VT PHÚ PHÁT, địa chỉ, ngày, tên)
-- Row 5: Header con (có `Tên :`, `Số xe :` merge cell)
-- Row 6: Trống
-- Row 7: Sub-header: `B=TÊN`, `D=Ngày`, `E=Số xe`, `F=Nơi giao`
-- Row 8+: Data rows với các cột:
-  - **B (Mã):** Location code (emp, ems, bcal, ssg, tp, hl, bcpt, pham, ntru, poyun, mpsg, sht, ...)
-  - **C (Tên TX):** Tên tài xế (b tâm, a lợi, x1, p vũ, ư lừa, ...)
-  - **D (Ngày):** Ngày giao hàng (DateTime)
-  - **E (Số xe):** Biển số xe (50H-70216, 50H 87442, 51C-81056, ...)
-  - **F (Nơi giao):** Địa điểm giao hàng (EMART P.H.ÍCH, E MART SALA, BIG C AN LAC, ...)
-  - **G (Số hóa đơn):** Invoice numbers, có thể là:
-    - Single number: `8312`, `8313`, `8324`
-    - Multiple separated by `+`: `71471+71473+71468`, `8473+71323+71325+71324+8325`
-    - Text (non-numeric): `pgh`, `r`
-    - Mixed: `bbnh+6491`
-
-Tổng: 707 dòng có dữ liệu cột G (trong ~1282 dòng).
+**File mẫu cấu trúc — Sheets "HCM" và "Tỉnh":**
+- Row 1-4: Header (tiêu đề, tên, ngày)
+- Row 5: Column headers: `Mã | Tên TX | Ngày | Số xe | Nơi giao | Số hóa đơn`
+- Row 6+: Data rows
 
 ---
 
@@ -277,11 +263,11 @@ Response:
 ## 8. Edge Cases
 
 ```
-EC-01: File không có sheet "XE NHỎ" → toast error "Không tìm thấy sheet 'XE NHỎ'"
+EC-01: File không có sheet "HCM" hoặc "Tỉnh" → toast error "Không tìm thấy sheet 'HCM' hoặc 'Tỉnh' trong file"
 EC-02: File có < 8 dòng → toast warning "File không chứa dữ liệu hóa đơn"
 EC-03: Cột G có giá trị text hoàn toàn (pgh, r) → so_hoa_don = [], vẫn insert record
 EC-04: Cột G mixed text+number (bbnh+6491) → so_hoa_don = ["6491"]
-EC-05: Cột G trống → bỏ qua toàn bộ dòng
+EC-05: Cột F trống → bỏ qua toàn bộ dòng
 EC-06: Upload file trùng 100% → DuplicateConfirmDialog hiện full list duplicates
 EC-07: Upload file có lẫn dòng mới + trùng → skip_duplicates=true chỉ insert dòng mới
 EC-08: Ngày Excel là Date object (parse linh hoạt: Date | ISO string | dd/mm/yyyy)
