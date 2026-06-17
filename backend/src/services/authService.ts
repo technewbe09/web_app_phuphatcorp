@@ -69,11 +69,21 @@ export const authService = {
     const passwordHash = await this.hashPassword(data.password);
     const role = data.role || UserRole.VIEWER;
 
+    // Resolve role_id from legacy role code
+    let roleId: number | null = null;
+    const roleResult = await pool.query<{ id: number }>(
+      'SELECT id FROM roles WHERE code = $1',
+      [role],
+    );
+    if (roleResult.rows[0]) {
+      roleId = roleResult.rows[0].id;
+    }
+
     const result = await pool.query<User>(
-      `INSERT INTO users (email, username, password_hash, full_name, role)
-       VALUES ($1, $2, $3, $4, $5)
-       RETURNING id, email, username, full_name, role`,
-      [data.email, data.username, passwordHash, data.full_name, role],
+      `INSERT INTO users (email, username, password_hash, full_name, role, role_id)
+       VALUES ($1, $2, $3, $4, $5, $6)
+       RETURNING id, email, username, full_name, role, role_id`,
+      [data.email, data.username, passwordHash, data.full_name, role, roleId],
     );
     const row = result.rows[0];
     return {
@@ -82,7 +92,7 @@ export const authService = {
       username: row.username,
       full_name: row.full_name,
       role: row.role as UserRole,
-      role_id: null,
+      role_id: row.role_id ?? null,
       is_active: true,
       permissions: [],
     };

@@ -28,24 +28,24 @@ router.use(authenticateToken);
 
 router.post(
   '/import',
-  requirePermission('accounting_data.manage'),
+  requirePermission('delivery_data.manage'),
   upload.single('file'),
   deliveryDataController.importFile,
 );
 router.get(
   '/batches',
-  requirePermission('accounting_data.view'),
+  requirePermission('delivery_data.view'),
   ...validate(listBatchesSchema),
   deliveryDataController.listBatches,
 );
 router.get(
   '/batches/:batchId',
-  requirePermission('accounting_data.view'),
+  requirePermission('delivery_data.view'),
   deliveryDataController.getBatchStats,
 );
 router.delete(
   '/batches/:batchId',
-  requirePermission('accounting_data.manage'),
+  requirePermission('delivery_data.manage'),
   ...validate(deleteBatchSchema),
   deliveryDataController.deleteBatch,
 );

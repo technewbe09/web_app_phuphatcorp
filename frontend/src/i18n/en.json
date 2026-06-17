@@ -99,31 +99,32 @@
     "adminReadonly": "ADMIN role always has all permissions",
     "modules": {
       "dashboard": "Dashboard",
-      "delivery_data": "Delivery Data",
+      "delivery_data": "Delivery Data Processing",
+      "transport": "Vehicle Data",
+      "dispatch": "Transport Operations",
+      "accounting_data": "Accounting Data",
       "users": "Users",
       "roles": "Roles",
       "permissions": "Permissions",
-      "reports": "Reports",
-      "transport": "Transport",
-      "dispatch": "Transport Operations",
-      "accounting_data": "Accounting Data"
+      "catalog": "Catalog Management"
     },
     "permCodes": {
       "dashboard_view": "View Dashboard",
       "delivery_data_view": "View Delivery Data",
       "delivery_data_manage": "Manage Delivery Data",
-      "users_view": "View Users",
-      "users_manage": "Manage Users",
-      "reports_view": "View Reports",
-      "roles_view": "View Roles",
-      "roles_manage": "Manage Roles",
-      "permissions_manage": "Manage Permissions",
       "transport_view": "View Transport Data",
       "transport_manage": "Manage Transport Data",
       "dispatch_view": "View Dispatch Board",
       "dispatch_manage": "Manage Dispatch",
       "accounting_data_view": "View Accounting Data",
-      "accounting_data_manage": "Manage Accounting Data"
+      "accounting_data_manage": "Manage Accounting Data",
+      "users_view": "View Users",
+      "users_manage": "Manage Users",
+      "roles_view": "View Roles",
+      "roles_manage": "Manage Roles",
+      "permissions_manage": "Manage Permissions",
+      "catalog_view": "View Catalog",
+      "catalog_manage": "Manage Catalog"
     }
   },
   "createUser": {
