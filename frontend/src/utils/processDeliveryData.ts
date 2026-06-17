@@ -376,17 +376,29 @@ type CustomerLookup = Map<string, { tuyenCu: string; tuyenPhuong: string }>;
 function buildCustomerLookup(customers: Customer[]): CustomerLookup {
   const map: CustomerLookup = new Map();
   for (const c of customers) {
-    const key = `${(c.ten_khach_hang ?? '').trim().toLowerCase()}|||${(c.dia_chi_giao_hang ?? '').trim().toLowerCase()}`;
-    map.set(key, {
+    const defaultValue = {
       tuyenCu: c.tuyen_cu ?? '',
       tuyenPhuong: c.tuyen_phuong ?? '',
-    });
+    };
+    const key = `${(c.ten_khach_hang ?? '').trim().toLowerCase()}|||${(c.dia_chi_giao_hang ?? '').trim().toLowerCase()}`;
+    map.set(key, defaultValue);
+    // Also index by supplier_code for priority lookup
+    if (c.supplier_code) {
+      const supplierKey = `${key}|||${c.supplier_code.trim()}`;
+      map.set(supplierKey, defaultValue);
+    }
   }
   return map;
 }
 
-function lookupCustomer(lookup: CustomerLookup, tenKH: string, diaChi: string): { tuyenCu: string; tuyenPhuong: string } {
+function lookupCustomer(lookup: CustomerLookup, tenKH: string, diaChi: string, maNcc?: string, slot?: string): { tuyenCu: string; tuyenPhuong: string } {
   const key = `${tenKH.trim().toLowerCase()}|||${diaChi.trim().toLowerCase()}`;
+  // Priority: if MCC/NDFC factory with Slot = "UNI 1", try supplier-specific lookup first
+  if (maNcc && slot && (maNcc === '2000000007' || maNcc === '2000000008') && slot.trim() === 'UNI 1') {
+    const supplierKey = `${key}|||${maNcc}`;
+    const found = lookup.get(supplierKey);
+    if (found) return found;
+  }
   return lookup.get(key) ?? { tuyenCu: '', tuyenPhuong: '' };
 }
 
@@ -442,7 +454,7 @@ function mapRowToOutput(row: RawRow, factoryVals: Record<string, string | number
   const roundMT = Math.round((Number(row[COL.HD_TRONG_LUONG]) || 0) / 1000 * 1000) / 1000;
   const khungGia = getKhungGia(groupRoundMTTotal, cell(row, COL.SO_TAU_XE));
   const soXe = cell(row, COL.SO_TAU_XE).slice(-9);
-  const { tuyenCu, tuyenPhuong } = lookupCustomer(customerLookup, cell(row, COL.TEN_KH), cell(row, COL.DIA_CHI));
+  const { tuyenCu, tuyenPhuong } = lookupCustomer(customerLookup, cell(row, COL.TEN_KH), cell(row, COL.DIA_CHI), cell(row, COL.MA_NCC), cell(row, COL.SLOT));
   const tuyenLenHD = tuyenPhuong ? `${tuyenPhuong} ${khungGia} (${soXe})` : '';
   const donViTinh = khungGia === '≤2.5 tấn' ? 'Chuyến' : 'Tấn';
   return [
