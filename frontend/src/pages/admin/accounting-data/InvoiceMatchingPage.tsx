@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { CheckCircle2, XCircle, FileSpreadsheet, ChevronDown, ChevronRight, Truck, ShieldCheck, ShieldQuestion } from 'lucide-react';
+import { CheckCircle2, XCircle, FileSpreadsheet, ChevronDown, ChevronRight, Truck, ShieldCheck, ShieldQuestion, CalendarDays } from 'lucide-react';
 import { Card, CardContent, CardHeader } from '../../../components/ui/Card';
 import { Button } from '../../../components/ui/Button';
 import { Input } from '../../../components/ui/Input';
@@ -222,9 +222,11 @@ export function InvoiceMatchingPage() {
 }
 
 function MissingInvoicesTab() {
+  const [viewMode, setViewMode] = useState<'vehicle' | 'month'>('vehicle');
   const [batchFilter, setBatchFilter] = useState<string>('');
   const [inCatalogFilter, setInCatalogFilter] = useState<string>('');
   const [expandedVehicles, setExpandedVehicles] = useState<Set<string>>(new Set());
+  const [expandedMonths, setExpandedMonths] = useState<Set<string>>(new Set());
 
   const { data: batchesData } = useGetBatches(1, 100);
 
@@ -288,10 +290,42 @@ function MissingInvoicesTab() {
 
   return (
     <Card>
-      <CardHeader>
+      {/* View toggle + filters */}
+      <CardHeader className="pb-0">
+        <div className="flex items-center justify-between flex-wrap gap-3">
+          <div className="flex items-center gap-1 bg-neutral-100 dark:bg-neutral-800 rounded-lg p-0.5">
+            <button
+              onClick={() => setViewMode('vehicle')}
+              className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
+                viewMode === 'vehicle'
+                  ? 'bg-white dark:bg-neutral-700 text-neutral-900 dark:text-neutral-100 shadow-sm'
+                  : 'text-neutral-500 hover:text-neutral-700'
+              }`}
+            >
+              <Truck className="w-3.5 h-3.5 inline mr-1" />
+              Theo số xe
+            </button>
+            <button
+              onClick={() => setViewMode('month')}
+              className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
+                viewMode === 'month'
+                  ? 'bg-white dark:bg-neutral-700 text-neutral-900 dark:text-neutral-100 shadow-sm'
+                  : 'text-neutral-500 hover:text-neutral-700'
+              }`}
+            >
+              <CalendarDays className="w-3.5 h-3.5 inline mr-1" />
+              Theo tháng
+            </button>
+          </div>
+          <span className="text-sm text-neutral-500">
+            {data.length} xe &middot; {totalMissing} hóa đơn thiếu
+          </span>
+        </div>
+      </CardHeader>
+      <CardHeader className="pt-2">
         <div className="flex items-center justify-between flex-wrap gap-3">
           <h2 className="text-lg font-semibold text-neutral-900 dark:text-neutral-100">
-            Hóa đơn thiếu theo số xe
+            {viewMode === 'vehicle' ? 'Hóa đơn thiếu theo số xe' : 'Hóa đơn thiếu theo tháng'}
           </h2>
           <div className="flex items-center gap-3">
             <Select
@@ -306,72 +340,173 @@ function MissingInvoicesTab() {
               onChange={(e) => setInCatalogFilter(e.target.value)}
               className="w-48"
             />
-            <span className="text-sm text-neutral-500 whitespace-nowrap">
-              {data.length} xe &middot; {totalMissing} hóa đơn thiếu
-            </span>
           </div>
         </div>
       </CardHeader>
-      <CardContent className="space-y-1">
-        {data.map((vehicle) => (
-          <div key={vehicle.so_xe} className="border border-neutral-200 dark:border-neutral-700 rounded-lg">
-            {/* Vehicle row */}
-            <button
-              onClick={() => toggle(vehicle.so_xe)}
-              className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-neutral-50 dark:hover:bg-neutral-800/50 rounded-lg transition-colors"
-            >
-              {expandedVehicles.has(vehicle.so_xe) ? (
-                <ChevronDown className="w-4 h-4 text-neutral-400 flex-shrink-0" />
-              ) : (
-                <ChevronRight className="w-4 h-4 text-neutral-400 flex-shrink-0" />
-              )}
-              <Truck className="w-4 h-4 text-neutral-400 flex-shrink-0" />
-              <span className="font-mono font-medium text-neutral-900 dark:text-neutral-100 flex-1">
-                {vehicle.so_xe}
-              </span>
-              {vehicle.in_catalog ? (
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400">
-                  <ShieldCheck className="w-3 h-3" />
-                  Có trong DM
-                </span>
-              ) : (
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400">
-                  <ShieldQuestion className="w-3 h-3" />
-                  Ngoài DM
-                </span>
-              )}
-              <span className="text-sm text-red-600 dark:text-red-400 font-medium">
-                {vehicle.missing_count} thiếu
-              </span>
-            </button>
 
-            {/* Drill-down: dates + invoices */}
-            {expandedVehicles.has(vehicle.so_xe) && (
-              <div className="border-t border-neutral-100 dark:border-neutral-800 px-4 py-2 bg-neutral-50 dark:bg-neutral-800/30 rounded-b-lg">
-                <div className="space-y-2">
-                  {vehicle.dates.map((d) => (
-                    <div key={d.ngay} className="pl-7">
-                      <p className="text-xs font-medium text-neutral-500 dark:text-neutral-400 mb-1">
-                        {d.ngay}
-                      </p>
-                      <div className="flex flex-wrap gap-1.5">
-                        {d.so_hoa_don.map((so) => (
-                          <span
-                            key={so}
-                            className="inline-flex items-center px-2 py-0.5 rounded text-xs font-mono bg-white dark:bg-neutral-700 border border-neutral-200 dark:border-neutral-600 text-neutral-700 dark:text-neutral-300"
-                          >
-                            {so}
-                          </span>
-                        ))}
+      {/* Vehicle View */}
+      {viewMode === 'vehicle' && (
+        <CardContent className="space-y-1">
+          {data.map((vehicle) => (
+            <div key={vehicle.so_xe} className="border border-neutral-200 dark:border-neutral-700 rounded-lg">
+              <button
+                onClick={() => toggle(vehicle.so_xe)}
+                className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-neutral-50 dark:hover:bg-neutral-800/50 rounded-lg transition-colors"
+              >
+                {expandedVehicles.has(vehicle.so_xe) ? (
+                  <ChevronDown className="w-4 h-4 text-neutral-400 flex-shrink-0" />
+                ) : (
+                  <ChevronRight className="w-4 h-4 text-neutral-400 flex-shrink-0" />
+                )}
+                <Truck className="w-4 h-4 text-neutral-400 flex-shrink-0" />
+                <span className="font-mono font-medium text-neutral-900 dark:text-neutral-100 flex-1">
+                  {vehicle.so_xe}
+                </span>
+                {vehicle.in_catalog ? (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400">
+                    <ShieldCheck className="w-3 h-3" />Có trong DM
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400">
+                    <ShieldQuestion className="w-3 h-3" />Ngoài DM
+                  </span>
+                )}
+                <span className="text-sm text-red-600 dark:text-red-400 font-medium">
+                  {vehicle.missing_count} thiếu
+                </span>
+              </button>
+              {expandedVehicles.has(vehicle.so_xe) && (
+                <div className="border-t border-neutral-100 dark:border-neutral-800 px-4 py-2 bg-neutral-50 dark:bg-neutral-800/30 rounded-b-lg">
+                  <div className="space-y-2">
+                    {vehicle.dates.map((d) => (
+                      <div key={d.ngay} className="pl-7">
+                        <p className="text-xs font-medium text-neutral-500 dark:text-neutral-400 mb-1">{d.ngay}</p>
+                        <div className="flex flex-wrap gap-1.5">
+                          {d.so_hoa_don.map((so) => (
+                            <span key={so} className="inline-flex items-center px-2 py-0.5 rounded text-xs font-mono bg-white dark:bg-neutral-700 border border-neutral-200 dark:border-neutral-600 text-neutral-700 dark:text-neutral-300">
+                              {so}
+                            </span>
+                          ))}
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    ))}
+                  </div>
                 </div>
-              </div>
-            )}
-          </div>
-        ))}
-      </CardContent>
+              )}
+            </div>
+          ))}
+        </CardContent>
+      )}
+
+      {/* Month View */}
+      {viewMode === 'month' && (
+        <MonthView data={data} />
+      )}
     </Card>
+  );
+}
+
+function MonthView({ data }: { data: MissingVehicle[] }) {
+  const [expandedMonths, setExpandedMonths] = useState<Set<string>>(new Set());
+  const [expandedInMonth, setExpandedInMonth] = useState<Set<string>>(new Set());
+
+  const toggleMonth = (key: string, setter: typeof setExpandedMonths) => {
+    setter((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
+
+  const monthMap = new Map<string, { vehicles: Map<string, MissingVehicle>; totalMissing: number }>();
+
+  for (const vehicle of data) {
+    for (const d of vehicle.dates) {
+      const month = d.ngay.substring(0, 7);
+      if (!monthMap.has(month)) {
+        monthMap.set(month, { vehicles: new Map(), totalMissing: 0 });
+      }
+      const entry = monthMap.get(month)!;
+      if (!entry.vehicles.has(vehicle.so_xe)) {
+        entry.vehicles.set(vehicle.so_xe, { ...vehicle, dates: [] });
+      }
+      entry.vehicles.get(vehicle.so_xe)!.dates.push(d);
+      entry.totalMissing += d.so_hoa_don.length;
+    }
+  }
+
+  const sortedMonths = Array.from(monthMap.entries()).sort((a, b) => b[0].localeCompare(a[0]));
+
+  return (
+    <CardContent className="space-y-2">
+      {sortedMonths.map(([month, entry]) => (
+        <div key={month} className="border border-neutral-200 dark:border-neutral-700 rounded-lg">
+          <button
+            onClick={() => toggleMonth(month, setExpandedMonths)}
+            className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-neutral-50 dark:hover:bg-neutral-800/50 rounded-lg transition-colors"
+          >
+            {expandedMonths.has(month) ? (
+              <ChevronDown className="w-4 h-4 text-neutral-400 flex-shrink-0" />
+            ) : (
+              <ChevronRight className="w-4 h-4 text-neutral-400 flex-shrink-0" />
+            )}
+            <CalendarDays className="w-4 h-4 text-neutral-400 flex-shrink-0" />
+            <span className="font-medium text-neutral-900 dark:text-neutral-100 flex-1">
+              {month}
+            </span>
+            <span className="text-sm text-neutral-500">
+              {entry.vehicles.size} xe &middot;
+            </span>
+            <span className="text-sm text-red-600 dark:text-red-400 font-medium">
+              {entry.totalMissing} thiếu
+            </span>
+          </button>
+          {expandedMonths.has(month) && (
+            <div className="border-t border-neutral-100 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-800/30 rounded-b-lg">
+              {Array.from(entry.vehicles.entries()).map(([soXe, vehicle]) => (
+                <div key={soXe}>
+                  <button
+                    onClick={() => toggleMonth(month + '|' + soXe, setExpandedInMonth)}
+                    className="w-full flex items-center gap-3 pl-8 pr-4 py-2 text-left hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors text-sm"
+                  >
+                    <Truck className="w-3.5 h-3.5 text-neutral-400 flex-shrink-0" />
+                    <span className="font-mono text-neutral-700 dark:text-neutral-300 flex-1">{soXe}</span>
+                    {vehicle.in_catalog ? (
+                      <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400">
+                        <ShieldCheck className="w-2.5 h-2.5" />DM
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400">
+                        <ShieldQuestion className="w-2.5 h-2.5" />DM
+                      </span>
+                    )}
+                    <span className="text-xs text-red-600 dark:text-red-400">
+                      {vehicle.dates.reduce((s, d) => s + d.so_hoa_don.length, 0)} thiếu
+                    </span>
+                  </button>
+                  {expandedInMonth.has(month + '|' + soXe) && (
+                    <div className="pl-12 pr-4 py-1 space-y-1.5">
+                      {vehicle.dates.map((d) => (
+                        <div key={d.ngay}>
+                          <p className="text-[11px] font-medium text-neutral-400 mb-0.5">{d.ngay}</p>
+                          <div className="flex flex-wrap gap-1">
+                            {d.so_hoa_don.map((so) => (
+                              <span key={so} className="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-mono bg-white dark:bg-neutral-700 border border-neutral-200 dark:border-neutral-600 text-neutral-600 dark:text-neutral-400">
+                                {so}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      ))}
+    </CardContent>
   );
 }
