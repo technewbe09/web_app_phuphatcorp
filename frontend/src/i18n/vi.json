@@ -567,5 +567,49 @@
   },
   "jobs": {
     "menuTitle": "Quản lý Job"
+  },
+  "auditLog": {
+    "title": "Nhật ký hệ thống",
+    "tabs": {
+      "access": "Nhật ký truy cập",
+      "audit": "Nhật ký thao tác"
+    },
+    "filters": {
+      "user": "Người dùng",
+      "method": "Phương thức",
+      "path": "Đường dẫn",
+      "status": "Trạng thái",
+      "action": "Hành động",
+      "entityType": "Loại đối tượng",
+      "dateFrom": "Từ ngày",
+      "dateTo": "Đến ngày",
+      "search": "Tìm kiếm",
+      "clearFilters": "Xóa bộ lọc",
+      "allUsers": "Tất cả người dùng",
+      "allMethods": "Tất cả phương thức",
+      "allStatuses": "Tất cả trạng thái",
+      "allActions": "Tất cả hành động",
+      "allEntities": "Tất cả loại"
+    },
+    "columns": {
+      "time": "Thời gian",
+      "user": "Người dùng",
+      "method": "Method",
+      "path": "Path",
+      "status": "Status",
+      "ip": "Địa chỉ IP",
+      "responseTime": "T/g xử lý",
+      "action": "Hành động",
+      "entity": "Đối tượng",
+      "entityLabel": "Mô tả"
+    },
+    "empty": {
+      "default": "Chưa có log nào",
+      "noResults": "Không tìm thấy log nào"
+    },
+    "error": {
+      "load": "Không thể tải dữ liệu log",
+      "retry": "Thử lại"
+    }
   }
 }

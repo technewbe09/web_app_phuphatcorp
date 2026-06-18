@@ -2,6 +2,7 @@ import { Response } from 'express';
 import { body, param, ValidationChain } from 'express-validator';
 import { weightAdjustmentService } from '../services/weightAdjustmentService';
 import { sendSuccess, sendError } from '../utils/response';
+import { auditService } from '../services/auditService';
 import { AuthRequest } from '../middleware/auth';
 
 export const weightAdjustmentCreateSchema: ValidationChain[] = [
@@ -64,6 +65,15 @@ export const weightAdjustmentController = {
         userId,
       );
       sendSuccess(res, row, 'Thêm điều chỉnh trọng lượng thành công', 201);
+      auditService.logAudit({
+        userId: req.user!.userId,
+        username: req.user!.email,
+        action: 'CREATE',
+        entityType: 'weight_adjustment',
+        entityId: row.id,
+        entityLabel: row.ma_hang,
+        ipAddress: req.ip,
+      });
     } catch (err: unknown) {
       if (err && typeof err === 'object' && 'code' in err) {
         const e = err as { code: string; ma_hang?: string };
@@ -88,6 +98,15 @@ export const weightAdjustmentController = {
         userId,
       );
       sendSuccess(res, { newRow }, 'Cập nhật điều chỉnh trọng lượng thành công');
+      auditService.logAudit({
+        userId: req.user!.userId,
+        username: req.user!.email,
+        action: 'UPDATE',
+        entityType: 'weight_adjustment',
+        entityId: id,
+        entityLabel: newRow.ma_hang,
+        ipAddress: req.ip,
+      });
     } catch (err: unknown) {
       if (err && typeof err === 'object' && 'code' in err) {
         const e = err as { code: string; ma_hang?: string };
@@ -111,6 +130,15 @@ export const weightAdjustmentController = {
       const userId = req.user!.userId;
       await weightAdjustmentService.softDelete(id, userId);
       sendSuccess(res, undefined, 'Đã xóa bản ghi');
+      auditService.logAudit({
+        userId: req.user!.userId,
+        username: req.user!.email,
+        action: 'DELETE',
+        entityType: 'weight_adjustment',
+        entityId: id,
+        entityLabel: `#${id}`,
+        ipAddress: req.ip,
+      });
     } catch (err: unknown) {
       if (err && typeof err === 'object' && 'code' in err) {
         const e = err as { code: string };
@@ -130,6 +158,15 @@ export const weightAdjustmentController = {
       const userId = req.user!.userId;
       const result = await weightAdjustmentService.uploadMany(rows, userId);
       sendSuccess(res, result, `Đã import ${result.inserted} bản ghi thành công`);
+      auditService.logAudit({
+        userId: req.user!.userId,
+        username: req.user!.email,
+        action: 'UPLOAD',
+        entityType: 'weight_adjustment',
+        entityLabel: 'Batch upload',
+        ipAddress: req.ip,
+        details: { inserted: result.inserted },
+      });
     } catch (err: unknown) {
       if (err && typeof err === 'object' && 'code' in err) {
         const e = err as { code: string; errors?: unknown[] };

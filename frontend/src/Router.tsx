@@ -20,6 +20,7 @@ import { InvoiceMatchingPage } from './pages/admin/accounting-data/InvoiceMatchi
 import { VehicleCatalogPage } from './pages/admin/catalog/VehicleCatalogPage';
 import { SupplierCatalogPage } from './pages/admin/catalog/SupplierCatalogPage';
 import { ReconcileJobPage } from './pages/admin/jobs/ReconcileJobPage';
+import { AuditLogPage } from './pages/admin/AuditLogPage';
 
 function PlaceholderPage({ title }: { title: string }) {
   return (
@@ -50,6 +51,7 @@ export function Router() {
             <Route path="/users" element={<UserManagementPage />} />
             <Route path="/roles" element={<RoleManagementPage />} />
             <Route path="/permissions" element={<PermissionManagementPage />} />
+            <Route path="/logs" element={<AuditLogPage />} />
             {/* Delivery Data */}
             <Route path="/delivery-data/5-houses" element={<DeliveryDataPage />} />
             <Route path="/delivery-data/rice" element={<RiceDeliveryDataPage />} />

@@ -3,6 +3,7 @@ import { body, query, ValidationChain } from 'express-validator';
 import { reconcileJobService } from '../services/reconcileJobService';
 import { schedulerService } from '../services/schedulerService';
 import { sendSuccess, sendError } from '../utils/response';
+import { auditService } from '../services/auditService';
 import { AuthRequest } from '../middleware/auth';
 
 export const createConfigSchema: ValidationChain[] = [
@@ -52,6 +53,15 @@ export const reconcileJobController = {
         await schedulerService.refreshConfig(config.id);
       }
       sendSuccess(res, config, 'Đã tạo cấu hình job', 201);
+      auditService.logAudit({
+        userId: req.user!.userId,
+        username: req.user!.email,
+        action: 'CREATE',
+        entityType: 'job',
+        entityId: config.id,
+        entityLabel: config.name,
+        ipAddress: req.ip,
+      });
     } catch (err) {
       const error = err instanceof Error ? err.message : 'Unknown error';
       sendError(res, 'Không thể tạo cấu hình job', 500, error);
@@ -68,6 +78,15 @@ export const reconcileJobController = {
       }
       await schedulerService.refreshConfig(config.id);
       sendSuccess(res, config, 'Đã cập nhật cấu hình job');
+      auditService.logAudit({
+        userId: req.user!.userId,
+        username: req.user!.email,
+        action: 'UPDATE',
+        entityType: 'job',
+        entityId: id,
+        entityLabel: config.name,
+        ipAddress: req.ip,
+      });
     } catch (err) {
       const error = err instanceof Error ? err.message : 'Unknown error';
       sendError(res, 'Không thể cập nhật cấu hình job', 500, error);
@@ -84,6 +103,15 @@ export const reconcileJobController = {
         return;
       }
       sendSuccess(res, { id }, 'Đã xóa cấu hình job');
+      auditService.logAudit({
+        userId: req.user!.userId,
+        username: req.user!.email,
+        action: 'DELETE',
+        entityType: 'job',
+        entityId: id,
+        entityLabel: `Job #${id}`,
+        ipAddress: req.ip,
+      });
     } catch (err) {
       const error = err instanceof Error ? err.message : 'Unknown error';
       sendError(res, 'Không thể xóa cấu hình job', 500, error);
@@ -101,6 +129,15 @@ export const reconcileJobController = {
       await schedulerService.refreshConfig(config.id);
       const msg = config.is_active ? 'Đã bật job' : 'Đã tắt job';
       sendSuccess(res, { id: config.id, is_active: config.is_active }, msg);
+      auditService.logAudit({
+        userId: req.user!.userId,
+        username: req.user!.email,
+        action: 'TOGGLE',
+        entityType: 'job',
+        entityId: id,
+        entityLabel: `Job #${id}`,
+        ipAddress: req.ip,
+      });
     } catch (err) {
       const error = err instanceof Error ? err.message : 'Unknown error';
       sendError(res, 'Không thể thay đổi trạng thái job', 500, error);
@@ -117,12 +154,14 @@ export const reconcileJobController = {
       let lookbackDays = lookback_days ?? 180;
       let configId = config_id ?? null;
 
+      let configName: string | undefined;
       if (configId) {
         const config = await reconcileJobService.getConfigById(configId);
         if (!config) {
           sendError(res, 'Không tìm thấy cấu hình job', 404);
           return;
         }
+        configName = config.name;
         if (!lookback_days) {
           lookbackDays = config.lookback_days;
         }
@@ -159,6 +198,15 @@ export const reconcileJobController = {
           },
           `Đối chiếu hoàn tất: ${result.matched_count}/${result.scanned_count} hóa đơn đã khớp`,
         );
+        auditService.logAudit({
+          userId: req.user!.userId,
+          username: req.user!.email,
+          action: 'TRIGGER',
+          entityType: 'job',
+          entityLabel: configName || 'Manual trigger',
+          ipAddress: req.ip,
+          details: { scanned: result.scanned_count, matched: result.matched_count },
+        });
       } catch (execErr) {
         const errorMsg =
           execErr instanceof Error ? execErr.message : 'Unknown error';

@@ -24,13 +24,14 @@ import {
   FolderOpen,
   Factory,
   RefreshCw,
+  FileText,
 } from 'lucide-react';
 import { cn } from '../utils/cn';
 import { useAuth } from '../hooks/useAuth';
 import { useI18n } from '../i18n/useI18n';
 import { ThemeToggle } from '../components/ui/ThemeToggle';
 
-const USER_SETTINGS_ROUTES = ['/users', '/roles', '/permissions'];
+const USER_SETTINGS_ROUTES = ['/users', '/roles', '/permissions', '/logs'];
 const DISPATCH_ROUTES = ['/dispatch'];
 const ACCOUNTING_DATA_ROUTES = ['/accounting-data'];
 const DELIVERY_DATA_ROUTES = ['/delivery-data'];
@@ -118,6 +119,9 @@ export function MainLayout() {
       : null,
     hasPermission('permissions.manage') || user?.role === 'ADMIN'
       ? { to: '/permissions', icon: Lock, label: t('sidebar.permissionManagement') }
+      : null,
+    hasPermission('logs.view') || user?.role === 'ADMIN'
+      ? { to: '/logs', icon: FileText, label: 'Nhật ký hệ thống' }
       : null,
   ].filter(Boolean) as { to: string; icon: typeof Users; label: string }[];
 

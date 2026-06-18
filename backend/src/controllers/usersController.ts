@@ -3,6 +3,7 @@ import { userService, ServiceError } from '../services/userService';
 import { sendSuccess, sendError } from '../utils/response';
 import { AuthRequest } from '../middleware/auth';
 import { UserRole } from '../types/user';
+import { auditService } from '../services/auditService';
 
 export const usersController = {
   async getUsers(req: AuthRequest, res: Response): Promise<void> {
@@ -55,6 +56,16 @@ export const usersController = {
       });
 
       sendSuccess(res, user, 'User created successfully', 201);
+
+      auditService.logAudit({
+        userId: actorId,
+        username: req.user!.email,
+        action: 'CREATE',
+        entityType: 'user',
+        entityId: user.id,
+        entityLabel: user.username || user.email,
+        ipAddress: req.ip,
+      });
     } catch (err) {
       if (err instanceof ServiceError) {
         sendError(res, err.message, err.statusCode, err.code);
@@ -82,6 +93,16 @@ export const usersController = {
       });
 
       sendSuccess(res, user, 'User updated successfully');
+
+      auditService.logAudit({
+        userId: actorId,
+        username: req.user!.email,
+        action: 'UPDATE',
+        entityType: 'user',
+        entityId: id,
+        entityLabel: user.username || user.email,
+        ipAddress: req.ip,
+      });
     } catch (err) {
       if (err instanceof ServiceError) {
         sendError(res, err.message, err.statusCode, err.code);
@@ -97,8 +118,19 @@ export const usersController = {
       const id = parseInt(req.params.id, 10);
       const actorId = req.user!.userId;
 
+      const targetUser = await userService.getUserById(id);
       await userService.deleteUser(id, actorId);
       sendSuccess(res, undefined, 'User deleted successfully');
+
+      auditService.logAudit({
+        userId: actorId,
+        username: req.user!.email,
+        action: 'DELETE',
+        entityType: 'user',
+        entityId: id,
+        entityLabel: targetUser?.username || targetUser?.email || `User #${id}`,
+        ipAddress: req.ip,
+      });
     } catch (err) {
       if (err instanceof ServiceError) {
         sendError(res, err.message, err.statusCode, err.code);
@@ -116,6 +148,17 @@ export const usersController = {
 
       await userService.resetPassword(id, new_password);
       sendSuccess(res, undefined, 'Password reset successfully');
+
+      const targetUser = await userService.getUserById(id);
+      auditService.logAudit({
+        userId: req.user!.userId,
+        username: req.user!.email,
+        action: 'UPDATE',
+        entityType: 'user',
+        entityId: id,
+        entityLabel: targetUser?.username || targetUser?.email || `User #${id}`,
+        ipAddress: req.ip,
+      });
     } catch (err) {
       if (err instanceof ServiceError) {
         sendError(res, err.message, err.statusCode, err.code);

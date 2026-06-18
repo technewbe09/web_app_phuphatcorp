@@ -2,6 +2,7 @@ import { Response } from 'express';
 import { body, param, query, ValidationChain } from 'express-validator';
 import { deliveryDataService } from '../services/deliveryDataService';
 import { sendSuccess, sendError } from '../utils/response';
+import { auditService } from '../services/auditService';
 import { AuthRequest } from '../middleware/auth';
 
 export const importFileSchema: ValidationChain[] = [];
@@ -44,6 +45,15 @@ export const deliveryDataController = {
       );
 
       sendSuccess(res, result, 'Import hoàn tất', 201);
+      auditService.logAudit({
+        userId: req.user!.userId,
+        username: req.user!.email,
+        action: 'IMPORT',
+        entityType: 'batch',
+        entityLabel: req.file?.originalname || 'ERP file',
+        ipAddress: req.ip,
+        details: { batchId: result.batch_id, rowCount: result.new_rows + result.duplicate_rows },
+      });
     } catch (err: unknown) {
       if (err && typeof err === 'object' && 'code' in err) {
         const e = err as { code: string; message?: string };
@@ -89,6 +99,15 @@ export const deliveryDataController = {
       const { batchId } = req.params;
       const result = await deliveryDataService.deleteBatch(batchId);
       sendSuccess(res, result, 'Đã xóa batch và dữ liệu liên quan');
+      auditService.logAudit({
+        userId: req.user!.userId,
+        username: req.user!.email,
+        action: 'DELETE',
+        entityType: 'batch',
+        entityId: undefined,
+        entityLabel: `Batch #${batchId}`,
+        ipAddress: req.ip,
+      });
     } catch (err) {
       const error = err instanceof Error ? err.message : 'Unknown error';
       sendError(res, 'Không thể xóa batch', 500, error);

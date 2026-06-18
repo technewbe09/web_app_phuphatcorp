@@ -3,6 +3,7 @@ import { AuthRequest } from '../middleware/auth';
 import { roleService } from '../services/roleService';
 import { ServiceError } from '../services/roleService';
 import { sendSuccess, sendError } from '../utils/response';
+import { auditService } from '../services/auditService';
 
 export const rolesController = {
   async getRoles(_req: AuthRequest, res: Response): Promise<void> {
@@ -33,6 +34,16 @@ export const rolesController = {
       const { name, description } = req.body;
       const role = await roleService.createRole({ name, description });
       sendSuccess(res, { role }, 'Thêm vai trò thành công', 201);
+
+      auditService.logAudit({
+        userId: req.user!.userId,
+        username: req.user!.email,
+        action: 'CREATE',
+        entityType: 'role',
+        entityId: role.id,
+        entityLabel: role.name,
+        ipAddress: req.ip,
+      });
     } catch (err) {
       if (err instanceof ServiceError) {
         sendError(res, err.message, err.statusCode, err.code);
@@ -48,6 +59,16 @@ export const rolesController = {
       const { name, description } = req.body;
       const role = await roleService.updateRole(id, { name, description });
       sendSuccess(res, { role }, 'Cập nhật vai trò thành công');
+
+      auditService.logAudit({
+        userId: req.user!.userId,
+        username: req.user!.email,
+        action: 'UPDATE',
+        entityType: 'role',
+        entityId: id,
+        entityLabel: role.name,
+        ipAddress: req.ip,
+      });
     } catch (err) {
       if (err instanceof ServiceError) {
         sendError(res, err.message, err.statusCode, err.code);
@@ -64,6 +85,16 @@ export const rolesController = {
       const result = await roleService.toggleRoleActive(id, is_active);
       const message = is_active ? 'Activate vai trò thành công' : 'Deactivate vai trò thành công';
       sendSuccess(res, result, message);
+
+      auditService.logAudit({
+        userId: req.user!.userId,
+        username: req.user!.email,
+        action: 'TOGGLE',
+        entityType: 'role',
+        entityId: id,
+        entityLabel: result.role?.name || `Role #${id}`,
+        ipAddress: req.ip,
+      });
     } catch (err) {
       if (err instanceof ServiceError) {
         sendError(res, err.message, err.statusCode, err.code);

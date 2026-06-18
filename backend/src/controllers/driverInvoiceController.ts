@@ -3,6 +3,7 @@ import { body, param, query, ValidationChain } from 'express-validator';
 import { driverInvoiceService } from '../services/driverInvoiceService';
 import { sendSuccess, sendError } from '../utils/response';
 import { AuthRequest } from '../middleware/auth';
+import { auditService } from '../services/auditService';
 
 export const driverInvoiceListSchema: ValidationChain[] = [
   query('page').optional().isInt({ min: 1 }).withMessage('Page must be >= 1'),
@@ -131,6 +132,16 @@ export const driverInvoiceController = {
         : 'Đã tạo hóa đơn tài xế';
 
       sendSuccess(res, result, message, 201);
+
+      auditService.logAudit({
+        userId,
+        username: req.user?.email || 'unknown',
+        action: 'CREATE',
+        entityType: 'driver_invoice',
+        entityId: result.id,
+        entityLabel: `Invoice #${result.id}`,
+        ipAddress: req.ip,
+      });
     } catch (err) {
       const error = err instanceof Error ? err.message : 'Unknown error';
       sendError(res, 'Không thể tạo hóa đơn tài xế', 500, error);
@@ -188,6 +199,16 @@ export const driverInvoiceController = {
         : `Đã import ${result.inserted} bản ghi`;
 
       sendSuccess(res, result, message, 201);
+
+      auditService.logAudit({
+        userId,
+        username: req.user?.email || 'unknown',
+        action: 'UPLOAD',
+        entityType: 'driver_invoice',
+        entityLabel: original_filename || 'Batch upload',
+        details: { inserted: result.inserted, duplicates: result.duplicates.length },
+        ipAddress: req.ip,
+      });
     } catch (err) {
       const error = err instanceof Error ? err.message : 'Unknown error';
       sendError(res, 'Không thể upload dữ liệu', 500, error);
@@ -199,6 +220,16 @@ export const driverInvoiceController = {
       const id = parseInt(req.params.id, 10);
       await driverInvoiceService.delete(id);
       sendSuccess(res, undefined, 'Đã xóa hóa đơn');
+
+      auditService.logAudit({
+        userId: req.user!.userId,
+        username: req.user!.email,
+        action: 'DELETE',
+        entityType: 'driver_invoice',
+        entityId: id,
+        entityLabel: `Invoice #${id}`,
+        ipAddress: req.ip,
+      });
     } catch (err: unknown) {
       if (err && typeof err === 'object' && 'code' in err) {
         const e = err as { code: string };
@@ -229,6 +260,17 @@ export const driverInvoiceController = {
         ? `Cập nhật thành công, cập nhật ${row.reconciled_count} hóa đơn đối chiếu`
         : 'Cập nhật hóa đơn thành công';
       sendSuccess(res, row, message);
+
+      auditService.logAudit({
+        userId: req.user!.userId,
+        username: req.user!.email,
+        action: 'UPDATE',
+        entityType: 'driver_invoice',
+        entityId: id,
+        entityLabel: `Invoice #${id}`,
+        ipAddress: req.ip,
+      });
+
     } catch (err: unknown) {
       if (err && typeof err === 'object' && 'code' in err) {
         const e = err as { code: string };

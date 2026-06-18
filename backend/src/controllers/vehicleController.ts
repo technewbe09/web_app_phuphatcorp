@@ -2,6 +2,7 @@ import { Response } from 'express';
 import { body, param, validationResult } from 'express-validator';
 import { vehicleService } from '../services/vehicleService';
 import { sendSuccess, sendError } from '../utils/response';
+import { auditService } from '../services/auditService';
 import { AuthRequest } from '../middleware/auth';
 
 export const vehicleDeleteSchema = [
@@ -51,6 +52,15 @@ export const vehicleController = {
         : `Đã import ${result.imported} xe`;
 
       sendSuccess(res, result, msg, 201);
+      auditService.logAudit({
+        userId: req.user!.userId,
+        username: req.user!.email,
+        action: 'UPLOAD',
+        entityType: 'vehicle',
+        entityLabel: 'Batch upload',
+        ipAddress: req.ip,
+        details: { imported: result.imported, reactivated: result.reactivated },
+      });
     } catch (err) {
       const error = err instanceof Error ? err.message : 'Unknown error';
       sendError(res, 'Không thể upload dữ liệu', 500, error);
@@ -68,6 +78,15 @@ export const vehicleController = {
       const id = parseInt(req.params.id, 10);
       await vehicleService.softDelete(id);
       sendSuccess(res, undefined, 'Đã xóa xe');
+      auditService.logAudit({
+        userId: req.user!.userId,
+        username: req.user!.email,
+        action: 'DELETE',
+        entityType: 'vehicle',
+        entityId: id,
+        entityLabel: `Vehicle #${id}`,
+        ipAddress: req.ip,
+      });
     } catch (err: unknown) {
       if (err && typeof err === 'object' && 'code' in err) {
         const e = err as { code: string };
