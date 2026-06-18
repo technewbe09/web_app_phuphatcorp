@@ -95,7 +95,7 @@ export function AuditLogPage() {
   const [draftAccessFilters, setDraftAccessFilters] = useState<AccessLogFilters>({ page: 1, limit: 50 });
   const [draftAuditFilters, setDraftAuditFilters] = useState<AuditLogFilters>({ page: 1, limit: 50 });
 
-  const { data: usersData } = useUsers({ limit: 200 });
+  const { data: usersData } = useUsers({ limit: 100 });
   const users = usersData?.data || [];
 
   const { data: accessData, isLoading: accessLoading, isError: accessError, refetch: refetchAccess } = useAccessLogs(accessFilters);
