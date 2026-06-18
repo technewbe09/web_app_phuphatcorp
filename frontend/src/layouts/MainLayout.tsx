@@ -23,6 +23,7 @@ import {
   FileSearch,
   FolderOpen,
   Factory,
+  RefreshCw,
 } from 'lucide-react';
 import { cn } from '../utils/cn';
 import { useAuth } from '../hooks/useAuth';
@@ -34,6 +35,7 @@ const DISPATCH_ROUTES = ['/dispatch'];
 const ACCOUNTING_DATA_ROUTES = ['/accounting-data'];
 const DELIVERY_DATA_ROUTES = ['/delivery-data'];
 const CATALOG_ROUTES = ['/catalog'];
+const JOBS_ROUTES = ['/jobs'];
 
 export function MainLayout() {
   const { user, logout, hasPermission, hasAnyPermission } = useAuth();
@@ -58,6 +60,9 @@ export function MainLayout() {
   );
   const [userSettingsOpen, setUserSettingsOpen] = useState(
     USER_SETTINGS_ROUTES.some((p) => location.pathname.startsWith(p)),
+  );
+  const [jobsOpen, setJobsOpen] = useState(
+    JOBS_ROUTES.some((p) => location.pathname.startsWith(p)),
   );
 
   const handleLogout = () => {
@@ -98,6 +103,9 @@ export function MainLayout() {
   const showAccountingData = hasAnyPermission(['accounting_data.view', 'accounting_data.manage'])
     || user?.role === 'ADMIN';
 
+  const showJobs = hasAnyPermission(['jobs.view', 'jobs.manage'])
+    || user?.role === 'ADMIN';
+
   const showDeliveryData = hasAnyPermission(['delivery_data.view', 'delivery_data.manage'])
     || user?.role === 'ADMIN';
 
@@ -120,6 +128,7 @@ export function MainLayout() {
   const isAccountingDataActive = ACCOUNTING_DATA_ROUTES.some((p) => location.pathname.startsWith(p));
   const isDeliveryDataActive = DELIVERY_DATA_ROUTES.some((p) => location.pathname.startsWith(p));
   const isCatalogActive = CATALOG_ROUTES.some((p) => location.pathname.startsWith(p));
+  const isJobsActive = JOBS_ROUTES.some((p) => location.pathname.startsWith(p));
 
   const accountingDataSubItems = [
     { to: '/accounting-data/weight-adjustments', icon: Scale, label: t('accountingData.weightAdjustment' as never) },
@@ -131,6 +140,10 @@ export function MainLayout() {
   const catalogSubItems = [
     { to: '/catalog/vehicles', icon: Car, label: t('catalog.vehicles') },
     { to: '/catalog/suppliers', icon: Factory, label: t('catalog.suppliers') },
+  ];
+
+  const jobsSubItems = [
+    { to: '/jobs/reconcile', icon: RefreshCw, label: 'Cấu hình Job' },
   ];
 
   const renderSubGroup = (
@@ -341,6 +354,17 @@ export function MainLayout() {
             catalogOpen,
             () => setCatalogOpen((o) => !o),
             isCatalogActive,
+          )}
+
+          {/* Quản lý Job collapsible group */}
+          {showJobs &&
+            renderSubGroup(
+            'Quản lý Job',
+            RefreshCw,
+            jobsSubItems,
+            jobsOpen,
+            () => setJobsOpen((o) => !o),
+            isJobsActive,
           )}
         </nav>
 

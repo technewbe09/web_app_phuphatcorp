@@ -11,6 +11,11 @@ export const listBatchesSchema: ValidationChain[] = [
   query('limit').optional().isInt({ min: 1, max: 100 }).withMessage('Limit must be 1-100'),
 ];
 
+export const getBatchRowsSchema: ValidationChain[] = [
+  body('batch_ids').isArray({ min: 1 }).withMessage('Cần ít nhất 1 batch ID'),
+  body('batch_ids.*').isString().withMessage('Mỗi batch ID phải là string'),
+];
+
 export const deleteBatchSchema: ValidationChain[] = [
   param('batchId').notEmpty().withMessage('Batch ID là bắt buộc'),
 ];
@@ -87,6 +92,24 @@ export const deliveryDataController = {
     } catch (err) {
       const error = err instanceof Error ? err.message : 'Unknown error';
       sendError(res, 'Không thể xóa batch', 500, error);
+    }
+  },
+
+  async getBatchRows(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      const { batch_ids } = req.body as { batch_ids: string[] };
+      const result = await deliveryDataService.getBatchRows(batch_ids);
+      sendSuccess(res, result, `Đã tải dữ liệu từ ${result.batch_ids.length} batch`);
+    } catch (err: unknown) {
+      if (err && typeof err === 'object' && 'code' in err) {
+        const e = err as { code: string; message?: string };
+        if (e.code === 'NO_DATA') {
+          sendError(res, e.message || 'Batch không có dữ liệu', 400);
+          return;
+        }
+      }
+      const error = err instanceof Error ? err.message : 'Unknown error';
+      sendError(res, 'Không thể tải dữ liệu batch', 500, error);
     }
   },
 };

@@ -12,6 +12,7 @@ import deliveryDataRoutes from './deliveryData';
 import accountantInvoiceRoutes from './accountantInvoices';
 import vehicleRoutes from './vehicles';
 import supplierRoutes from './suppliers';
+import reconcileJobRoutes from './reconcileJobs';
 
 const router = Router();
 
@@ -28,5 +29,6 @@ router.use('/delivery-data', deliveryDataRoutes);
 router.use('/accountant-invoices', accountantInvoiceRoutes);
 router.use('/vehicles', vehicleRoutes);
 router.use('/suppliers', supplierRoutes);
+router.use('/reconcile-jobs', reconcileJobRoutes);
 
 export default router;

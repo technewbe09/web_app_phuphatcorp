@@ -12,6 +12,7 @@ import { DriverInvoiceCreateModal } from '../../../components/accounting-data/Dr
 import { InvoiceNumbersPopup } from '../../../components/accounting-data/InvoiceNumbersPopup';
 import { useAuth } from '../../../hooks/useAuth';
 import type { DriverInvoice, DriverInvoiceFilters } from '../../../api/driverInvoiceApi';
+import type { InvoiceNumber } from '../../../api/driverInvoiceApi';
 
 interface Toast {
   id: number;
@@ -28,7 +29,7 @@ export function DriverInvoicesPage() {
   const [uploadModalOpen, setUploadModalOpen] = useState(false);
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [toasts, setToasts] = useState<Toast[]>([]);
-  const [selectedInvoices, setSelectedInvoices] = useState<string[] | null>(null);
+  const [selectedInvoices, setSelectedInvoices] = useState<InvoiceNumber[] | null>(null);
   const [editingInvoice, setEditingInvoice] = useState<DriverInvoice | null>(null);
 
   const { data, isLoading, isError, refetch } = useGetDriverInvoices(filters);
@@ -226,9 +227,12 @@ export function DriverInvoicesPage() {
                       <TableCell className="text-center">
                         <button
                           onClick={() => setSelectedInvoices(row.so_hoa_don)}
-                          className="inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400 cursor-pointer hover:bg-neutral-200 dark:hover:bg-neutral-700 transition-colors"
-                          title={row.so_hoa_don.join(', ')}
+                          className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400 cursor-pointer hover:bg-neutral-200 dark:hover:bg-neutral-700 transition-colors"
+                          title={row.so_hoa_don.map((n) => n.so).join(', ')}
                         >
+                          {row.so_hoa_don.some((n) => n.ghi_chu) && (
+                            <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                          )}
                           [{row.so_hoa_don.length}]
                         </button>
                       </TableCell>

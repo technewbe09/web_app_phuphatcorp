@@ -35,6 +35,12 @@ Hệ thống dùng **RBAC** (Role-Based Access Control) — mỗi user gắn 1 r
 | transport.manage | Quản lý dữ liệu vận tải (CRUD lịch đi hàng) |
 | dispatch.view | Xem bảng điều phối xe |
 | dispatch.manage | Tạo/xóa lịch điều phối xe |
+| accounting_data.view | Xem dữ liệu kế toán |
+| accounting_data.manage | Quản lý dữ liệu kế toán |
+| catalog.view | Xem danh mục |
+| catalog.manage | Quản lý danh mục |
+| jobs.view | Xem cấu hình Job |
+| jobs.manage | Quản lý cấu hình Job |
 
 **Cơ chế enforcement:**
 - JWT payload chứa `roleId` và `permissions: string[]`
@@ -517,6 +523,36 @@ frontend/src/components/admin/UploadCustomersModal.tsx
 
 ---
 
+### 11.4 Đối chiếu HĐ (/accounting-data/invoice-matching)
+
+**Mục đích:** Xem kết quả đối chiếu giữa `accountant_invoices` và `driver_invoices` sau khi import dữ liệu.
+
+**API Endpoints:**
+```
+GET /api/accountant-invoices?batch_id=&page=&limit=... → list invoices (accounting_data.view)
+GET /api/accountant-invoices/missing-summary?batch_id=&in_catalog= → grouped missing (accounting_data.view)
+```
+
+**Access:** Route `/accounting-data/invoice-matching`, sidebar menu "Quản lý dữ liệu kế toán" → "Đối chiếu HĐ"
+
+---
+
+### 11.5 Import 5 nhà (/accounting-data/delivery-import)
+
+**Mục đích:** Upload file Excel ERP 5 nhà, import vào `delivery_data`, tự động bóc tách hóa đơn vào `accountant_invoices` và đối chiếu với `driver_invoices`.
+
+**API Endpoints:**
+```
+POST /api/delivery-data/import → import file (accounting_data.manage)
+GET  /api/delivery-data/batches → list batches (accounting_data.view)
+GET  /api/delivery-data/batches/:id → batch stats (accounting_data.view)
+GET  /api/delivery-data/batches/rows → batch rows (accounting_data.view)
+DELETE /api/delivery-data/batches/:id → delete batch (accounting_data.manage)
+```
+
+**Access:** Route `/accounting-data/delivery-import`, sidebar menu "Quản lý dữ liệu kế toán" → "Import 5 nhà"
+
+---
 
 ## 12. Quản lý danh mục
 
@@ -568,6 +604,66 @@ frontend/src/components/catalog/DeleteVehicleDialog.tsx
 ```
 
 **Access:** Tất cả authenticated users. Route: `/catalog/vehicles`
+
+---
+
+## 13. Quản lý Job
+
+Module "Quản lý Job" quản lý các job chạy nền tự động của hệ thống.
+
+### 13.1 Job Đối chiếu HĐ (/jobs/reconcile)
+
+**Mục đích:** Job chạy định kỳ tự động đối chiếu `accountant_invoices` với `driver_invoices` và cập nhật trạng thái hóa đơn. Kèm màn hình cấu hình thời gian và phạm vi job.
+
+**Data model — bảng `reconcile_job_configs`:**
+```sql
+reconcile_job_configs (id PK, name, lookback_days DEFAULT 180, schedule_hours INTEGER[] DEFAULT '{8,12,18}', is_active BOOLEAN DEFAULT true, last_run_at, next_run_at, created_by/updated_by FK->users, created_at, updated_at)
+```
+
+**Data model — bảng `reconcile_job_logs`:**
+```sql
+reconcile_job_logs (id PK, config_id FK->reconcile_job_configs ON DELETE SET NULL, trigger_type VARCHAR(10) DEFAULT 'scheduled', started_at, finished_at, status DEFAULT 'running', lookback_days, scanned_count DEFAULT 0, matched_count DEFAULT 0, error_message, created_at)
+```
+
+**Business Rules:**
+- BR-001: Job quét `accountant_invoices` có `trang_thai='không có'` trong phạm vi `ngay >= CURRENT_DATE - lookback_days`.
+- BR-002: Đối chiếu dùng fuzzy match 4 mức trên `so_xe` + `ngay` + `so_hoa_don` — giống logic `deliveryDataService` và `driverInvoiceService`.
+- BR-003: Schedule dùng `node-cron`, mỗi config chọn nhiều giờ chạy. Bật/tắt/sửa/xóa không cần restart server.
+- BR-004: Có nút "Chạy ngay" để trigger thủ công.
+- BR-005: Mỗi lần chạy ghi log vào `reconcile_job_logs`.
+
+**API Endpoints:**
+```
+GET    /api/reconcile-jobs/configs         → list configs (jobs.view)
+POST   /api/reconcile-jobs/configs         → create config (jobs.manage)
+PUT    /api/reconcile-jobs/configs/:id     → update config (jobs.manage)
+DELETE /api/reconcile-jobs/configs/:id     → delete config (jobs.manage)
+PATCH  /api/reconcile-jobs/configs/:id/toggle → toggle active (jobs.manage)
+POST   /api/reconcile-jobs/trigger         → trigger thủ công (jobs.manage)
+GET    /api/reconcile-jobs/logs            → xem lịch sử chạy (jobs.view)
+```
+
+**Files:**
+```
+backend/src/migrations/023_create_reconcile_jobs.sql
+backend/src/migrations/024_add_job_permissions.sql
+backend/src/services/reconcileJobService.ts
+backend/src/services/schedulerService.ts
+backend/src/controllers/reconcileJobController.ts
+backend/src/routes/reconcileJobs.ts
+frontend/src/api/reconcileJobApi.ts
+frontend/src/hooks/useReconcileJobs.ts
+frontend/src/pages/admin/jobs/ReconcileJobPage.tsx
+frontend/src/components/accounting-data/HourSelector.tsx
+```
+
+**Permissions:**
+| Code | Role mặc định |
+|------|--------------|
+| jobs.view | ADMIN, ACCOUNTANT, VIEWER |
+| jobs.manage | ADMIN, ACCOUNTANT |
+
+**Access:** Route `/jobs/reconcile`, sidebar menu "Quản lý Job" → "Cấu hình Job"
 
 ---
 

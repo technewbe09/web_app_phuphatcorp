@@ -19,6 +19,7 @@ import { DeliveryImportPage } from './pages/admin/accounting-data/DeliveryImport
 import { InvoiceMatchingPage } from './pages/admin/accounting-data/InvoiceMatchingPage';
 import { VehicleCatalogPage } from './pages/admin/catalog/VehicleCatalogPage';
 import { SupplierCatalogPage } from './pages/admin/catalog/SupplierCatalogPage';
+import { ReconcileJobPage } from './pages/admin/jobs/ReconcileJobPage';
 
 function PlaceholderPage({ title }: { title: string }) {
   return (
@@ -62,6 +63,9 @@ export function Router() {
             <Route path="/accounting-data/customers" element={<CustomersPage />} />
             <Route path="/accounting-data/delivery-import" element={<DeliveryImportPage />} />
             <Route path="/accounting-data/invoice-matching" element={<InvoiceMatchingPage />} />
+            {/* Jobs */}
+            <Route path="/accounting-data/reconcile-jobs" element={<Navigate to="/jobs/reconcile" replace />} />
+            <Route path="/jobs/reconcile" element={<ReconcileJobPage />} />
             {/* Catalog */}
             <Route path="/catalog/vehicles" element={<VehicleCatalogPage />} />
             <Route path="/catalog/suppliers" element={<SupplierCatalogPage />} />
