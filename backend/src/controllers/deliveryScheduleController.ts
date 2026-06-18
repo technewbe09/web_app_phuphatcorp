@@ -2,6 +2,7 @@ import { Response } from 'express';
 import { body, query, ValidationChain } from 'express-validator';
 import { deliveryScheduleService } from '../services/deliveryScheduleService';
 import { sendSuccess, sendError } from '../utils/response';
+import { auditService } from '../services/auditService';
 import { AuthRequest } from '../middleware/auth';
 
 export const deliveryScheduleUploadSchema: ValidationChain[] = [
@@ -120,6 +121,15 @@ export const deliveryScheduleController = {
         'Upload thành công',
         200
       );
+      auditService.logAudit({
+        userId: req.user!.userId,
+        username: req.user!.email,
+        action: 'UPLOAD',
+        entityType: 'delivery_schedule',
+        entityLabel: req.file?.originalname || 'Excel file',
+        ipAddress: req.ip,
+        details: { fromDate: from_date, toDate: to_date, rowCount: result.total_rows_inserted },
+      });
     } catch (err: unknown) {
       if (err && typeof err === 'object' && 'code' in err) {
         const e = err as { code: string; errors?: any[] };
@@ -194,6 +204,14 @@ export const deliveryScheduleController = {
         'Xóa thành công',
         200
       );
+      auditService.logAudit({
+        userId: req.user!.userId,
+        username: req.user!.email,
+        action: 'DELETE',
+        entityType: 'delivery_schedule',
+        entityLabel: `Date range: ${from_date} - ${to_date}`,
+        ipAddress: req.ip,
+      });
     } catch (err) {
       const error = err instanceof Error ? err.message : 'Unknown error';
       sendError(res, 'Không thể xóa dữ liệu', 500, error);
@@ -213,6 +231,15 @@ export const deliveryScheduleController = {
         return;
       }
       sendSuccess(res, { id }, 'Xóa thành công', 200);
+      auditService.logAudit({
+        userId: req.user!.userId,
+        username: req.user!.email,
+        action: 'DELETE',
+        entityType: 'delivery_schedule',
+        entityId: id,
+        entityLabel: `#${id}`,
+        ipAddress: req.ip,
+      });
     } catch (err) {
       const error = err instanceof Error ? err.message : 'Unknown error';
       sendError(res, 'Không thể xóa bản ghi', 500, error);
@@ -242,6 +269,15 @@ export const deliveryScheduleController = {
         return;
       }
       sendSuccess(res, updated, 'Cập nhật thành công', 200);
+      auditService.logAudit({
+        userId: req.user!.userId,
+        username: req.user!.email,
+        action: 'UPDATE',
+        entityType: 'delivery_schedule',
+        entityId: id,
+        entityLabel: `#${id}`,
+        ipAddress: req.ip,
+      });
     } catch (err) {
       const error = err instanceof Error ? err.message : 'Unknown error';
       sendError(res, 'Không thể cập nhật bản ghi', 500, error);

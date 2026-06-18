@@ -2,6 +2,7 @@ import { Response } from 'express';
 import { body, param, query, ValidationChain } from 'express-validator';
 import { dispatchScheduleService, UpdateDispatchScheduleData } from '../services/dispatchScheduleService';
 import { sendSuccess, sendError } from '../utils/response';
+import { auditService } from '../services/auditService';
 import { AuthRequest } from '../middleware/auth';
 
 export const dispatchListQuerySchema: ValidationChain[] = [
@@ -76,6 +77,15 @@ export const dispatchScheduleController = {
       const userId = req.user?.userId ?? null;
       const schedule = await dispatchScheduleService.create(req.body, userId);
       sendSuccess(res, schedule, 'Tạo chuyến xe thành công', 201);
+      auditService.logAudit({
+        userId: req.user!.userId,
+        username: req.user!.email,
+        action: 'CREATE',
+        entityType: 'dispatch_schedule',
+        entityId: schedule.id,
+        entityLabel: `Dispatch #${schedule.id}`,
+        ipAddress: req.ip,
+      });
     } catch (err) {
       const error = err instanceof Error ? err.message : 'Unknown error';
       sendError(res, 'Không thể tạo chuyến xe', 500, error);
@@ -92,6 +102,15 @@ export const dispatchScheduleController = {
         return;
       }
       sendSuccess(res, schedule, 'Cập nhật chuyến xe thành công');
+      auditService.logAudit({
+        userId: req.user!.userId,
+        username: req.user!.email,
+        action: 'UPDATE',
+        entityType: 'dispatch_schedule',
+        entityId: id,
+        entityLabel: `Dispatch #${id}`,
+        ipAddress: req.ip,
+      });
     } catch (err) {
       const error = err instanceof Error ? err.message : 'Unknown error';
       sendError(res, 'Không thể cập nhật chuyến xe', 500, error);
@@ -107,6 +126,15 @@ export const dispatchScheduleController = {
         return;
       }
       sendSuccess(res, null, 'Đã xóa chuyến xe');
+      auditService.logAudit({
+        userId: req.user!.userId,
+        username: req.user!.email,
+        action: 'DELETE',
+        entityType: 'dispatch_schedule',
+        entityId: id,
+        entityLabel: `Dispatch #${id}`,
+        ipAddress: req.ip,
+      });
     } catch (err) {
       const error = err instanceof Error ? err.message : 'Unknown error';
       sendError(res, 'Không thể xóa chuyến xe', 500, error);

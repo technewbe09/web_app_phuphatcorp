@@ -3,6 +3,7 @@ import { body, param, ValidationChain } from 'express-validator';
 import { supplierService } from '../services/supplierService';
 import { sendSuccess, sendError } from '../utils/response';
 import { AuthRequest } from '../middleware/auth';
+import { auditService } from '../services/auditService';
 
 export const supplierCreateSchema: ValidationChain[] = [
   body('supplier_code')
@@ -61,6 +62,16 @@ export const supplierController = {
 
       const row = await supplierService.create({ supplier_code, name, notes: notes ?? null });
       sendSuccess(res, row, 'Thêm nhà cung cấp thành công', 201);
+
+      auditService.logAudit({
+        userId: req.user!.userId,
+        username: req.user!.email,
+        action: 'CREATE',
+        entityType: 'supplier',
+        entityId: row.id,
+        entityLabel: row.name || row.supplier_code,
+        ipAddress: req.ip,
+      });
     } catch (err: unknown) {
       const error = err instanceof Error ? err.message : 'Unknown error';
       sendError(res, 'Không thể thêm nhà cung cấp', 500, error);
@@ -80,6 +91,16 @@ export const supplierController = {
 
       const row = await supplierService.update(id, { supplier_code, name, notes: notes ?? null });
       sendSuccess(res, row, 'Cập nhật nhà cung cấp thành công');
+
+      auditService.logAudit({
+        userId: req.user!.userId,
+        username: req.user!.email,
+        action: 'UPDATE',
+        entityType: 'supplier',
+        entityId: id,
+        entityLabel: row.name || row.supplier_code,
+        ipAddress: req.ip,
+      });
     } catch (err: unknown) {
       if (err && typeof err === 'object' && 'code' in err) {
         const e = err as { code: string };
@@ -98,6 +119,16 @@ export const supplierController = {
       const id = parseInt(req.params.id, 10);
       await supplierService.softDelete(id);
       sendSuccess(res, undefined, 'Đã xóa nhà cung cấp');
+
+      auditService.logAudit({
+        userId: req.user!.userId,
+        username: req.user!.email,
+        action: 'DELETE',
+        entityType: 'supplier',
+        entityId: id,
+        entityLabel: `Supplier #${id}`,
+        ipAddress: req.ip,
+      });
     } catch (err: unknown) {
       if (err && typeof err === 'object' && 'code' in err) {
         const e = err as { code: string };
@@ -116,6 +147,16 @@ export const supplierController = {
       const { rows } = req.body;
       const result = await supplierService.uploadMany(rows);
       sendSuccess(res, result, `Đã import ${result.inserted} nhà cung cấp thành công`, 201);
+
+      auditService.logAudit({
+        userId: req.user!.userId,
+        username: req.user!.email,
+        action: 'UPLOAD',
+        entityType: 'supplier',
+        entityLabel: 'Batch upload',
+        details: { inserted: result.inserted, total: rows.length },
+        ipAddress: req.ip,
+      });
     } catch (err: unknown) {
       if (err && typeof err === 'object' && 'code' in err) {
         const e = err as { code: string; errors?: unknown[] };

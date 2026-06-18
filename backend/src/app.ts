@@ -5,6 +5,7 @@ import morgan from 'morgan';
 import cookieParser from 'cookie-parser';
 import routes from './routes';
 import { errorHandler } from './middleware/errorHandler';
+import { auditMiddleware } from './middleware/auditMiddleware';
 
 const app = express();
 
@@ -35,6 +36,7 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(morgan('dev'));
 app.use(cookieParser());
+app.use(auditMiddleware);
 
 app.use('/api', routes);
 

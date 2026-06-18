@@ -41,6 +41,7 @@ Hệ thống dùng **RBAC** (Role-Based Access Control) — mỗi user gắn 1 r
 | catalog.manage | Quản lý danh mục |
 | jobs.view | Xem cấu hình Job |
 | jobs.manage | Quản lý cấu hình Job |
+| logs.view | Xem nhật ký hệ thống |
 
 **Cơ chế enforcement:**
 - JWT payload chứa `roleId` và `permissions: string[]`
@@ -806,23 +807,39 @@ Parent menu group "Thiết lập người dùng" trong sidebar — collapsible a
 - Unsaved changes tracked locally (dirty state với Set objects)
 - Lưu tất cả: loop non-ADMIN roles → PUT /api/permissions/role/:id
 
-### 9.4 Files
+### 9.4 Quản lý nhật ký hệ thống (/logs)
+
+- Requires: `logs.view`
+- 2 tab: "Nhật ký truy cập" (access_logs — mọi POST/PUT/DELETE/PATCH request) và "Nhật ký thao tác" (audit_logs — business events từ 12 service)
+- Filter theo user, method/action, path/entity_type, status, date range, pagination
+- Audit log: expandable row hiển thị JSON details
+- Access logs ghi tự động qua middleware (fire-and-forget), audit logs gọi từ controller
+- Log retention: access_logs 90 ngày, audit_logs 180 ngày, cleanup cron 3AM hàng ngày
+
+### 9.5 Files
 
 ```
 backend/src/services/roleService.ts
 backend/src/services/permissionService.ts
+backend/src/services/auditService.ts
 backend/src/controllers/rolesController.ts
 backend/src/controllers/permissionsController.ts
+backend/src/controllers/auditController.ts
 backend/src/routes/roles.ts
 backend/src/routes/permissions.ts
+backend/src/routes/auditLogs.ts
 backend/src/migrations/004_roles_permissions.sql
+backend/src/migrations/026_create_audit_logs.sql
 
 frontend/src/api/rolesApi.ts
 frontend/src/api/permissionsApi.ts
+frontend/src/api/auditLogApi.ts
 frontend/src/hooks/useRoles.ts
 frontend/src/hooks/usePermissions.ts
+frontend/src/hooks/useAuditLogs.ts
 frontend/src/pages/admin/RoleManagementPage.tsx
 frontend/src/pages/admin/PermissionManagementPage.tsx
+frontend/src/pages/admin/AuditLogPage.tsx
 frontend/src/components/admin/CreateRoleModal.tsx
 frontend/src/components/admin/EditRoleModal.tsx
 frontend/src/components/admin/DeactivateRoleDialog.tsx

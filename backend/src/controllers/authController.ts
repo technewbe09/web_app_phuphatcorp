@@ -6,6 +6,7 @@ import { sendSuccess, sendError } from '../utils/response';
 import { AuthRequest } from '../middleware/auth';
 import { UserRole } from '../types/user';
 import { pool } from '../config/database';
+import { auditService } from '../services/auditService';
 
 export const registerSchema: ValidationChain[] = [
   body('username')
@@ -94,6 +95,15 @@ export const authController = {
       setRefreshCookie(res, refreshToken);
 
       sendSuccess(res, { user: userPublic, accessToken }, 'Login successful');
+
+      auditService.logAudit({
+        userId: userPublic.id,
+        username: userPublic.username || userPublic.email,
+        action: 'LOGIN',
+        entityType: 'auth',
+        entityLabel: userPublic.email,
+        ipAddress: req.ip,
+      });
     } catch (err) {
       const error = err instanceof Error ? err.message : 'Unknown error';
       sendError(res, 'Login failed', 500, error);
@@ -139,8 +149,20 @@ export const authController = {
     }
   },
 
-  logout(_req: Request, res: Response): void {
+  logout(req: AuthRequest, res: Response): void {
     res.clearCookie('refreshToken');
+
+    if (req.user) {
+      auditService.logAudit({
+        userId: req.user.userId,
+        username: req.user.email,
+        action: 'LOGOUT',
+        entityType: 'auth',
+        entityLabel: req.user.email,
+        ipAddress: req.ip,
+      });
+    }
+
     sendSuccess(res, undefined, 'Logged out successfully');
   },
 

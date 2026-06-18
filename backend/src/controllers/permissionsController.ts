@@ -3,6 +3,7 @@ import { AuthRequest } from '../middleware/auth';
 import { permissionService } from '../services/permissionService';
 import { ServiceError } from '../services/roleService';
 import { sendSuccess, sendError } from '../utils/response';
+import { auditService } from '../services/auditService';
 
 export const permissionsController = {
   async getPermissions(_req: AuthRequest, res: Response): Promise<void> {
@@ -29,6 +30,16 @@ export const permissionsController = {
       const { permission_ids } = req.body;
       await permissionService.updateRolePermissions(roleId, permission_ids);
       sendSuccess(res, undefined, 'Cập nhật quyền thành công');
+
+      auditService.logAudit({
+        userId: req.user!.userId,
+        username: req.user!.email,
+        action: 'UPDATE_PERMISSIONS',
+        entityType: 'permission',
+        entityId: roleId,
+        entityLabel: `Role #${roleId}`,
+        ipAddress: req.ip,
+      });
     } catch (err) {
       if (err instanceof ServiceError) {
         sendError(res, err.message, err.statusCode, err.code);

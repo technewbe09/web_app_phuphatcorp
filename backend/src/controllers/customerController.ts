@@ -3,6 +3,7 @@ import { body, param, ValidationChain } from 'express-validator';
 import { customerService } from '../services/customerService';
 import { sendSuccess, sendError } from '../utils/response';
 import { AuthRequest } from '../middleware/auth';
+import { auditService } from '../services/auditService';
 
 export const customerCreateSchema: ValidationChain[] = [
   body('diem_tra_hang')
@@ -74,6 +75,16 @@ export const customerController = {
         supplier_code,
       });
       sendSuccess(res, row, 'Thêm khách hàng thành công', 201);
+
+      auditService.logAudit({
+        userId: req.user!.userId,
+        username: req.user!.email,
+        action: 'CREATE',
+        entityType: 'customer',
+        entityId: row.id,
+        entityLabel: row.ten_khach_hang || row.diem_tra_hang,
+        ipAddress: req.ip,
+      });
     } catch (err: unknown) {
       const error = err instanceof Error ? err.message : 'Unknown error';
       sendError(res, 'Không thể thêm khách hàng', 500, error);
@@ -94,6 +105,16 @@ export const customerController = {
         supplier_code,
       });
       sendSuccess(res, row, 'Cập nhật khách hàng thành công');
+
+      auditService.logAudit({
+        userId: req.user!.userId,
+        username: req.user!.email,
+        action: 'UPDATE',
+        entityType: 'customer',
+        entityId: id,
+        entityLabel: row.ten_khach_hang || row.diem_tra_hang,
+        ipAddress: req.ip,
+      });
     } catch (err: unknown) {
       if (err && typeof err === 'object' && 'code' in err) {
         const e = err as { code: string };
@@ -112,6 +133,16 @@ export const customerController = {
       const id = parseInt(req.params.id, 10);
       await customerService.softDelete(id);
       sendSuccess(res, undefined, 'Đã xóa khách hàng');
+
+      auditService.logAudit({
+        userId: req.user!.userId,
+        username: req.user!.email,
+        action: 'DELETE',
+        entityType: 'customer',
+        entityId: id,
+        entityLabel: `Customer #${id}`,
+        ipAddress: req.ip,
+      });
     } catch (err: unknown) {
       if (err && typeof err === 'object' && 'code' in err) {
         const e = err as { code: string };
@@ -130,6 +161,16 @@ export const customerController = {
       const { rows } = req.body;
       const result = await customerService.uploadMany(rows);
       sendSuccess(res, result, `Đã import ${result.inserted} khách hàng thành công`, 201);
+
+      auditService.logAudit({
+        userId: req.user!.userId,
+        username: req.user!.email,
+        action: 'UPLOAD',
+        entityType: 'customer',
+        entityLabel: 'Batch upload',
+        details: { inserted: result.inserted, total: rows.length },
+        ipAddress: req.ip,
+      });
     } catch (err: unknown) {
       if (err && typeof err === 'object' && 'code' in err) {
         const e = err as { code: string; errors?: unknown[] };

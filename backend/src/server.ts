@@ -3,6 +3,7 @@ import app from './app';
 import { env } from './config/env';
 import { pool } from './config/database';
 import { schedulerService } from './services/schedulerService';
+import { initLogCleanup, destroyLogCleanup } from './services/logCleanupService';
 
 async function main(): Promise<void> {
   try {
@@ -15,6 +16,7 @@ async function main(): Promise<void> {
   }
 
   await schedulerService.init();
+  initLogCleanup();
 
   app.listen(env.port, () => {
     console.log(`[Server] Running on http://localhost:${env.port}`);
@@ -23,6 +25,7 @@ async function main(): Promise<void> {
 
 process.on('SIGTERM', () => {
   schedulerService.destroy();
+  destroyLogCleanup();
   process.exit(0);
 });
 
