@@ -594,4 +594,106 @@ export const deliveryDataService = {
       uploaded_at: r.uploaded_at as string,
     };
   },
+
+  async getBatchRows(batchIds: string[]): Promise<{
+    batch_ids: string[];
+    original_filenames: string[];
+    total_rows: number;
+    rows: unknown[][];
+  }> {
+    const result = await pool.query(
+      `SELECT
+        batch_id,
+        channel,
+        sub_channel,
+        dien_giai_ct,
+        dien_giai,
+        slot,
+        waybill_no,
+        slot_no,
+        user_tao_hd,
+        user_tao_pxk,
+        po_number,
+        warehouse_no,
+        warehouse_name,
+        ma_pxk,
+        so_chung_tu,
+        so_seri,
+        dia_chi,
+        ten_hang_hoa,
+        ma_dvt,
+        sp_trong_luong,
+        hd_trong_luong,
+        ma_ncc,
+        ma_kh,
+        ten_kh,
+        ma_hang,
+        ten_hang_en,
+        loai_hang,
+        ma_lh_giao,
+        so_luong,
+        so_tau_xe,
+        tai_xe,
+        so_cont,
+        TO_CHAR(ngay_hd, 'DD/MM/YYYY') as ngay_hd,
+        so_hd,
+        thong_tin_bs,
+        original_filename
+      FROM delivery_data
+      WHERE batch_id = ANY($1::varchar[])
+      ORDER BY batch_id, id`,
+      [batchIds],
+    );
+
+    if (result.rows.length === 0) {
+      throw { code: 'NO_DATA', message: 'Batch đã chọn không có dữ liệu' };
+    }
+
+    const rows: unknown[][] = result.rows.map((r: Record<string, unknown>) => [
+      r.channel,
+      r.sub_channel,
+      r.dien_giai_ct,
+      r.dien_giai,
+      r.slot,
+      r.waybill_no,
+      r.slot_no,
+      r.user_tao_hd,
+      r.user_tao_pxk,
+      r.po_number,
+      r.warehouse_no,
+      r.warehouse_name,
+      r.ma_pxk,
+      r.so_chung_tu,
+      r.so_seri,
+      r.dia_chi,
+      r.ten_hang_hoa,
+      r.ma_dvt,
+      r.sp_trong_luong,
+      r.hd_trong_luong,
+      r.ma_ncc,
+      r.ma_kh,
+      r.ten_kh,
+      r.ma_hang,
+      r.ten_hang_en,
+      r.loai_hang,
+      r.ma_lh_giao,
+      r.so_luong,
+      r.so_tau_xe,
+      r.tai_xe,
+      r.so_cont,
+      r.ngay_hd,
+      r.so_hd,
+      r.thong_tin_bs,
+    ]);
+
+    const filenames = [...new Set(result.rows.map((r: Record<string, unknown>) => r.original_filename as string))];
+    const foundBatchIds = [...new Set(result.rows.map((r: Record<string, unknown>) => r.batch_id as string))];
+
+    return {
+      batch_ids: foundBatchIds,
+      original_filenames: filenames,
+      total_rows: rows.length,
+      rows,
+    };
+  },
 };

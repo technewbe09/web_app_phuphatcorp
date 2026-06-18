@@ -5,6 +5,11 @@ function normalizeSoXe(raw: string): string {
   return raw.replace(/^[^\d]*/, '').replace(/[-,\s]/g, '').replace(/\/.*$/, '');
 }
 
+export interface InvoiceNumber {
+  so: string;
+  ghi_chu: string;
+}
+
 export interface DriverInvoice {
   id: number;
   ma: string;
@@ -13,7 +18,7 @@ export interface DriverInvoice {
   so_xe: string;
   noi_giao: string;
   ghi_chu: string | null;
-  so_hoa_don: string[];
+  so_hoa_don: InvoiceNumber[];
   original_filename: string | null;
   uploaded_by: number | null;
   uploaded_at: string;
@@ -27,7 +32,7 @@ export interface DriverInvoiceRow {
   so_xe: string;
   noi_giao: string;
   ghi_chu: string | null;
-  so_hoa_don: string[];
+  so_hoa_don: InvoiceNumber[];
 }
 
 export interface DriverInvoiceFilters {
@@ -81,7 +86,7 @@ function rowToInvoice(row: Record<string, unknown>): DriverInvoice {
     so_xe: row.so_xe as string,
     noi_giao: row.noi_giao as string,
     ghi_chu: row.ghi_chu as string | null,
-    so_hoa_don: row.so_hoa_don as string[],
+    so_hoa_don: row.so_hoa_don as InvoiceNumber[],
     original_filename: row.original_filename as string | null,
     uploaded_by: row.uploaded_by as number | null,
     uploaded_at: row.uploaded_at instanceof Date
@@ -138,7 +143,7 @@ export const driverInvoiceService = {
         client,
         data.so_xe,
         data.ngay,
-        data.so_hoa_don,
+        data.so_hoa_don.map((n) => n.so),
       );
 
       const result = await client.query(
@@ -204,7 +209,7 @@ export const driverInvoiceService = {
       params.push(`%${filters.noi_giao}%`);
     }
     if (filters.so_hoa_don) {
-      conditions.push(`EXISTS (SELECT 1 FROM jsonb_array_elements_text(so_hoa_don) elem WHERE elem LIKE $${paramIndex++})`);
+      conditions.push(`EXISTS (SELECT 1 FROM jsonb_array_elements(so_hoa_don) elem WHERE elem->>'so' LIKE $${paramIndex++})`);
       params.push(`%${filters.so_hoa_don}%`);
     }
     if (filters.ghi_chu) {
@@ -256,7 +261,7 @@ export const driverInvoiceService = {
 
       const normalizedSoXe = normalizeSoXe(existing.so_xe);
       for (const soHd of existing.so_hoa_don) {
-        const stripped = soHd.replace(/^0+/, '');
+        const stripped = soHd.so.replace(/^0+/, '');
         if (!stripped) continue;
 
         await client.query(
@@ -310,7 +315,7 @@ export const driverInvoiceService = {
         client,
         data.so_xe,
         data.ngay,
-        data.so_hoa_don,
+        data.so_hoa_don.map((n) => n.so),
       );
 
       const result = await client.query(

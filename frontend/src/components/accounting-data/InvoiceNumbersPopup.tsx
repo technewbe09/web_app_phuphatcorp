@@ -1,7 +1,8 @@
 import { X } from 'lucide-react';
+import type { InvoiceNumber } from '../../api/driverInvoiceApi';
 
 interface Props {
-  numbers: string[];
+  numbers: InvoiceNumber[];
   onClose: () => void;
 }
 
@@ -9,7 +10,7 @@ export function InvoiceNumbersPopup({ numbers, onClose }: Props) {
   return (
     <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50" onClick={onClose}>
       <div
-        className="bg-white dark:bg-neutral-900 rounded-xl shadow-xl w-full max-w-xs mx-4 overflow-hidden"
+        className="bg-white dark:bg-neutral-900 rounded-xl shadow-xl w-full max-w-md mx-4 overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between px-4 py-3 border-b border-neutral-200 dark:border-neutral-800">
@@ -29,14 +30,21 @@ export function InvoiceNumbersPopup({ numbers, onClose }: Props) {
               Không có số hóa đơn nào
             </p>
           ) : (
-            <div className="flex flex-wrap gap-2">
+            <div className="space-y-2">
               {numbers.map((num, i) => (
-                <span
+                <div
                   key={i}
-                  className="inline-flex items-center px-2.5 py-1 text-sm font-medium rounded-md bg-neutral-100 dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300"
+                  className="flex items-center gap-2 px-2.5 py-1.5 rounded-md bg-neutral-100 dark:bg-neutral-800"
                 >
-                  {num}
-                </span>
+                  <span className="text-sm font-medium text-neutral-700 dark:text-neutral-300">
+                    {num.so}
+                  </span>
+                  {num.ghi_chu && (
+                    <span className="text-xs text-neutral-500 dark:text-neutral-400 bg-neutral-200 dark:bg-neutral-700 px-1.5 py-0.5 rounded">
+                      {num.ghi_chu}
+                    </span>
+                  )}
+                </div>
               ))}
             </div>
           )}

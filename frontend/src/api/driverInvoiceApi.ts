@@ -1,5 +1,10 @@
 import axiosClient from './axiosClient';
 
+export interface InvoiceNumber {
+  so: string;
+  ghi_chu: string;
+}
+
 export interface DriverInvoice {
   id: number;
   ma: string;
@@ -8,7 +13,7 @@ export interface DriverInvoice {
   so_xe: string;
   noi_giao: string;
   ghi_chu: string | null;
-  so_hoa_don: string[];
+  so_hoa_don: InvoiceNumber[];
   original_filename: string | null;
   uploaded_by: number | null;
   uploaded_at: string;
@@ -35,7 +40,7 @@ export interface DriverInvoiceRow {
   so_xe: string;
   noi_giao: string;
   ghi_chu: string | null;
-  so_hoa_don: string[];
+  so_hoa_don: InvoiceNumber[];
 }
 
 export interface PaginatedData<T> {

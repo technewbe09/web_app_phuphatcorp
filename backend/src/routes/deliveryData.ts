@@ -3,6 +3,7 @@ import multer from 'multer';
 import {
   deliveryDataController,
   listBatchesSchema,
+  getBatchRowsSchema,
   deleteBatchSchema,
 } from '../controllers/deliveryDataController';
 import { validate } from '../middleware/validate';
@@ -48,6 +49,12 @@ router.delete(
   requirePermission('delivery_data.manage'),
   ...validate(deleteBatchSchema),
   deliveryDataController.deleteBatch,
+);
+router.post(
+  '/batches/rows',
+  requirePermission('delivery_data.view'),
+  ...validate(getBatchRowsSchema),
+  deliveryDataController.getBatchRows,
 );
 
 export default router;

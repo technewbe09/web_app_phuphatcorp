@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { deliveryDataApi, type BatchInfo, type ImportResult } from '../api/deliveryDataApi';
+import { deliveryDataApi, type BatchInfo, type BatchRowsResponse, type ImportResult } from '../api/deliveryDataApi';
 
 const DELIVERY_DATA_KEY = 'delivery-data';
 const BATCHES_KEY = 'delivery-data-batches';
@@ -37,5 +37,11 @@ export function useDeleteBatch() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [BATCHES_KEY] });
     },
+  });
+}
+
+export function useGetBatchRows() {
+  return useMutation<BatchRowsResponse, Error, string[]>({
+    mutationFn: (batchIds: string[]) => deliveryDataApi.getBatchRows(batchIds),
   });
 }

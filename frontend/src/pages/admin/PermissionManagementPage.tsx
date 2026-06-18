@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { Fragment, useMemo, useState } from 'react';
 import { usePermissionMatrix, useUpdateRolePermissions } from '../../hooks/usePermissions';
 import { useI18n } from '../../i18n/useI18n';
 import { Button } from '../../components/ui/Button';
@@ -46,7 +46,7 @@ function PermissionMatrix({
         </thead>
         <tbody>
           {Object.entries(grouped).map(([module, perms]) => (
-            <>
+            <Fragment key={`module-${module}`}>
               {/* Module header row */}
               <tr
                 key={`module-${module}`}
@@ -106,7 +106,7 @@ function PermissionMatrix({
                   })}
                 </tr>
               ))}
-            </>
+            </Fragment>
           ))}
         </tbody>
       </table>

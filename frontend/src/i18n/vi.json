@@ -541,5 +541,31 @@
     "menuTitle": "Quản lý danh mục",
     "vehicles": "Danh mục xe",
     "suppliers": "Danh mục NCC"
+  },
+  "reconcileJob": {
+    "title": "Cấu hình Job Đối chiếu",
+    "save": "Lưu",
+    "edit": "Sửa",
+    "delete": "Xóa",
+    "create": "Tạo cấu hình",
+    "runNow": "Chạy ngay",
+    "noConfig": "Chưa có cấu hình job nào",
+    "confirmDelete": "Bạn có chắc muốn xóa cấu hình này?",
+    "deleteSuccess": "Đã xóa cấu hình job",
+    "createSuccess": "Đã tạo cấu hình job",
+    "updateSuccess": "Đã cập nhật cấu hình job",
+    "toggleOn": "Đã bật job",
+    "toggleOff": "Đã tắt job",
+    "triggerSuccess": "Đối chiếu hoàn tất",
+    "triggerResult": "{matched}/{scanned} hóa đơn đã khớp",
+    "noLogs": "Chưa có lịch sử chạy",
+    "validation": {
+      "lookbackMin": "Số ngày quét phải >= 1",
+      "hoursRequired": "Vui lòng chọn ít nhất 1 giờ",
+      "nameRequired": "Tên job không được để trống"
+    }
+  },
+  "jobs": {
+    "menuTitle": "Quản lý Job"
   }
 }

@@ -5,7 +5,7 @@ import { Modal } from '../ui/Modal';
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
 import { useUpdateDriverInvoice } from '../../hooks/useDriverInvoices';
-import type { DriverInvoice } from '../../api/driverInvoiceApi';
+import type { DriverInvoice, InvoiceNumber } from '../../api/driverInvoiceApi';
 
 interface Props {
   isOpen: boolean;
@@ -26,7 +26,7 @@ interface FormValues {
 export function DriverInvoiceEditModal({ isOpen, onClose, onSuccess, invoice }: Props) {
   const updateMutation = useUpdateDriverInvoice();
   const { register, handleSubmit, reset, formState: { errors } } = useForm<FormValues>();
-  const [soHoaDon, setSoHoaDon] = useState<string[]>([]);
+  const [soHoaDon, setSoHoaDon] = useState<InvoiceNumber[]>([]);
 
   useEffect(() => {
     if (invoice) {
@@ -38,12 +38,12 @@ export function DriverInvoiceEditModal({ isOpen, onClose, onSuccess, invoice }: 
         noi_giao: invoice.noi_giao,
         ghi_chu: invoice.ghi_chu || '',
       });
-      setSoHoaDon([...invoice.so_hoa_don]);
+      setSoHoaDon(invoice.so_hoa_don.map((n: { so: string; ghi_chu: string }) => ({ ...n })));
     }
   }, [invoice, reset]);
 
   const handleAddNumber = () => {
-    setSoHoaDon((prev) => [...prev, '']);
+    setSoHoaDon((prev) => [...prev, { so: '', ghi_chu: '' }]);
   };
 
   const handleRemoveNumber = (index: number) => {
@@ -53,7 +53,15 @@ export function DriverInvoiceEditModal({ isOpen, onClose, onSuccess, invoice }: 
   const handleChangeNumber = (index: number, value: string) => {
     setSoHoaDon((prev) => {
       const next = [...prev];
-      next[index] = value;
+      next[index] = { ...next[index], so: value };
+      return next;
+    });
+  };
+
+  const handleChangeNote = (index: number, value: string) => {
+    setSoHoaDon((prev) => {
+      const next = [...prev];
+      next[index] = { ...next[index], ghi_chu: value };
       return next;
     });
   };
@@ -66,7 +74,7 @@ export function DriverInvoiceEditModal({ isOpen, onClose, onSuccess, invoice }: 
         data: {
           ...values,
           ghi_chu: values.ghi_chu || null,
-          so_hoa_don: soHoaDon.filter((s) => s.trim() !== '' && /^\d+$/.test(s.trim())),
+          so_hoa_don: soHoaDon.filter((n) => n.so.trim() !== '' && /^\d+$/.test(n.so.trim())),
         },
       });
       const msg = result.reconciled_count && result.reconciled_count > 0
@@ -143,8 +151,15 @@ export function DriverInvoiceEditModal({ isOpen, onClose, onSuccess, invoice }: 
                 <div key={i} className="flex items-center gap-2">
                   <Input
                     placeholder={`Số HĐ #${i + 1}`}
-                    value={num}
+                    value={num.so}
                     onChange={(e) => handleChangeNumber(i, e.target.value)}
+                    className="flex-1"
+                  />
+                  <Input
+                    placeholder="Ghi chú..."
+                    value={num.ghi_chu}
+                    onChange={(e) => handleChangeNote(i, e.target.value)}
+                    className="w-36"
                   />
                   <button
                     type="button"

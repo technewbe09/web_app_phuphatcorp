@@ -7,7 +7,7 @@ export interface ParsedInvoiceRow {
   so_xe: string;
   noi_giao: string;
   ghi_chu: string | null;
-  so_hoa_don: string[];
+  so_hoa_don: { so: string; ghi_chu: string }[];
 }
 
 export interface ParseDriverInvoiceResult {
@@ -43,12 +43,13 @@ function parseExcelDate(value: unknown): string {
   return '';
 }
 
-function parseInvoiceNumbers(raw: string | null | undefined): string[] {
+function parseInvoiceNumbers(raw: string | null | undefined): { so: string; ghi_chu: string }[] {
   if (!raw || typeof raw !== 'string' || !raw.trim()) return [];
   return raw
     .split('+')
     .map((s) => s.trim())
-    .filter((s) => /^\d+$/.test(s));
+    .filter((s) => /^\d+$/.test(s))
+    .map((so) => ({ so, ghi_chu: '' }));
 }
 
 function normalizeSoXe(raw: string): string {

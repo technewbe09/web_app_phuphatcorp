@@ -40,6 +40,13 @@ export interface PaginatedData<T> {
   };
 }
 
+export interface BatchRowsResponse {
+  batch_ids: string[];
+  original_filenames: string[];
+  total_rows: number;
+  rows: unknown[][];
+}
+
 export const deliveryDataApi = {
   importFile: async (file: File): Promise<ImportResult> => {
     const formData = new FormData();
@@ -72,6 +79,14 @@ export const deliveryDataApi = {
   deleteBatch: async (batchId: string): Promise<DeleteBatchResult> => {
     const response = await axiosClient.delete<{ data: DeleteBatchResult }>(
       `/delivery-data/batches/${batchId}`,
+    );
+    return response.data.data;
+  },
+
+  getBatchRows: async (batchIds: string[]): Promise<BatchRowsResponse> => {
+    const response = await axiosClient.post<{ data: BatchRowsResponse }>(
+      '/delivery-data/batches/rows',
+      { batch_ids: batchIds },
     );
     return response.data.data;
   },
