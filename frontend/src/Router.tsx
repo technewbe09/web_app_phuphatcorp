@@ -18,6 +18,7 @@ import { RiceDeliveryDataPage } from './pages/admin/RiceDeliveryDataPage';
 import { DeliveryImportPage } from './pages/admin/accounting-data/DeliveryImportPage';
 import { InvoiceMatchingPage } from './pages/admin/accounting-data/InvoiceMatchingPage';
 import { VehicleCatalogPage } from './pages/admin/catalog/VehicleCatalogPage';
+import { InnerCityCustomerPage } from './pages/admin/catalog/InnerCityCustomerPage';
 import { SupplierCatalogPage } from './pages/admin/catalog/SupplierCatalogPage';
 import { ReconcileJobPage } from './pages/admin/jobs/ReconcileJobPage';
 import { AuditLogPage } from './pages/admin/AuditLogPage';
@@ -70,6 +71,7 @@ export function Router() {
             <Route path="/jobs/reconcile" element={<ReconcileJobPage />} />
             {/* Catalog */}
             <Route path="/catalog/vehicles" element={<VehicleCatalogPage />} />
+            <Route path="/catalog/inner-city-customers" element={<InnerCityCustomerPage />} />
             <Route path="/catalog/suppliers" element={<SupplierCatalogPage />} />
           </Route>
         </Route>

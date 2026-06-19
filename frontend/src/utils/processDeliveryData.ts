@@ -565,7 +565,8 @@ export async function parseDeliveryFile(file: File): Promise<ParsedFileData> {
 export async function processDeliveryDataFromRows(
   dataRows: RawRow[],
   sourceRowNums: number[],
-  customers?: Customer[]
+  customers?: Customer[],
+  innerCityCustomerNames?: Set<string>
 ): Promise<ProcessResult> {
   const warnings: string[] = [];
   const customerLookup = buildCustomerLookup(customers ?? []);
@@ -604,14 +605,18 @@ export async function processDeliveryDataFromRows(
   }
 
   // ── Step 1: Group by (Số tàu/xe + Ngày hóa đơn + Tên khách hàng) ──────────
-  // Bước 1a: Group sơ bộ theo (Số tàu/xe + Ngày HĐ + Tên KH)
+  // Bước 1a: Group sơ bộ — nếu có Thông tin bổ sung thì key = Xe + Ngày + Thông tin BS,
+  //           nếu không thì key = Xe + Ngày + Tên KH
   const preliminaryGroupMap = new Map<string, RawRow[]>();
 
   dataRows.forEach((row) => {
     const vehicle = cell(row, COL.SO_TAU_XE);
     const date = row[COL.NGAY_HD] ?? '';
+    const thongTinBS = cell(row, COL.THONG_TIN_BS).trim();
     const customerName = cell(row, COL.TEN_KH);
-    const key = `${vehicle}|||${date}|||${customerName}`;
+    const key = thongTinBS
+      ? `${vehicle}|||${date}|||${thongTinBS}`
+      : `${vehicle}|||${date}|||${customerName}`;
 
     if (!preliminaryGroupMap.has(key)) {
       preliminaryGroupMap.set(key, []);
@@ -631,8 +636,10 @@ export async function processDeliveryDataFromRows(
     }, 0);
     const totalMT = totalHDTrongLuong / 1000;
 
-    // Nếu SUM(HĐ Trọng lượng)/1000 >= 13, kiểm tra "Thông tin bổ sung"
-    if (totalMT >= 13) {
+    // Nếu tổng trọng lượng >= 13 và KH là inner-city → kiểm tra "Thông tin bổ sung"
+    // Nếu KH không thuộc inner-city → bypass, giữ nguyên group key
+    const isInnerCity = innerCityCustomerNames?.has(customerName.trim().toLowerCase());
+    if (totalMT >= 13 && isInnerCity) {
       // Nhóm lại theo "Thông tin bổ sung" nếu có từ 2 giá trị trở lên
       const subGroups = new Map<string, RawRow[]>();
 

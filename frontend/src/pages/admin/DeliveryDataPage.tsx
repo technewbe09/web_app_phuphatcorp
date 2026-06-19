@@ -21,6 +21,7 @@ import {
 } from '../../utils/processDeliveryData';
 import { weightAdjustmentApi, type WeightAdjustment } from '../../api/weightAdjustmentApi';
 import { customersApi, type Customer } from '../../api/customersApi';
+import { innerCityCustomerApi } from '../../api/innerCityCustomerApi';
 import {
   WeightAdjustmentConfirmDialog,
   type AdjustmentRow,
@@ -138,11 +139,12 @@ export function DeliveryDataPage() {
   );
 
   const customersRef = useRef<Customer[]>([]);
+  const innerCityNamesRef = useRef<Set<string>>(new Set());
 
   const runProcess = useCallback(async (rows: RawRow[], nums: number[]) => {
     setPageState('processing');
     try {
-      const processResult = await processDeliveryDataFromRows(rows, nums, customersRef.current);
+      const processResult = await processDeliveryDataFromRows(rows, nums, customersRef.current, innerCityNamesRef.current);
       setResult(processResult);
       setPageState('success');
     } catch (err) {
@@ -167,11 +169,15 @@ export function DeliveryDataPage() {
       setExcludedRowCount(excludedCount);
       const effectiveParsed = { rawRows: filteredRows, sourceRowNums: filteredSourceRowNums };
 
-      const [masterdata, customers] = await Promise.all([
+      const [masterdata, customers, innerCityCustomers] = await Promise.all([
         weightAdjustmentApi.fetchAll(),
         customersApi.fetchAll(),
+        innerCityCustomerApi.fetchAll(),
       ]);
       customersRef.current = customers;
+      innerCityNamesRef.current = new Set(
+        innerCityCustomers.customers.map((c) => c.customer_name.trim().toLowerCase())
+      );
       const masterMap = new Map(masterdata.map((m) => [m.ma_hang, m]));
       const found = buildAdjustments(effectiveParsed.rawRows, effectiveParsed.sourceRowNums, masterMap);
 

@@ -63,9 +63,14 @@ export const vehicleService = {
       countWhereClause += ` AND (plate_number ILIKE $1 OR driver_name ILIKE $2)`;
     }
 
+    const countParams: unknown[] = [];
+    if (search) {
+      const q = `%${search}%`;
+      countParams.push(q, q);
+    }
     const countResult = await pool.query<{ count: string }>(
       `SELECT COUNT(*) as count FROM vehicles ${countWhereClause}`,
-      search ? [search] : [],
+      countParams,
     );
     const total = parseInt(countResult.rows[0].count, 10);
 
