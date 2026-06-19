@@ -320,13 +320,17 @@ Giống sheet Processed, nhưng chèn thêm 2 cột giữa "Đơn vị tính" v�
 ### 5.3 Business Rules
 
 - **BR-000:** ⚠️ DEPRECATED (removed 2026-04-25) — Pre-sort rows by vehicle+date+invoice was removed. Final sort groups by vehicle is now performed in BR-003.
-- **BR-001:** Grouping key ban đầu = Số tàu/xe + Ngày hóa đơn + Tên khách hàng
+- **BR-001:** Grouping key ban đầu = Số tàu/xe + Ngày hóa đơn + (Thông tin bổ sung nếu có, ngược lại Tên khách hàng)
   - Số tàu/xe được normalize: strip suffix `" /L2"` nếu có trước khi dùng làm group key (BR-010)
+  - Nếu cột Thông tin bổ sung có dữ liệu → key = Xe + Ngày + Thông tin BS
+  - Nếu không → key = Xe + Ngày + Tên KH
   - Tính SUM(HĐ Trọng lượng) / 1000 của group sơ bộ
   - Nếu < 13: giữ nguyên group key (Số tàu/xe + Ngày HĐ + Tên KH)
   - Nếu >= 13: kiểm tra cột "Thông tin bổ sung"
-    - Có từ 2 giá trị trở lên (phân tách bằng dấu phẩy/xuống dòng) → group key = Số tàu/xe + Ngày HĐ + Tên KH + Thông tin bổ sung
-    - Chỉ có 1 giá trị hoặc rỗng → giữ nguyên group key
+    - Nếu Tên KH **không** nằm trong danh sách `inner_city_customers` → bypass, giữ nguyên group key (BR-014)
+    - Nếu Tên KH nằm trong danh sách `inner_city_customers`:
+      - Có từ 2 giá trị trở lên → group key += Thông tin bổ sung
+      - Có 0-1 giá trị → giữ nguyên group key
 - **BR-002:** Trong mỗi nhóm, sort rows theo Số HĐ ASC (numeric-aware localeCompare), sau đó Mã nhà cung cấp ASC (numeric-aware)
 - **BR-003:** Final sort groups theo **biển số hiển thị** (`.slice(-9)` của Số tàu/xe đã normalize) ASC. Dùng `compareVehicleNumbers()` — sort theo prefix alphabetically → number numerically. Lý do: source data có nhiều format prefix khác nhau (`PPH `, `PPH-`, `PPH-P-`, `PPH-G-`, `PPH-ND-`, etc.) gây sai thứ tự nếu sort full string.
 - **BR-004:** Round(MT) = HD_TRONG_LUONG (col 19) / 1000, làm tròn 3 chữ số thập phân — tính per row (không phải per group)
@@ -339,6 +343,7 @@ Giống sheet Processed, nhưng chèn thêm 2 cột giữa "Đơn vị tính" v�
 - **BR-011:** Cột "Khung giá" và "Đơn vị tính" nằm ngay sau "Địa chỉ giao hàng". "Khung giá" phân loại dựa trên tổng Round(MT) nhóm: ≤2.5 / >8-16 / >16-23 / Pallet. "Đơn vị tính" = "Chuyến" nếu Khung giá = "≤2.5 tấn", còn lại "Tấn".
 - **BR-012:** Lọc dòng trước khi xử lý: dòng có cột "Diễn giải" chứa "thay thế" hoặc "điều chỉnh" bị loại bỏ (filterExcludedRows). Đây là các hóa đơn chỉnh sửa, không phải giao hàng thực tế.
 - **BR-013:** Customer lookup cho tuyến: mặc định tra bằng `TEN_KH + DIA_CHI`. Nếu `MA_NCC = 2000000007` hoặc `2000000008` và `Slot = "UNI 1"` → ưu tiên tra bằng `TEN_KH + DIA_CHI + MA_NCC` (khớp `customers.supplier_code`), nếu không có thì fallback về key mặc định.
+- **BR-014:** Bypass group splitting cho KH không nội thành: nếu Tên KH **không** khớp với `customer_name` trong `inner_city_customers`, bỏ qua bước tách nhóm (Step 1b), giữ nguyên group key. Chỉ thực hiện tách nhóm cho KH nội thành khi tổng trọng lượng >= 13.
 
 ### 5.4 Verify trọng lượng (Weight Adjustment Check)
 

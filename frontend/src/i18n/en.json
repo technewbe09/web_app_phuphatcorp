@@ -538,30 +538,8 @@
   "catalog": {
     "menuTitle": "Catalog Management",
     "vehicles": "Vehicle Catalog",
-    "suppliers": "Supplier Catalog"
-  },
-  "reconcileJob": {
-    "title": "Reconcile Job Configuration",
-    "save": "Save",
-    "edit": "Edit",
-    "delete": "Delete",
-    "create": "Create Config",
-    "runNow": "Run Now",
-    "noConfig": "No job configuration yet",
-    "confirmDelete": "Are you sure you want to delete this configuration?",
-    "deleteSuccess": "Job configuration deleted",
-    "createSuccess": "Job configuration created",
-    "updateSuccess": "Job configuration updated",
-    "toggleOn": "Job enabled",
-    "toggleOff": "Job disabled",
-    "triggerSuccess": "Reconciliation completed",
-    "triggerResult": "{matched}/{scanned} invoices matched",
-    "noLogs": "No execution history",
-    "validation": {
-      "lookbackMin": "Lookback days must be >= 1",
-      "hoursRequired": "Please select at least 1 hour",
-      "nameRequired": "Job name is required"
-    }
+    "innerCityCustomers": "Inner City Customers",
+    "suppliers": "Suppliers"
   },
   "jobs": {
     "menuTitle": "Job Management"

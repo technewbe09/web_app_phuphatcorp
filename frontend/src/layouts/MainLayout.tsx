@@ -22,9 +22,9 @@ import {
   Upload,
   FileSearch,
   FolderOpen,
-  Factory,
-  RefreshCw,
+  Building2,
   FileText,
+  RefreshCw,
 } from 'lucide-react';
 import { cn } from '../utils/cn';
 import { useAuth } from '../hooks/useAuth';
@@ -143,7 +143,8 @@ export function MainLayout() {
 
   const catalogSubItems = [
     { to: '/catalog/vehicles', icon: Car, label: t('catalog.vehicles') },
-    { to: '/catalog/suppliers', icon: Factory, label: t('catalog.suppliers') },
+    { to: '/catalog/inner-city-customers', icon: Building2, label: t('catalog.innerCityCustomers') },
+    { to: '/catalog/suppliers', icon: Truck, label: t('catalog.suppliers') },
   ];
 
   const jobsSubItems = [
