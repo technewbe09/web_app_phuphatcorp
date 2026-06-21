@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Plus, Settings, Pencil, Trash2, AlertTriangle, RefreshCw } from 'lucide-react';
+import { Plus, Settings, Pencil, Trash2, AlertTriangle, RefreshCw, Search, X } from 'lucide-react';
 import { Pagination } from '../../../components/ui/Pagination';
 import { Card, CardContent } from '../../../components/ui/Card';
 import { Button } from '../../../components/ui/Button';
@@ -31,6 +31,8 @@ export function OilChangePage() {
   const [modal, setModal] = useState<{ type: 'create' } | { type: 'edit'; record: OilChangeRecord } | null>(null);
   const [intervalModal, setIntervalModal] = useState<{ vehicle: OilChangeDueVehicle } | null>(null);
   const [vehicleFilter, setVehicleFilter] = useState('');
+  const [vehicleSearch, setVehicleSearch] = useState('');
+  const [dropdownOpen, setDropdownOpen] = useState(false);
   const [page, setPage] = useState(1);
   const [toasts, setToasts] = useState<Toast[]>([]);
   const PAGE_SIZE = 20;
@@ -45,6 +47,14 @@ export function OilChangePage() {
   const deleteMutation = useDeleteOilChange();
 
   const vehicles = vehiclesData?.vehicles ?? [];
+
+  const filteredVehicles = vehicles.filter((v) => {
+    if (!vehicleSearch) return true;
+    const q = vehicleSearch.toLowerCase();
+    return v.plate_number.toLowerCase().includes(q) || v.driver_name.toLowerCase().includes(q);
+  });
+
+  const selectedVehicle = vehicles.find((v) => v.id === Number(vehicleFilter));
 
   const showToast = (message: string, variant: 'success' | 'error' = 'success') => {
     const id = Date.now();
@@ -131,16 +141,61 @@ export function OilChangePage() {
           <Card>
             <CardContent className="p-4">
               <div className="flex items-center gap-3">
-                <select
-                  value={vehicleFilter}
-                  onChange={(e) => { setVehicleFilter(e.target.value); setPage(1); }}
-                  className="px-3 py-2 text-sm border border-neutral-200 dark:border-neutral-700 rounded-lg bg-white dark:bg-neutral-900 text-neutral-900 dark:text-neutral-100 focus:outline-none focus:ring-2 focus:ring-neutral-900 dark:focus:ring-neutral-100"
-                >
-                  <option value="">Tất cả xe</option>
-                  {vehicles.map((v) => (
-                    <option key={v.id} value={v.id}>{v.plate_number} - {v.driver_name}</option>
-                  ))}
-                </select>
+                <div className="relative">
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400" />
+                    <input
+                      type="text"
+                      value={vehicleSearch}
+                      placeholder="Tìm theo biển số hoặc tài xế..."
+                      onFocus={() => setDropdownOpen(true)}
+                      onBlur={() => setTimeout(() => setDropdownOpen(false), 200)}
+                      onChange={(e) => {
+                        setVehicleSearch(e.target.value);
+                        setDropdownOpen(true);
+                      }}
+                      className="pl-9 pr-8 py-2 text-sm border border-neutral-200 dark:border-neutral-700 rounded-lg bg-white dark:bg-neutral-900 text-neutral-900 dark:text-neutral-100 focus:outline-none focus:ring-2 focus:ring-neutral-900 dark:focus:ring-neutral-100 w-64"
+                    />
+                    {selectedVehicle && (
+                      <button
+                        onClick={() => { setVehicleFilter(''); setVehicleSearch(''); setPage(1); }}
+                        className="absolute right-2 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-300"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    )}
+                  </div>
+                  {dropdownOpen && filteredVehicles.length > 0 && (
+                    <div className="absolute z-50 mt-1 w-80 max-h-60 overflow-auto bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded-lg shadow-lg">
+                      <button
+                        className="w-full text-left px-3 py-2 text-sm text-neutral-500 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-700"
+                        onMouseDown={() => {
+                          setVehicleFilter('');
+                          setVehicleSearch('');
+                          setDropdownOpen(false);
+                          setPage(1);
+                        }}
+                      >
+                        Tất cả xe
+                      </button>
+                      {filteredVehicles.map((v) => (
+                        <button
+                          key={v.id}
+                          className="w-full text-left px-3 py-2 text-sm text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-700"
+                          onMouseDown={() => {
+                            setVehicleFilter(String(v.id));
+                            setVehicleSearch(`${v.plate_number} - ${v.driver_name}`);
+                            setDropdownOpen(false);
+                            setPage(1);
+                          }}
+                        >
+                          <span className="font-mono font-medium">{v.plate_number}</span>
+                          <span className="text-neutral-400"> - {v.driver_name}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
                 <div className="flex-1" />
                 <Button onClick={() => setModal({ type: 'create' })}>
                   <Plus className="w-4 h-4 mr-2" />
