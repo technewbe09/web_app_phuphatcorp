@@ -22,6 +22,8 @@ import { InnerCityCustomerPage } from './pages/admin/catalog/InnerCityCustomerPa
 import { SupplierCatalogPage } from './pages/admin/catalog/SupplierCatalogPage';
 import { ReconcileJobPage } from './pages/admin/jobs/ReconcileJobPage';
 import { AuditLogPage } from './pages/admin/AuditLogPage';
+import { FuelDataPage } from './pages/admin/fuel-data/FuelDataPage';
+import { FuelStatisticsPage } from './pages/admin/fuel-data/FuelStatisticsPage';
 
 function PlaceholderPage({ title }: { title: string }) {
   return (
@@ -69,6 +71,9 @@ export function Router() {
             {/* Jobs */}
             <Route path="/accounting-data/reconcile-jobs" element={<Navigate to="/jobs/reconcile" replace />} />
             <Route path="/jobs/reconcile" element={<ReconcileJobPage />} />
+            {/* Fuel Data */}
+            <Route path="/fuel-data" element={<FuelDataPage />} />
+            <Route path="/fuel-data/statistics" element={<FuelStatisticsPage />} />
             {/* Catalog */}
             <Route path="/catalog/vehicles" element={<VehicleCatalogPage />} />
             <Route path="/catalog/inner-city-customers" element={<InnerCityCustomerPage />} />

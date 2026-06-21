@@ -15,6 +15,7 @@ import innerCityCustomerRoutes from './innerCityCustomers';
 import supplierRoutes from './suppliers';
 import reconcileJobRoutes from './reconcileJobs';
 import auditLogRoutes from './auditLogs';
+import fuelRecordRoutes from './fuelRecords';
 
 const router = Router();
 
@@ -34,5 +35,6 @@ router.use('/inner-city-customers', innerCityCustomerRoutes);
 router.use('/suppliers', supplierRoutes);
 router.use('/reconcile-jobs', reconcileJobRoutes);
 router.use('/logs', auditLogRoutes);
+router.use('/fuel-records', fuelRecordRoutes);
 
 export default router;
