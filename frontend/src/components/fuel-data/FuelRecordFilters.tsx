@@ -1,7 +1,7 @@
+import { useState } from 'react';
 import { Button } from '../ui/Button';
 import { Select } from '../ui/Select';
-import { Input } from '../ui/Input';
-import { Search, FilterX } from 'lucide-react';
+import { Search, FilterX, X } from 'lucide-react';
 import type { Vehicle } from '../../api/vehicleCatalogApi';
 
 interface Props {
@@ -30,33 +30,91 @@ export function FuelRecordFilters({
   isLoading,
 }: Props) {
   const hasFilters = selectedVehicleId || selectedMonth || search;
+  const [vehicleSearchQuery, setVehicleSearchQuery] = useState('');
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+
+  const filteredVehicles = vehicles.filter((v) => {
+    if (!vehicleSearchQuery) return true;
+    const q = vehicleSearchQuery.toLowerCase();
+    return v.plate_number.toLowerCase().includes(q) || v.driver_name.toLowerCase().includes(q);
+  });
+
+  const selectedVehicle = vehicles.find((v) => v.id === Number(selectedVehicleId));
+
+  const displayValue = selectedVehicle
+    ? `${selectedVehicle.plate_number} - ${selectedVehicle.driver_name}`
+    : (search || vehicleSearchQuery);
+
+  const handleClearVehicle = () => {
+    onVehicleChange('');
+    onSearchChange('');
+    setVehicleSearchQuery('');
+  };
 
   return (
     <div className="flex flex-wrap items-center gap-3">
       <div className="relative">
-        <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400" />
-        <Input
-          placeholder="Tìm biển số xe..."
-          value={search}
-          onChange={(e) => onSearchChange(e.target.value)}
-          className="pl-9 w-48"
-          disabled={isLoading}
-        />
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400" />
+          <input
+            type="text"
+            value={displayValue}
+            placeholder="Tìm biển số hoặc tài xế..."
+            disabled={isLoading}
+            onFocus={() => setDropdownOpen(true)}
+            onBlur={() => setTimeout(() => setDropdownOpen(false), 200)}
+            onChange={(e) => {
+              const val = e.target.value;
+              setVehicleSearchQuery(val);
+              setDropdownOpen(true);
+              if (selectedVehicleId) {
+                onVehicleChange('');
+                onSearchChange(val);
+              } else {
+                onSearchChange(val);
+              }
+            }}
+            className="pl-9 pr-8 py-2 text-sm border border-neutral-200 dark:border-neutral-700 rounded-lg bg-white dark:bg-neutral-900 text-neutral-900 dark:text-neutral-100 focus:outline-none focus:ring-2 focus:ring-neutral-900 dark:focus:ring-neutral-100 w-64 disabled:opacity-50"
+          />
+          {(selectedVehicleId || search) && (
+            <button
+              onClick={handleClearVehicle}
+              disabled={isLoading}
+              className="absolute right-2 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-300"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          )}
+        </div>
+        {dropdownOpen && filteredVehicles.length > 0 && (
+          <div className="absolute z-50 mt-1 w-80 max-h-60 overflow-auto bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded-lg shadow-lg">
+            <button
+              className="w-full text-left px-3 py-2 text-sm text-neutral-500 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-700"
+              onMouseDown={() => {
+                handleClearVehicle();
+                setDropdownOpen(false);
+              }}
+            >
+              Tất cả xe
+            </button>
+            {filteredVehicles.map((v) => (
+              <button
+                key={v.id}
+                className="w-full text-left px-3 py-2 text-sm text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-700"
+                onMouseDown={() => {
+                  onVehicleChange(String(v.id));
+                  onSearchChange('');
+                  setVehicleSearchQuery('');
+                  setDropdownOpen(false);
+                }}
+              >
+                <span className="font-mono font-medium">{v.plate_number}</span>
+                <span className="text-neutral-400"> - {v.driver_name}</span>
+              </button>
+            ))}
+          </div>
+        )}
       </div>
-
-      <Select
-        value={selectedVehicleId}
-        onChange={(e) => onVehicleChange(e.target.value)}
-        disabled={isLoading}
-        className="w-56"
-        options={[
-          { value: '', label: 'Tất cả xe' },
-          ...vehicles.map((v) => ({
-            value: String(v.id),
-            label: `${v.plate_number} - ${v.driver_name}`,
-          })),
-        ]}
-      />
 
       <Select
         value={selectedMonth}
