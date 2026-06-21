@@ -25,6 +25,8 @@ import {
   Building2,
   FileText,
   RefreshCw,
+  Droplets,
+  BarChart3,
 } from 'lucide-react';
 import { cn } from '../utils/cn';
 import { useAuth } from '../hooks/useAuth';
@@ -83,6 +85,8 @@ export function MainLayout() {
   const vehicleDataSubItems = [
     { to: '/vehicle-data/delivery-schedule', icon: FileSpreadsheet, label: t('vehicleData.deliverySchedule' as never) },
     { to: '/vehicle-data/driver-invoices', icon: ReceiptText, label: t('vehicleData.driverInvoices' as never) },
+    { to: '/fuel-data', icon: Droplets, label: 'Quản lý dữ liệu dầu' },
+    { to: '/fuel-data/statistics', icon: BarChart3, label: 'Thống kê dầu' },
   ];
 
   const dispatchSubItems = [
@@ -96,6 +100,7 @@ export function MainLayout() {
     || user?.role === 'ADMIN';
 
   const showVehicleData = hasAnyPermission(['transport.view', 'transport.manage'])
+    || hasAnyPermission(['fuel.view', 'fuel.manage'])
     || user?.role === 'ADMIN';
 
   const showDispatch = hasAnyPermission(['dispatch.view', 'dispatch.manage'])
@@ -316,7 +321,7 @@ export function MainLayout() {
             vehicleDataSubItems,
             vehicleDataOpen,
             () => setVehicleDataOpen((o) => !o),
-            location.pathname.startsWith('/vehicle-data'),
+            location.pathname.startsWith('/vehicle-data') || location.pathname.startsWith('/fuel-data'),
           )}
 
           {/* Điều hành vận tải collapsible group */}
