@@ -60,6 +60,7 @@ router.get('/months', requirePermission('fuel.view'), fuelRecordController.month
 router.get('/batches', requirePermission('fuel.view'), fuelRecordController.batches);
 router.get('/latest-odometer/:vehicleId', requirePermission('fuel.view'), fuelRecordController.latestOdometer);
 router.get('/monitoring', requirePermission('fuel.view'), fuelRecordController.monitoring);
+router.get('/without-fuel', requirePermission('fuel.view'), fuelRecordController.withoutFuel);
 router.get('/:id/images', requirePermission('fuel.view'), fuelRecordController.getImages);
 router.get('/:id', requirePermission('fuel.view'), fuelRecordController.getById);
 

@@ -351,18 +351,57 @@ export const fuelRecordService = {
          lr.fuel_rate as last_fuel_rate,
          lr.record_date::text as last_record_date,
          a.avg_rate as avg_fuel_rate_12m,
-         CASE
-           WHEN a.avg_rate > 0 THEN
-             ROUND((ABS(lr.fuel_rate - a.avg_rate) / a.avg_rate * 100)::numeric, 2)
-           ELSE 0
-         END as diff_pct
-       FROM last_record lr
-       JOIN avg_12m a ON a.vehicle_id = lr.vehicle_id
-       JOIN vehicles v ON v.id = lr.vehicle_id
-       WHERE a.avg_rate > 0
-         AND ABS(lr.fuel_rate - a.avg_rate) / a.avg_rate * 100 >= $1
+          CASE
+            WHEN a.avg_rate > 0 THEN
+              ROUND(((lr.fuel_rate - a.avg_rate) / a.avg_rate * 100)::numeric, 2)
+            ELSE 0
+          END as diff_pct
+        FROM last_record lr
+        JOIN avg_12m a ON a.vehicle_id = lr.vehicle_id
+        JOIN vehicles v ON v.id = lr.vehicle_id
+        WHERE a.avg_rate > 0
+          AND lr.fuel_rate > a.avg_rate
+          AND (lr.fuel_rate - a.avg_rate) / a.avg_rate * 100 >= $1
        ORDER BY diff_pct DESC`,
       [thresholdPct],
+    );
+    return result.rows;
+  },
+
+  async getVehiclesWithoutFuel(days: number = 30): Promise<{
+    vehicle_id: number;
+    plate_number: string;
+    driver_name: string;
+    last_record_date: string | null;
+    days_since_last: number | null;
+  }[]> {
+    const result = await pool.query<{
+      vehicle_id: number;
+      plate_number: string;
+      driver_name: string;
+      last_record_date: string | null;
+      days_since_last: number | null;
+    }>(
+      `SELECT
+         v.id as vehicle_id,
+         v.plate_number,
+         v.driver_name,
+         fr.record_date::text as last_record_date,
+         (CURRENT_DATE - fr.record_date::date) as days_since_last
+       FROM vehicles v
+       LEFT JOIN LATERAL (
+         SELECT record_date
+         FROM fuel_records
+         WHERE vehicle_id = v.id
+         ORDER BY record_date DESC
+         LIMIT 1
+       ) fr ON true
+       WHERE v.status = 'active'
+         AND (fr.record_date IS NULL OR fr.record_date < (CURRENT_DATE - $1::int))
+       ORDER BY
+         CASE WHEN fr.record_date IS NULL THEN 0 ELSE 1 END,
+         fr.record_date ASC NULLS FIRST`,
+      [days],
     );
     return result.rows;
   },

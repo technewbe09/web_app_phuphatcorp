@@ -7,20 +7,21 @@ import { Select } from '../../../components/ui/Select';
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '../../../components/ui/Table';
-import { useGetFuelStatistics, useGetFuelMonths, useGetFuelMonitoring } from '../../../hooks/useFuelRecords';
+import { useGetFuelStatistics, useGetFuelMonths, useGetFuelMonitoring, useGetVehiclesWithoutFuel } from '../../../hooks/useFuelRecords';
 import { useGetVehicles } from '../../../hooks/useVehicleCatalog';
 import { FuelStatisticsSummary } from '../../../components/fuel-data/FuelStatisticsSummary';
 import { cn } from '../../../utils/cn';
 
-type Tab = 'overview' | 'monitoring';
+type Tab = 'overview' | 'monitoring' | 'without-fuel';
 
 export function FuelStatisticsPage() {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<Tab>('overview');
   const [selectedMonth, setSelectedMonth] = useState('');
   const [selectedVehicleId, setSelectedVehicleId] = useState('');
+  const [withoutFuelDays, setWithoutFuelDays] = useState(30);
 
-  const { data: vehicleData } = useGetVehicles('', 1, 200);
+  const { data: vehicleData } = useGetVehicles('', undefined, 1, 200);
   const vehicles = vehicleData?.vehicles ?? [];
   const { data: months } = useGetFuelMonths();
 
@@ -30,6 +31,7 @@ export function FuelStatisticsPage() {
   });
 
   const { data: monitoringData, isLoading: monitoringLoading } = useGetFuelMonitoring(10);
+  const { data: withoutFuelData, isLoading: withoutFuelLoading } = useGetVehiclesWithoutFuel(withoutFuelDays);
 
   const formatNum = (v: number | string | null | undefined, decimals = 1) =>
     v != null ? Number(v).toLocaleString('vi-VN', { minimumFractionDigits: decimals, maximumFractionDigits: decimals }) : '-';
@@ -37,6 +39,7 @@ export function FuelStatisticsPage() {
   const tabs: { key: Tab; label: string }[] = [
     { key: 'overview', label: 'Tổng quan' },
     { key: 'monitoring', label: 'Xe cần theo dõi' },
+    { key: 'without-fuel', label: 'Xe chưa đổ dầu' },
   ];
 
   return (
@@ -276,7 +279,7 @@ export function FuelStatisticsPage() {
                 Xe cần theo dõi
               </h2>
               <p className="text-sm text-neutral-500 dark:text-neutral-400 mt-1">
-                Xe có L/100km lần đổ gần nhất chênh lệch ≥10% so với trung bình 12 tháng
+                Xe có L/100km lần đổ gần nhất cao hơn ≥10% so với trung bình 12 tháng
               </p>
             </div>
             {monitoringLoading ? (
@@ -323,6 +326,92 @@ export function FuelStatisticsPage() {
                         </TableCell>
                         <TableCell className="text-right text-sm text-neutral-500 dark:text-neutral-400">
                           {new Date(v.last_record_date).toLocaleDateString('vi-VN')}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* ============ TAB: Xe chưa đổ dầu ============ */}
+      {activeTab === 'without-fuel' && (
+        <Card>
+          <CardContent className="p-0">
+            <div className="px-6 py-4 border-b border-neutral-200 dark:border-neutral-800 flex items-center justify-between">
+              <div>
+                <h2 className="text-lg font-semibold text-neutral-900 dark:text-neutral-100">
+                  Xe chưa đổ dầu
+                </h2>
+                <p className="text-sm text-neutral-500 dark:text-neutral-400 mt-1">
+                  Xe trong danh mục không có lịch sử đổ dầu trong khoảng thời gian
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setWithoutFuelDays(14)}
+                  className={`px-3 py-1.5 text-sm rounded-md transition-colors ${
+                    withoutFuelDays === 14
+                      ? 'bg-neutral-800 dark:bg-neutral-200 text-white dark:text-neutral-900'
+                      : 'bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400 hover:bg-neutral-200 dark:hover:bg-neutral-700'
+                  }`}
+                >
+                  14 ngày
+                </button>
+                <button
+                  onClick={() => setWithoutFuelDays(30)}
+                  className={`px-3 py-1.5 text-sm rounded-md transition-colors ${
+                    withoutFuelDays === 30
+                      ? 'bg-neutral-800 dark:bg-neutral-200 text-white dark:text-neutral-900'
+                      : 'bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400 hover:bg-neutral-200 dark:hover:bg-neutral-700'
+                  }`}
+                >
+                  30 ngày
+                </button>
+              </div>
+            </div>
+            {withoutFuelLoading ? (
+              <div className="p-6 space-y-3">
+                {Array.from({ length: 3 }).map((_, i) => (
+                  <div key={i} className="h-10 bg-neutral-100 dark:bg-neutral-800 rounded animate-pulse" />
+                ))}
+              </div>
+            ) : !withoutFuelData || withoutFuelData.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-16 gap-3 text-neutral-500 dark:text-neutral-400">
+                <p className="text-sm">Tất cả xe đều đã có lịch sử đổ dầu trong {withoutFuelDays} ngày qua.</p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Biển số</TableHead>
+                      <TableHead>Tài xế</TableHead>
+                      <TableHead className="text-right">Lần đổ gần nhất</TableHead>
+                      <TableHead className="text-right">Số ngày đã qua</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {withoutFuelData.map((v) => (
+                      <TableRow key={v.vehicle_id}>
+                        <TableCell className="font-mono font-medium text-neutral-900 dark:text-neutral-100">
+                          {v.plate_number}
+                        </TableCell>
+                        <TableCell className="text-neutral-700 dark:text-neutral-300">
+                          {v.driver_name}
+                        </TableCell>
+                        <TableCell className="text-right text-neutral-500 dark:text-neutral-400 text-sm">
+                          {v.last_record_date
+                            ? new Date(v.last_record_date).toLocaleDateString('vi-VN')
+                            : 'Chưa có dữ liệu'}
+                        </TableCell>
+                        <TableCell className="text-right font-medium text-red-600 dark:text-red-400">
+                          {v.days_since_last != null
+                            ? `${v.days_since_last} ngày`
+                            : '—'}
                         </TableCell>
                       </TableRow>
                     ))}

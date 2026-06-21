@@ -126,3 +126,11 @@ export interface FuelRecordImage {
   mime_type: string | null;
   created_at: string;
 }
+
+export interface WithoutFuelVehicle {
+  vehicle_id: number;
+  plate_number: string;
+  driver_name: string;
+  last_record_date: string | null;
+  days_since_last: number | null;
+}
