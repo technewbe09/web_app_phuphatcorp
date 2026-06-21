@@ -6,6 +6,7 @@ export interface Vehicle {
   plate_number: string;
   driver_name: string;
   status: 'active' | 'deactive';
+  oil_change_interval_km: number;
   created_at: string;
   updated_at: string;
 }
@@ -35,7 +36,7 @@ export interface VehicleData {
 }
 
 const SELECT_COLS = `
-  id, plate_number, driver_name, status, created_at, updated_at
+  id, plate_number, driver_name, status, oil_change_interval_km, created_at, updated_at
 `;
 
 function normalizePlateNumber(raw: string): string | null {
@@ -176,6 +177,19 @@ export const vehicleService = {
     const result = await pool.query<Vehicle>(
       `UPDATE vehicles SET status = $1 WHERE id = $2 RETURNING ${SELECT_COLS}`,
       [newStatus, id],
+    );
+    return result.rows[0];
+  },
+
+  async updateOilInterval(id: number, intervalKm: number): Promise<Vehicle> {
+    const existing = await this.findById(id);
+    if (!existing) {
+      throw { code: 'NOT_FOUND' };
+    }
+
+    const result = await pool.query<Vehicle>(
+      `UPDATE vehicles SET oil_change_interval_km = $1 WHERE id = $2 RETURNING ${SELECT_COLS}`,
+      [intervalKm, id],
     );
     return result.rows[0];
   },

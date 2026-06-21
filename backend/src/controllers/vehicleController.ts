@@ -25,6 +25,12 @@ export const vehicleUpdateSchema = [
     .isLength({ max: 255 }).withMessage('Tên tài xế tối đa 255 ký tự'),
 ];
 
+export const oilIntervalSchema = [
+  param('id').isInt({ min: 1 }).withMessage('ID không hợp lệ'),
+  body('oil_change_interval_km')
+    .isInt({ min: 0 }).withMessage('Ngưỡng km phải là số nguyên >= 0'),
+];
+
 export const vehicleController = {
   async getAll(req: AuthRequest, res: Response): Promise<void> {
     try {
@@ -185,6 +191,41 @@ export const vehicleController = {
       }
       const error = err instanceof Error ? err.message : 'Unknown error';
       sendError(res, 'Không thể cập nhật trạng thái xe', 500, error);
+    }
+  },
+
+  async updateOilInterval(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        res.status(400).json({ success: false, errors: errors.array() });
+        return;
+      }
+
+      const id = parseInt(req.params.id, 10);
+      const { oil_change_interval_km } = req.body;
+      const vehicle = await vehicleService.updateOilInterval(id, oil_change_interval_km);
+      sendSuccess(res, vehicle, `Đã cập nhật ngưỡng thay nhớt cho xe ${vehicle.plate_number}`);
+      auditService.logAudit({
+        userId: req.user!.userId,
+        username: req.user!.email,
+        action: 'UPDATE',
+        entityType: 'vehicle',
+        entityId: id,
+        entityLabel: vehicle.plate_number,
+        ipAddress: req.ip,
+        details: { oil_change_interval_km },
+      });
+    } catch (err: unknown) {
+      if (err && typeof err === 'object' && 'code' in err) {
+        const e = err as { code: string };
+        if (e.code === 'NOT_FOUND') {
+          sendError(res, 'Không tìm thấy xe', 404);
+          return;
+        }
+      }
+      const error = err instanceof Error ? err.message : 'Unknown error';
+      sendError(res, 'Không thể cập nhật ngưỡng thay nhớt', 500, error);
     }
   },
 

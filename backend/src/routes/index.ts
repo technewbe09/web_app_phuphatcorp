@@ -16,6 +16,8 @@ import supplierRoutes from './suppliers';
 import reconcileJobRoutes from './reconcileJobs';
 import auditLogRoutes from './auditLogs';
 import fuelRecordRoutes from './fuelRecords';
+import vehicleInspectionRoutes from './vehicleInspections';
+import vehicleOilChangeRoutes from './vehicleOilChanges';
 
 const router = Router();
 
@@ -36,5 +38,7 @@ router.use('/suppliers', supplierRoutes);
 router.use('/reconcile-jobs', reconcileJobRoutes);
 router.use('/logs', auditLogRoutes);
 router.use('/fuel-records', fuelRecordRoutes);
+router.use('/vehicle-inspections', vehicleInspectionRoutes);
+router.use('/vehicle-oil-changes', vehicleOilChangeRoutes);
 
 export default router;

@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import multer from 'multer';
-import { vehicleController, vehicleDeleteSchema, vehicleCreateSchema, vehicleUpdateSchema } from '../controllers/vehicleController';
+import { vehicleController, vehicleDeleteSchema, vehicleCreateSchema, vehicleUpdateSchema, oilIntervalSchema } from '../controllers/vehicleController';
 import { authenticateToken, requirePermission } from '../middleware/auth';
 import { validate } from '../middleware/validate';
 
@@ -28,5 +28,6 @@ router.post('/', requirePermission('catalog.manage'), ...validate(vehicleCreateS
 router.delete('/:id', requirePermission('catalog.manage'), ...validate(vehicleDeleteSchema), vehicleController.remove);
 router.patch('/:id/toggle', requirePermission('catalog.manage'), ...validate(vehicleDeleteSchema), vehicleController.toggleStatus);
 router.put('/:id', requirePermission('catalog.manage'), ...validate(vehicleUpdateSchema), vehicleController.update);
+router.put('/:id/oil-interval', requirePermission('vehicle_data.manage'), ...validate(oilIntervalSchema), vehicleController.updateOilInterval);
 
 export default router;
