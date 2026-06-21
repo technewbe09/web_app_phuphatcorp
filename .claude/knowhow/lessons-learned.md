@@ -4,6 +4,28 @@ description: Ghi lại các bài học kinh nghiệm, bug đã fix, và pitfalls
 
 # Lessons Learned — PhuPhatCorp
 
+## Bug: Inspection create/update — Invalid SQL: RETURNING with FROM/JOIN/WHERE
+- **Ngày:** 2026-06-21
+- **Severity:** High
+- **Feature liên quan:** Quản lý Đăng kiểm
+- **Triệu chứng:** `POST /api/vehicle-inspections` returns 500 Internal Server Error. PostgreSQL error: invalid `RETURNING` clause with `FROM`/`JOIN`/`WHERE`.
+- **Root cause:** `inspectionService.create()` dùng `RETURNING columns FROM table JOIN ... WHERE` — PostgreSQL `RETURNING` chỉ trả về columns của row vừa INSERT/UPDATE, không hỗ trợ FROM/JOIN/WHERE. Đây là syntax error SQL.
+- **Fix:** `create()`: INSERT + RETURNING id → sau đó gọi `this.getById(id)` để lấy full record với JOIN vehicles. `update()`: UPDATE không cần RETURNING → dùng `this.getById(id)` lấy kết quả (pattern đã có sẵn).
+- **File sửa:** `backend/src/services/inspectionService.ts:160-167` (create), `backend/src/services/inspectionService.ts:205-211` (update)
+- **Cần chú ý:** PostgreSQL `RETURNING` chỉ hỗ trợ `RETURNING *` hoặc `RETURNING col1, col2`. Nếu cần JOIN thêm dữ liệu từ bảng khác sau INSERT, dùng 2-step: INSERT RETURNING id → SELECT với JOIN.
+
+## Bug: New feature deployment — API 403 due to missing permission seed migration
+- **Ngày:** 2026-06-21
+- **Severity:** High
+- **Feature liên quan:** Quản lý Đăng kiểm & Lịch sử Thay nhớt
+- **Triệu chứng:** Tất cả 15 API endpoints mới trả về 403 Forbidden dù user có ADMIN role. Response `{"success":false,"message":"Insufficient permissions"}`.
+- **Root cause:** Migration seed permissions (032) và migration tạo bảng (031) chưa được chạy. `requirePermission` middleware kiểm tra `req.user.permissions.includes(code)` — permissions được load từ DB qua JOIN `roles → role_permissions → permissions` trong `authService.loadUserWithPermissions()`. Khi permission codes chưa tồn tại trong DB, JWT token được cấp không chứa permissions mới → mọi request bị chặn.
+- **Fix:** Chạy migration 031 (tạo bảng) và 032 (seed permissions) lên DB. User cần re-login để nhận JWT token mới chứa permissions đã seed.
+- **File sửa:** Không sửa code — chỉ chạy migration: `backend/src/migrations/031_vehicle_inspection_oil_change.sql`, `backend/src/migrations/032_seed_vehicle_data_permissions.sql`
+- **Cần chú ý:** Khi triển khai feature mới có thêm permissions, luôn chạy migration seed permissions TRƯỚC khi khởi động lại server hoặc test API. Permission được load một lần khi user login/refresh token và cache trong JWT 15 phút. Migration tạo bảng (DDL) và migration seed permissions (DML) nên được chạy cùng lúc.
+
+---
+
 ## Bug: Delivery Data Processing — Vehicle sort wrong because sort key ≠ display key (.slice(-9))
 - **Ngày:** 2026-04-26
 - **Severity:** High

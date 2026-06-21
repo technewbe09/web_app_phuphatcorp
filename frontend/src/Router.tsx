@@ -24,6 +24,8 @@ import { ReconcileJobPage } from './pages/admin/jobs/ReconcileJobPage';
 import { AuditLogPage } from './pages/admin/AuditLogPage';
 import { FuelDataPage } from './pages/admin/fuel-data/FuelDataPage';
 import { FuelStatisticsPage } from './pages/admin/fuel-data/FuelStatisticsPage';
+import { InspectionPage } from './pages/admin/vehicle-data/InspectionPage';
+import { OilChangePage } from './pages/admin/vehicle-data/OilChangePage';
 
 function PlaceholderPage({ title }: { title: string }) {
   return (
@@ -61,6 +63,8 @@ export function Router() {
             {/* Vehicle Data */}
             <Route path="/vehicle-data/delivery-schedule" element={<DeliverySchedulePage />} />
             <Route path="/vehicle-data/driver-invoices" element={<DriverInvoicesPage />} />
+            <Route path="/vehicle-data/inspections" element={<InspectionPage />} />
+            <Route path="/vehicle-data/oil-changes" element={<OilChangePage />} />
             {/* Dispatch */}
             <Route path="/dispatch/schedule" element={<SchedulePage />} />
             {/* Accounting Data */}

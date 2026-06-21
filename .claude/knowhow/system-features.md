@@ -370,13 +370,35 @@ src/api/weightAdjustmentApi.ts     ← fetchAll() dùng để load masterdata
 
 ## 7. Quản lý dữ liệu xe
 
-Module "Quản lý dữ liệu xe" chứa sub-menu Lịch đi hàng.
+Module "Quản lý dữ liệu xe" chứa các sub-menu: Lịch đi hàng, Hóa đơn tài xế, Quản lý dữ liệu dầu, Thống kê dầu.
 
 ### 7.1 Lịch đi hàng (/vehicle-data/delivery-schedule)
 
 **Mục đích:** Quản lý lịch đi hàng theo ngày.
 
 **Access:** Tất cả authenticated users. Route: `/vehicle-data/delivery-schedule`
+
+### 7.2 Hóa đơn tài xế (/vehicle-data/driver-invoices)
+
+**Mục đích:** Upload và quản lý hóa đơn tài xế từ Excel.
+
+**Access:** Route `/vehicle-data/driver-invoices`
+
+### 7.3 Quản lý đăng kiểm (/vehicle-data/inspections) — PLANNED
+
+**Mục đích:** Theo dõi thông tin đăng kiểm của từng xe (ngày đăng kiểm, ngày hết hạn, ghi chú, upload ảnh scan). Cảnh báo xe sắp hết hạn.
+
+**Access:** Route `/vehicle-data/inspections`. Permission: `vehicle_data.view` / `vehicle_data.manage`.
+
+**Docs:** `docs/ba/20260621_vehicle-inspection-oil-change-analysis.md`
+
+### 7.4 Quản lý thay nhớt (/vehicle-data/oil-changes) — PLANNED
+
+**Mục đích:** Ghi nhận lịch sử thay nhớt động cơ, thiết lập ngưỡng km bắt buộc thay nhớt (mặc định 5000km), tự động đối chiếu với số km từ lần đổ dầu gần nhất để nhắc nhở xe cần thay nhớt.
+
+**Access:** Route `/vehicle-data/oil-changes`. Permission: `vehicle_data.view` / `vehicle_data.manage`.
+
+**Docs:** `docs/ba/20260621_vehicle-inspection-oil-change-analysis.md`
 
 ---
 

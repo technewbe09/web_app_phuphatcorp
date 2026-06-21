@@ -5,6 +5,7 @@ export interface Vehicle {
   plate_number: string;
   driver_name: string;
   status: 'active' | 'deactive';
+  oil_change_interval_km: number;
   created_at: string;
   updated_at: string;
 }
