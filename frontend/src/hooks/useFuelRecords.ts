@@ -97,3 +97,10 @@ export function useGetFuelMonitoring(threshold: number = 10) {
     queryFn: () => fuelRecordApi.fetchMonitoring(threshold),
   });
 }
+
+export function useGetVehiclesWithoutFuel(days: number = 30) {
+  return useQuery({
+    queryKey: [...QUERY_KEY, 'without-fuel', { days }],
+    queryFn: () => fuelRecordApi.fetchWithoutFuel(days),
+  });
+}

@@ -297,6 +297,17 @@ export const fuelRecordController = {
     }
   },
 
+  async withoutFuel(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      const days = req.query.days ? parseInt(req.query.days as string, 10) : 30;
+      const data = await fuelRecordService.getVehiclesWithoutFuel(days);
+      sendSuccess(res, data, 'Danh sách xe chưa đổ dầu');
+    } catch (err) {
+      const error = err instanceof Error ? err.message : 'Unknown error';
+      sendError(res, 'Không thể tải danh sách xe chưa đổ dầu', 500, error);
+    }
+  },
+
   async uploadImage(req: AuthRequest, res: Response): Promise<void> {
     try {
       const recordId = parseInt(req.params.id, 10);

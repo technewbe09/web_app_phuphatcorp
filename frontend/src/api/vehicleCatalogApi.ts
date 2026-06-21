@@ -9,6 +9,11 @@ export interface Vehicle {
   updated_at: string;
 }
 
+export interface VehicleData {
+  driver_name: string;
+  plate_number: string;
+}
+
 export interface VehicleListResponse {
   vehicles: Vehicle[];
   total: number;
@@ -31,6 +36,7 @@ export interface VehicleUploadError {
 export const vehicleCatalogApi = {
   fetchAll: async (params?: {
     search?: string;
+    status?: string;
     page?: number;
     limit?: number;
   }): Promise<VehicleListResponse> => {
@@ -52,7 +58,18 @@ export const vehicleCatalogApi = {
     return response.data.data;
   },
 
-  delete: async (id: number): Promise<void> => {
-    await axiosClient.delete(`/vehicles/${id}`);
+  toggleStatus: async (id: number): Promise<Vehicle> => {
+    const response = await axiosClient.patch<{ data: Vehicle }>(`/vehicles/${id}/toggle`);
+    return response.data.data;
+  },
+
+  create: async (data: VehicleData): Promise<Vehicle> => {
+    const response = await axiosClient.post<{ data: Vehicle }>('/vehicles', data);
+    return response.data.data;
+  },
+
+  update: async (id: number, data: { driver_name: string }): Promise<Vehicle> => {
+    const response = await axiosClient.put<{ data: Vehicle }>(`/vehicles/${id}`, data);
+    return response.data.data;
   },
 };

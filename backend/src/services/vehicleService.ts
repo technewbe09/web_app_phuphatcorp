@@ -29,6 +29,11 @@ export interface UploadError {
   reason: string;
 }
 
+export interface VehicleData {
+  driver_name: string;
+  plate_number: string;
+}
+
 const SELECT_COLS = `
   id, plate_number, driver_name, status, created_at, updated_at
 `;
@@ -48,19 +53,36 @@ function normalizePlateNumber(raw: string): string | null {
 export const vehicleService = {
   async getAll(
     search?: string,
+    status?: string,
     page: number = 1,
     limit: number = 20,
   ): Promise<VehicleListResult> {
     const offset = (page - 1) * limit;
     const params: unknown[] = [];
-    let whereClause = "WHERE status = 'active'";
-    let countWhereClause = "WHERE status = 'active'";
+    let whereClause = '';
+    const conditions: string[] = [];
+
+    if (status === 'active') {
+      conditions.push("status = 'active'");
+    } else if (status === 'inactive') {
+      conditions.push("status = 'deactive'");
+    } else if (status === 'all') {
+      // no status filter
+    } else {
+      conditions.push("status = 'active'");
+    }
+
+    if (conditions.length > 0) {
+      whereClause = `WHERE ${conditions.join(' AND ')}`;
+    }
+    let countWhereClause = whereClause;
 
     if (search) {
       const q = `%${search}%`;
       params.push(q, q);
-      whereClause += ` AND (plate_number ILIKE $${params.length - 1} OR driver_name ILIKE $${params.length})`;
-      countWhereClause += ` AND (plate_number ILIKE $1 OR driver_name ILIKE $2)`;
+      const and = countWhereClause ? ' AND ' : 'WHERE ';
+      whereClause += `${and}(plate_number ILIKE $${params.length - 1} OR driver_name ILIKE $${params.length})`;
+      countWhereClause += `${and}(plate_number ILIKE $1 OR driver_name ILIKE $2)`;
     }
 
     const countParams: unknown[] = [];
@@ -111,6 +133,64 @@ export const vehicleService = {
       `UPDATE vehicles SET status = 'deactive' WHERE id = $1`,
       [id],
     );
+  },
+
+  async create(data: VehicleData): Promise<Vehicle> {
+    const normalized = normalizePlateNumber(data.plate_number);
+    if (!normalized) {
+      throw { code: 'INVALID_PLATE', message: `Biển số không đúng định dạng: ${data.plate_number}` };
+    }
+
+    const existingActive = await this.findByPlateNumber(normalized);
+    if (existingActive) {
+      throw { code: 'DUPLICATE_PLATE', message: `Biển số đã tồn tại: ${normalized}` };
+    }
+
+    const deactivated = await pool.query<Vehicle>(
+      `SELECT id FROM vehicles WHERE plate_number = $1 AND status = 'deactive'`,
+      [normalized],
+    );
+
+    if (deactivated.rows.length > 0) {
+      const result = await pool.query<Vehicle>(
+        `UPDATE vehicles SET status = 'active', driver_name = $1 WHERE id = $2 RETURNING ${SELECT_COLS}`,
+        [data.driver_name, deactivated.rows[0].id],
+      );
+      return result.rows[0];
+    }
+
+    const result = await pool.query<Vehicle>(
+      `INSERT INTO vehicles (plate_number, driver_name) VALUES ($1, $2) RETURNING ${SELECT_COLS}`,
+      [normalized, data.driver_name],
+    );
+    return result.rows[0];
+  },
+
+  async toggleStatus(id: number): Promise<Vehicle> {
+    const existing = await this.findById(id);
+    if (!existing) {
+      throw { code: 'NOT_FOUND' };
+    }
+
+    const newStatus = existing.status === 'active' ? 'deactive' : 'active';
+    const result = await pool.query<Vehicle>(
+      `UPDATE vehicles SET status = $1 WHERE id = $2 RETURNING ${SELECT_COLS}`,
+      [newStatus, id],
+    );
+    return result.rows[0];
+  },
+
+  async update(id: number, data: { driver_name: string }): Promise<Vehicle> {
+    const existing = await this.findById(id);
+    if (!existing) {
+      throw { code: 'NOT_FOUND' };
+    }
+
+    const result = await pool.query<Vehicle>(
+      `UPDATE vehicles SET driver_name = $1 WHERE id = $2 RETURNING ${SELECT_COLS}`,
+      [data.driver_name, id],
+    );
+    return result.rows[0];
   },
 
   async uploadFromExcel(

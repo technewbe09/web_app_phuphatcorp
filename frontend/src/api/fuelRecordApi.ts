@@ -9,6 +9,7 @@ import type {
   BatchInfo,
   MonitoringVehicle,
   FuelRecordImage,
+  WithoutFuelVehicle,
 } from '../types/fuelRecord';
 
 export interface FuelListParams {
@@ -124,6 +125,14 @@ export const fuelRecordApi = {
   fetchImages: async (recordId: number): Promise<FuelRecordImage[]> => {
     const response = await axiosClient.get<{ data: FuelRecordImage[] }>(
       `/fuel-records/${recordId}/images`,
+    );
+    return response.data.data;
+  },
+
+  fetchWithoutFuel: async (days: number = 30): Promise<WithoutFuelVehicle[]> => {
+    const response = await axiosClient.get<{ data: WithoutFuelVehicle[] }>(
+      '/fuel-records/without-fuel',
+      { params: { days } },
     );
     return response.data.data;
   },
