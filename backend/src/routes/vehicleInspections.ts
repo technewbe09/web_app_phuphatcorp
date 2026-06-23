@@ -29,18 +29,15 @@ const imageUpload = multer({
     },
   }),
   limits: { fileSize: 10 * 1024 * 1024 },
-  fileFilter: (_req, file, cb) => {
-    if (file.mimetype.startsWith('image/') || file.mimetype === 'application/pdf') {
-      cb(null, true);
-    } else {
-      cb(new Error('Chỉ chấp nhận file ảnh hoặc PDF'));
-    }
+  fileFilter: (_req, _file, cb) => {
+    cb(null, true);
   },
 });
 
 router.use(authenticateToken);
 
 router.get('/', requirePermission('vehicle_data.view'), inspectionController.list);
+router.get('/summary', requirePermission('vehicle_data.view'), inspectionController.getVehicleSummary);
 router.get('/expiring', requirePermission('vehicle_data.view'), inspectionController.getExpiring);
 router.get('/:id', requirePermission('vehicle_data.view'), inspectionController.getById);
 

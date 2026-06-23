@@ -48,6 +48,17 @@ export interface UpdateInspectionInput {
   notes?: string;
 }
 
+export interface VehicleInspectionSummary {
+  vehicle_id: number;
+  plate_number: string;
+  driver_name: string;
+  latest_inspection_id: number | null;
+  latest_inspection_date: string | null;
+  latest_expiry_date: string | null;
+  latest_status: string | null;
+  inspection_count: number;
+}
+
 const SELECT_COLS = `
   ir.id, ir.vehicle_id, ir.inspection_date, ir.expiry_date,
   ir.notes, ir.status, ir.created_by, ir.created_at, ir.updated_at,
@@ -275,5 +286,96 @@ export const inspectionService = {
       [inspectionId],
     );
     return result.rows;
+  },
+
+  async getVehicleSummary(params: {
+    search?: string;
+    status?: string;
+    page?: number;
+    limit?: number;
+  }): Promise<{ vehicles: VehicleInspectionSummary[]; total: number; page: number; limit: number }> {
+    const page = params.page || 1;
+    const limit = params.limit || 20;
+    const offset = (page - 1) * limit;
+    const conditions: string[] = [];
+    const queryParams: unknown[] = [];
+    let paramIdx = 1;
+
+    let whereLatest = '';
+    if (params.status && params.status !== 'all') {
+      if (params.status === 'expired') {
+        whereLatest = `AND ir.expiry_date < CURRENT_DATE`;
+      } else if (params.status === 'expiring') {
+        whereLatest = `AND ir.expiry_date BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '30 days'`;
+      } else if (params.status === 'active') {
+        whereLatest = `AND ir.expiry_date >= CURRENT_DATE`;
+      } else if (params.status === 'no_inspection') {
+        whereLatest = `AND ir.id IS NULL`;
+      }
+    }
+
+    if (params.search) {
+      const q = `%${params.search}%`;
+      conditions.push(`(v.plate_number ILIKE $${paramIdx} OR v.driver_name ILIKE $${paramIdx})`);
+      queryParams.push(q);
+      paramIdx++;
+    }
+
+    const searchWhere = conditions.length > 0 ? `AND ${conditions.join(' AND ')}` : '';
+
+    const query = `
+      WITH latest_inspection AS (
+        SELECT DISTINCT ON (vehicle_id)
+          id, vehicle_id, inspection_date, expiry_date, status
+        FROM inspection_records
+        WHERE status IN ('active', 'expired')
+        ORDER BY vehicle_id, expiry_date DESC
+      )
+      SELECT
+        v.id AS vehicle_id,
+        v.plate_number,
+        v.driver_name,
+        li.id AS latest_inspection_id,
+        li.inspection_date AS latest_inspection_date,
+        li.expiry_date AS latest_expiry_date,
+        li.status AS latest_status,
+        (SELECT COUNT(*) FROM inspection_records WHERE vehicle_id = v.id AND status != 'deleted')::int AS inspection_count
+      FROM vehicles v
+      LEFT JOIN latest_inspection li ON li.vehicle_id = v.id
+      WHERE v.status = 'active'
+        ${whereLatest}
+        ${searchWhere}
+      ORDER BY
+        CASE WHEN li.id IS NULL THEN 1 ELSE 0 END,
+        li.expiry_date ASC NULLS LAST,
+        v.plate_number ASC
+      LIMIT $${paramIdx} OFFSET $${paramIdx + 1}
+    `;
+
+    const countQuery = `
+      WITH latest_inspection AS (
+        SELECT DISTINCT ON (vehicle_id)
+          id, vehicle_id, expiry_date, status
+        FROM inspection_records
+        WHERE status IN ('active', 'expired')
+        ORDER BY vehicle_id, expiry_date DESC
+      )
+      SELECT COUNT(*)::int AS count
+      FROM vehicles v
+      LEFT JOIN latest_inspection li ON li.vehicle_id = v.id
+      WHERE v.status = 'active'
+        ${whereLatest}
+        ${searchWhere}
+    `;
+
+    const countResult = await pool.query<{ count: number }>(countQuery, queryParams);
+    const total = countResult.rows[0].count;
+
+    const dataResult = await pool.query<VehicleInspectionSummary>(
+      query,
+      [...queryParams, limit, offset],
+    );
+
+    return { vehicles: dataResult.rows, total, page, limit };
   },
 };

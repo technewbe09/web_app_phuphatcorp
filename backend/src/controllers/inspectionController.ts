@@ -184,6 +184,21 @@ export const inspectionController = {
     }
   },
 
+  async getVehicleSummary(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      const search = req.query.search as string | undefined;
+      const status = req.query.status as string | undefined;
+      const page = parseInt(req.query.page as string, 10) || 1;
+      const limit = parseInt(req.query.limit as string, 10) || 20;
+
+      const data = await inspectionService.getVehicleSummary({ search, status, page, limit });
+      sendSuccess(res, data, 'Danh sách xe');
+    } catch (err) {
+      const error = err instanceof Error ? err.message : 'Unknown error';
+      sendError(res, 'Không thể tải danh sách xe', 500, error);
+    }
+  },
+
   async uploadImage(req: AuthRequest, res: Response): Promise<void> {
     try {
       const id = parseInt(req.params.id, 10);
