@@ -1,20 +1,16 @@
 import { useState } from 'react';
-import { Plus, Pencil, Trash2, AlertTriangle, RefreshCw, Search, X } from 'lucide-react';
+import { Plus, Eye, History, AlertTriangle, RefreshCw, Search, X } from 'lucide-react';
 import { Pagination } from '../../../components/ui/Pagination';
 import { Card, CardContent } from '../../../components/ui/Card';
 import { Button } from '../../../components/ui/Button';
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
+  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '../../../components/ui/Table';
-import { useGetInspections, useDeleteInspection } from '../../../hooks/useVehicleInspections';
+import { useGetVehicleSummary } from '../../../hooks/useVehicleInspections';
 import { useGetVehicles } from '../../../hooks/useVehicleCatalog';
 import { InspectionFormModal } from '../../../components/vehicle-data/InspectionFormModal';
-import type { InspectionRecord } from '../../../api/vehicleInspectionApi';
+import { InspectionHistoryModal } from '../../../components/vehicle-data/InspectionHistoryModal';
+import type { VehicleInspectionSummary } from '../../../api/vehicleInspectionApi';
 import { cn } from '../../../utils/cn';
 
 interface Toast {
@@ -24,7 +20,12 @@ interface Toast {
 }
 
 export function InspectionPage() {
-  const [modal, setModal] = useState<{ type: 'create' } | { type: 'edit'; inspection: InspectionRecord } | null>(null);
+  const [modal, setModal] = useState<
+    { type: 'create'; vehicleId?: number } |
+    { type: 'history'; vehicle: VehicleInspectionSummary } |
+    { type: 'view'; vehicle: VehicleInspectionSummary } |
+    null
+  >(null);
   const [search, setSearch] = useState('');
   const [vehicleSearch, setVehicleSearch] = useState('');
   const [dropdownOpen, setDropdownOpen] = useState(false);
@@ -33,14 +34,20 @@ export function InspectionPage() {
   const [toasts, setToasts] = useState<Toast[]>([]);
   const PAGE_SIZE = 20;
 
-  const { data, isLoading, isError, refetch } = useGetInspections({
+  const { data, isLoading, isError, refetch } = useGetVehicleSummary({
     search: search || undefined,
     status: statusFilter,
     page,
     limit: PAGE_SIZE,
   });
   const { data: vehiclesData } = useGetVehicles('', 'active', 1, 200);
-  const deleteMutation = useDeleteInspection();
+
+  const vehicles = vehiclesData?.vehicles ?? [];
+  const filteredVehicles = vehicles.filter((v) => {
+    if (!vehicleSearch) return true;
+    const q = vehicleSearch.toLowerCase();
+    return v.plate_number.toLowerCase().includes(q) || v.driver_name.toLowerCase().includes(q);
+  });
 
   const showToast = (message: string, variant: 'success' | 'error' = 'success') => {
     const id = Date.now();
@@ -48,36 +55,16 @@ export function InspectionPage() {
     setTimeout(() => setToasts((prev) => prev.filter((t) => t.id !== id)), 4000);
   };
 
-  const handleDelete = async (inspection: InspectionRecord) => {
-    if (!window.confirm('Bạn có chắc muốn xóa bản ghi đăng kiểm này?')) return;
-    try {
-      await deleteMutation.mutateAsync(inspection.id);
-      showToast('Đã xóa bản ghi đăng kiểm');
-    } catch {
-      showToast('Không thể xóa đăng kiểm', 'error');
-    }
-  };
-
   const totalPages = data ? Math.ceil(data.total / PAGE_SIZE) : 0;
-  const inspections = data?.inspections ?? [];
-  const vehicles = vehiclesData?.vehicles ?? [];
+  const vehicleList = data?.vehicles ?? [];
 
-  const filteredVehicles = vehicles.filter((v) => {
-    if (!vehicleSearch) return true;
-    const q = vehicleSearch.toLowerCase();
-    return v.plate_number.toLowerCase().includes(q) || v.driver_name.toLowerCase().includes(q);
-  });
-
-
-
-  const getStatusBadge = (inspection: InspectionRecord) => {
+  const getStatusBadge = (v: VehicleInspectionSummary) => {
+    if (!v.latest_expiry_date) {
+      return { label: 'Chưa đăng kiểm', className: 'bg-neutral-100 dark:bg-neutral-800 text-neutral-500 dark:text-neutral-400' };
+    }
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    const expiry = new Date(inspection.expiry_date);
-
-    if (inspection.status === 'superseded') {
-      return { label: 'Đã thay thế', className: 'bg-neutral-100 dark:bg-neutral-800 text-neutral-500 dark:text-neutral-400' };
-    }
+    const expiry = new Date(v.latest_expiry_date);
     if (expiry < today) {
       return { label: 'Hết hạn', className: 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400' };
     }
@@ -185,7 +172,7 @@ export function InspectionPage() {
               <option value="active">Còn hạn</option>
               <option value="expiring">Sắp hết hạn</option>
               <option value="expired">Hết hạn</option>
-              <option value="superseded">Đã thay thế</option>
+              <option value="no_inspection">Chưa đăng kiểm</option>
             </select>
           </div>
         </CardContent>
@@ -202,17 +189,17 @@ export function InspectionPage() {
           ) : isError ? (
             <div className="flex flex-col items-center justify-center py-16 gap-3 text-neutral-500 dark:text-neutral-400">
               <AlertTriangle className="w-8 h-8 text-red-400" />
-              <p className="text-sm">Không thể tải dữ liệu đăng kiểm.</p>
+              <p className="text-sm">Không thể tải dữ liệu.</p>
               <Button variant="outline" size="sm" onClick={() => refetch()}>
                 <RefreshCw className="w-4 h-4 mr-2" />
                 Thử lại
               </Button>
             </div>
-          ) : inspections.length === 0 ? (
+          ) : vehicleList.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-16 gap-3 text-neutral-500 dark:text-neutral-400">
               <p className="text-sm">
                 {search || statusFilter !== 'all'
-                  ? 'Không tìm thấy bản ghi nào phù hợp.'
+                  ? 'Không tìm thấy xe nào phù hợp.'
                   : 'Chưa có dữ liệu đăng kiểm.'}
               </p>
               {!search && statusFilter === 'all' && (
@@ -230,56 +217,69 @@ export function InspectionPage() {
                     <TableHead className="w-14">STT</TableHead>
                     <TableHead className="w-36">Biển số</TableHead>
                     <TableHead>Tài xế</TableHead>
-                    <TableHead className="w-32">Ngày đăng kiểm</TableHead>
+                    <TableHead className="w-32">Đăng kiểm gần nhất</TableHead>
                     <TableHead className="w-32">Ngày hết hạn</TableHead>
                     <TableHead className="w-28 text-center">Trạng thái</TableHead>
-                    <TableHead className="w-24">Ghi chú</TableHead>
-                    <TableHead className="w-24 text-center">Thao tác</TableHead>
+                    <TableHead className="w-20 text-center">Số lần ĐK</TableHead>
+                    <TableHead className="w-32 text-center">Thao tác</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {inspections.map((inspection, idx) => {
-                    const badge = getStatusBadge(inspection);
+                  {vehicleList.map((v, idx) => {
+                    const badge = getStatusBadge(v);
                     return (
-                      <TableRow key={inspection.id}>
+                      <TableRow key={v.vehicle_id}>
                         <TableCell className="text-neutral-500 dark:text-neutral-400 text-sm">
                           {(page - 1) * PAGE_SIZE + idx + 1}
                         </TableCell>
                         <TableCell className="font-mono font-medium text-neutral-900 dark:text-neutral-100">
-                          {inspection.plate_number || '-'}
+                          {v.plate_number}
                         </TableCell>
                         <TableCell className="text-neutral-700 dark:text-neutral-300">
-                          {inspection.driver_name || '-'}
+                          {v.driver_name}
                         </TableCell>
                         <TableCell className="text-neutral-700 dark:text-neutral-300 text-sm">
-                          {new Date(inspection.inspection_date).toLocaleDateString('vi-VN')}
+                          {v.latest_inspection_date
+                            ? new Date(v.latest_inspection_date).toLocaleDateString('vi-VN')
+                            : '-'}
                         </TableCell>
-                        <TableCell className="text-neutral-700 dark:text-neutral-300 text-sm">
-                          {new Date(inspection.expiry_date).toLocaleDateString('vi-VN')}
+                        <TableCell className="text-neutral-700 dark:text-neutral-300 text-sm font-medium">
+                          {v.latest_expiry_date
+                            ? new Date(v.latest_expiry_date).toLocaleDateString('vi-VN')
+                            : '-'}
                         </TableCell>
                         <TableCell className="text-center">
                           <span className={cn('inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium', badge.className)}>
                             {badge.label}
                           </span>
                         </TableCell>
-                        <TableCell className="text-neutral-500 dark:text-neutral-400 text-sm max-w-40 truncate">
-                          {inspection.notes || '-'}
+                        <TableCell className="text-center text-neutral-700 dark:text-neutral-300 text-sm">
+                          {v.inspection_count}
                         </TableCell>
                         <TableCell className="text-center">
                           <div className="flex items-center justify-center gap-1">
                             <button
-                              onClick={() => setModal({ type: 'edit', inspection })}
-                              className="p-1.5 text-neutral-400 dark:text-neutral-500 hover:text-neutral-600 dark:hover:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800 rounded transition-colors"
-                              title="Sửa"
+                              onClick={() => setModal({ type: 'view', vehicle: v })}
+                              disabled={!v.latest_inspection_id}
+                              className="p-1.5 text-neutral-400 dark:text-neutral-500 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                              title="Xem chi tiết"
                             >
-                              <Pencil className="w-4 h-4" />
+                              <Eye className="w-4 h-4" />
                             </button>
                             <button
-                              onClick={() => handleDelete(inspection)}
-                              className="p-1.5 text-neutral-400 dark:text-neutral-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors"
-                              title="Xóa"
+                              onClick={() => setModal({ type: 'history', vehicle: v })}
+                              disabled={v.inspection_count === 0}
+                              className="p-1.5 text-neutral-400 dark:text-neutral-500 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/20 rounded transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                              title="Lịch sử đăng kiểm"
                             >
-                              <Trash2 className="w-4 h-4" />
+                              <History className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => setModal({ type: 'create', vehicleId: v.vehicle_id })}
+                              className="p-1.5 text-neutral-400 dark:text-neutral-500 hover:text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20 rounded transition-colors"
+                              title="Thêm đăng kiểm mới"
+                            >
+                              <Plus className="w-4 h-4" />
                             </button>
                           </div>
                         </TableCell>
@@ -301,12 +301,33 @@ export function InspectionPage() {
       </Card>
 
       <InspectionFormModal
-        isOpen={modal !== null}
+        isOpen={modal?.type === 'create'}
         onClose={() => setModal(null)}
         onSuccess={(msg) => showToast(msg)}
         onError={(msg) => showToast(msg, 'error')}
-        inspection={modal?.type === 'edit' ? modal.inspection : null}
+        inspection={null}
+        preselectedVehicleId={modal?.type === 'create' ? modal.vehicleId : undefined}
       />
+
+      {modal?.type === 'view' && modal.vehicle.latest_inspection_id && (
+        <InspectionFormModal
+          isOpen={true}
+          onClose={() => setModal(null)}
+          onSuccess={(msg) => showToast(msg)}
+          onError={(msg) => showToast(msg, 'error')}
+          viewInspectionId={modal.vehicle.latest_inspection_id}
+          viewMode
+        />
+      )}
+
+      {modal?.type === 'history' && (
+        <InspectionHistoryModal
+          isOpen={true}
+          onClose={() => setModal(null)}
+          vehicle={modal.vehicle}
+          onError={(msg) => showToast(msg, 'error')}
+        />
+      )}
     </div>
   );
 }

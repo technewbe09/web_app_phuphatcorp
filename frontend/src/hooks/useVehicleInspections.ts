@@ -20,6 +20,18 @@ export function useGetInspections(params?: {
   });
 }
 
+export function useGetVehicleSummary(params?: {
+  search?: string;
+  status?: string;
+  page?: number;
+  limit?: number;
+}) {
+  return useQuery({
+    queryKey: [...QUERY_KEY, 'summary', params],
+    queryFn: () => vehicleInspectionApi.fetchSummary(params),
+  });
+}
+
 export function useGetInspection(id: number) {
   return useQuery({
     queryKey: [...QUERY_KEY, id],
