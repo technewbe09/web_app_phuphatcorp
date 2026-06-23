@@ -60,8 +60,8 @@ export function InspectionFormModal({ isOpen, onClose, onSuccess, onError, inspe
         setFieldErrors((prev) => ({ ...prev, image: 'File quá lớn (tối đa 10MB)' }));
         return;
       }
-      if (!file.type.startsWith('image/')) {
-        setFieldErrors((prev) => ({ ...prev, image: 'Chỉ chấp nhận file ảnh' }));
+      if (!file.type.startsWith('image/') && file.type !== 'application/pdf') {
+        setFieldErrors((prev) => ({ ...prev, image: 'Chỉ chấp nhận file ảnh hoặc PDF' }));
         return;
       }
     }
@@ -210,7 +210,7 @@ export function InspectionFormModal({ isOpen, onClose, onSuccess, onError, inspe
             >
               <input
                 type="file"
-                accept="image/*"
+                accept="image/*,application/pdf"
                 multiple
                 onChange={handleFileChange}
                 className="hidden"
@@ -222,7 +222,7 @@ export function InspectionFormModal({ isOpen, onClose, onSuccess, onError, inspe
                   Kéo thả ảnh hoặc click để chọn
                 </p>
                 <p className="text-xs text-neutral-400 dark:text-neutral-500 mt-1">
-                  Tối đa 10MB/ảnh, định dạng JPG, PNG
+                  Tối đa 10MB/file, định dạng JPG, PNG, PDF
                 </p>
               </label>
             </div>

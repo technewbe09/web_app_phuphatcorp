@@ -30,10 +30,10 @@ const imageUpload = multer({
   }),
   limits: { fileSize: 10 * 1024 * 1024 },
   fileFilter: (_req, file, cb) => {
-    if (file.mimetype.startsWith('image/')) {
+    if (file.mimetype.startsWith('image/') || file.mimetype === 'application/pdf') {
       cb(null, true);
     } else {
-      cb(new Error('Chỉ chấp nhận file ảnh'));
+      cb(new Error('Chỉ chấp nhận file ảnh hoặc PDF'));
     }
   },
 });
