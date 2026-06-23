@@ -94,8 +94,8 @@ export function InspectionFormModal({ isOpen, onClose, onSuccess, onError, inspe
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
     for (const file of files) {
-      if (file.size > 10 * 1024 * 1024) {
-        setFieldErrors((prev) => ({ ...prev, image: 'File quá lớn (tối đa 10MB)' }));
+      if (file.size > 50 * 1024 * 1024) {
+        setFieldErrors((prev) => ({ ...prev, image: 'File quá lớn (tối đa 50MB)' }));
         return;
       }
     }
@@ -353,7 +353,7 @@ export function InspectionFormModal({ isOpen, onClose, onSuccess, onError, inspe
                     Kéo thả file hoặc click để chọn
                   </p>
                   <p className="text-xs text-neutral-400 dark:text-neutral-500 mt-1">
-                    Tối đa 10MB/file, mọi định dạng
+                    Tối đa 50MB/file, mọi định dạng
                   </p>
                 </label>
               </div>

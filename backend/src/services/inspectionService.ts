@@ -1,6 +1,5 @@
 import { pool } from '../config/database';
-import fs from 'fs';
-import path from 'path';
+import { storageService } from './storageService';
 
 export interface InspectionRecord {
   id: number;
@@ -68,14 +67,6 @@ const SELECT_COLS = `
 const IMAGE_SELECT_COLS = `
   id, inspection_id, filename, original_filename, file_path, file_size, mime_type, created_at
 `;
-
-function ensureUploadDir(): string {
-  const dir = path.resolve('uploads/inspection-images');
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true });
-  }
-  return dir;
-}
 
 export const inspectionService = {
   async listAll(params: {
@@ -264,28 +255,27 @@ export const inspectionService = {
       throw { code: 'NOT_FOUND' };
     }
 
+    const uploadResult = await storageService.upload(file.buffer, file.originalname, file.mimetype);
+
     const result = await pool.query<InspectionImage>(
       `INSERT INTO inspection_images (inspection_id, filename, original_filename, file_path, file_size, mime_type)
        VALUES ($1, $2, $3, $4, $5, $6)
        RETURNING ${IMAGE_SELECT_COLS}`,
-      [inspectionId, file.filename, file.originalname, file.path, file.size, file.mimetype],
+      [inspectionId, uploadResult.filename, file.originalname, uploadResult.objectKey, file.size, file.mimetype],
     );
     return result.rows[0];
   },
 
   async deleteImage(imageId: number): Promise<void> {
     const result = await pool.query<InspectionImage>(
-      `SELECT file_path FROM inspection_images WHERE id = $1`,
+      `SELECT filename FROM inspection_images WHERE id = $1`,
       [imageId],
     );
     if (!result.rows[0]) {
       throw { code: 'NOT_FOUND' };
     }
 
-    const filePath = result.rows[0].file_path;
-    if (fs.existsSync(filePath)) {
-      fs.unlinkSync(filePath);
-    }
+    await storageService.delete(result.rows[0].filename);
 
     await pool.query(`DELETE FROM inspection_images WHERE id = $1`, [imageId]);
   },
