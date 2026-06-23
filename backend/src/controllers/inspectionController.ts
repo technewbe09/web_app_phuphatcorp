@@ -1,5 +1,7 @@
 import { Response } from 'express';
 import { body, param, query, validationResult } from 'express-validator';
+import path from 'path';
+import fs from 'fs';
 import { inspectionService } from '../services/inspectionService';
 import { sendSuccess, sendError } from '../utils/response';
 import { auditService } from '../services/auditService';
@@ -243,6 +245,23 @@ export const inspectionController = {
       }
       const error = err instanceof Error ? err.message : 'Unknown error';
       sendError(res, 'Không thể xóa ảnh', 500, error);
+    }
+  },
+
+  async serveFile(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      const { filename } = req.params;
+      const filePath = path.resolve('uploads', 'inspection-images', filename);
+
+      if (!fs.existsSync(filePath)) {
+        sendError(res, 'Không tìm thấy file', 404);
+        return;
+      }
+
+      res.sendFile(filePath);
+    } catch (err) {
+      const error = err instanceof Error ? err.message : 'Unknown error';
+      sendError(res, 'Không thể tải file', 500, error);
     }
   },
 };

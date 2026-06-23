@@ -155,7 +155,7 @@ export const inspectionService = {
     try {
       await client.query('BEGIN');
 
-      const activeResult = await client.query<InspectionRecord>(
+      const activeResult = await client.query<{ id: number }>(
         `SELECT id FROM inspection_records
          WHERE vehicle_id = $1 AND status = 'active'
          ORDER BY expiry_date DESC LIMIT 1`,
@@ -168,18 +168,27 @@ export const inspectionService = {
         );
       }
 
-      const insertResult = await client.query<{ id: number }>(
+      const insertResult = await client.query<InspectionRecord>(
         `INSERT INTO inspection_records (vehicle_id, inspection_date, expiry_date, notes, created_by)
          VALUES ($1, $2, $3, $4, $5)
-         RETURNING id`,
+         RETURNING id, vehicle_id, inspection_date, expiry_date, notes, status, created_by, created_at, updated_at`,
         [input.vehicle_id, input.inspection_date, input.expiry_date, input.notes || null, userId],
       );
 
       await client.query('COMMIT');
 
-      const newId = insertResult.rows[0].id;
-      const record = await this.getById(newId);
-      return record!;
+      const row = insertResult.rows[0];
+      const vehicle = await pool.query<{ plate_number: string; driver_name: string }>(
+        `SELECT plate_number, driver_name FROM vehicles WHERE id = $1`,
+        [row.vehicle_id],
+      );
+
+      return {
+        ...row,
+        plate_number: vehicle.rows[0]?.plate_number,
+        driver_name: vehicle.rows[0]?.driver_name,
+        images: [],
+      };
     } catch (err) {
       await client.query('ROLLBACK');
       throw err;
@@ -224,15 +233,13 @@ export const inspectionService = {
   },
 
   async softDelete(id: number): Promise<void> {
-    const existing = await this.getById(id);
-    if (!existing || existing.status === 'deleted') {
-      throw { code: 'NOT_FOUND' };
-    }
-
-    await pool.query(
-      `UPDATE inspection_records SET status = 'deleted' WHERE id = $1`,
+    const result = await pool.query(
+      `UPDATE inspection_records SET status = 'deleted' WHERE id = $1 AND status != 'deleted' RETURNING id`,
       [id],
     );
+    if (result.rowCount === 0) {
+      throw { code: 'NOT_FOUND' };
+    }
   },
 
   async getExpiring(days: number = 30): Promise<InspectionRecord[]> {
@@ -249,8 +256,11 @@ export const inspectionService = {
   },
 
   async addImage(inspectionId: number, file: Express.Multer.File): Promise<InspectionImage> {
-    const inspection = await this.getById(inspectionId);
-    if (!inspection) {
+    const exists = await pool.query<{ exists: boolean }>(
+      `SELECT EXISTS(SELECT 1 FROM inspection_records WHERE id = $1) AS exists`,
+      [inspectionId],
+    );
+    if (!exists.rows[0].exists) {
       throw { code: 'NOT_FOUND' };
     }
 
@@ -304,13 +314,13 @@ export const inspectionService = {
     let whereLatest = '';
     if (params.status && params.status !== 'all') {
       if (params.status === 'expired') {
-        whereLatest = `AND ir.expiry_date < CURRENT_DATE`;
+        whereLatest = `AND li.expiry_date < CURRENT_DATE`;
       } else if (params.status === 'expiring') {
-        whereLatest = `AND ir.expiry_date BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '30 days'`;
+        whereLatest = `AND li.expiry_date BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '30 days'`;
       } else if (params.status === 'active') {
-        whereLatest = `AND ir.expiry_date >= CURRENT_DATE`;
+        whereLatest = `AND li.expiry_date >= CURRENT_DATE`;
       } else if (params.status === 'no_inspection') {
-        whereLatest = `AND ir.id IS NULL`;
+        whereLatest = `AND li.id IS NULL`;
       }
     }
 
@@ -330,6 +340,12 @@ export const inspectionService = {
         FROM inspection_records
         WHERE status IN ('active', 'expired')
         ORDER BY vehicle_id, expiry_date DESC
+      ),
+      inspection_counts AS (
+        SELECT vehicle_id, COUNT(*) AS cnt
+        FROM inspection_records
+        WHERE status != 'deleted'
+        GROUP BY vehicle_id
       )
       SELECT
         v.id AS vehicle_id,
@@ -339,9 +355,11 @@ export const inspectionService = {
         li.inspection_date AS latest_inspection_date,
         li.expiry_date AS latest_expiry_date,
         li.status AS latest_status,
-        (SELECT COUNT(*) FROM inspection_records WHERE vehicle_id = v.id AND status != 'deleted')::int AS inspection_count
+        COALESCE(ic.cnt, 0)::int AS inspection_count,
+        COUNT(*) OVER()::int AS total_count
       FROM vehicles v
       LEFT JOIN latest_inspection li ON li.vehicle_id = v.id
+      LEFT JOIN inspection_counts ic ON ic.vehicle_id = v.id
       WHERE v.status = 'active'
         ${whereLatest}
         ${searchWhere}
@@ -352,30 +370,12 @@ export const inspectionService = {
       LIMIT $${paramIdx} OFFSET $${paramIdx + 1}
     `;
 
-    const countQuery = `
-      WITH latest_inspection AS (
-        SELECT DISTINCT ON (vehicle_id)
-          id, vehicle_id, expiry_date, status
-        FROM inspection_records
-        WHERE status IN ('active', 'expired')
-        ORDER BY vehicle_id, expiry_date DESC
-      )
-      SELECT COUNT(*)::int AS count
-      FROM vehicles v
-      LEFT JOIN latest_inspection li ON li.vehicle_id = v.id
-      WHERE v.status = 'active'
-        ${whereLatest}
-        ${searchWhere}
-    `;
-
-    const countResult = await pool.query<{ count: number }>(countQuery, queryParams);
-    const total = countResult.rows[0].count;
-
-    const dataResult = await pool.query<VehicleInspectionSummary>(
+    const result = await pool.query<VehicleInspectionSummary & { total_count: number }>(
       query,
       [...queryParams, limit, offset],
     );
 
-    return { vehicles: dataResult.rows, total, page, limit };
+    const total = result.rows.length > 0 ? result.rows[0].total_count : 0;
+    return { vehicles: result.rows, total, page, limit };
   },
 };
