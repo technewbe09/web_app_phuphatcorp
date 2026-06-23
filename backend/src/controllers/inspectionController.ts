@@ -1,8 +1,7 @@
 import { Response } from 'express';
 import { body, param, query, validationResult } from 'express-validator';
-import path from 'path';
-import fs from 'fs';
 import { inspectionService } from '../services/inspectionService';
+import { storageService } from '../services/storageService';
 import { sendSuccess, sendError } from '../utils/response';
 import { auditService } from '../services/auditService';
 import { AuthRequest } from '../middleware/auth';
@@ -251,15 +250,22 @@ export const inspectionController = {
   async serveFile(req: AuthRequest, res: Response): Promise<void> {
     try {
       const { filename } = req.params;
-      const filePath = path.resolve('uploads', 'inspection-images', filename);
 
-      if (!fs.existsSync(filePath)) {
-        sendError(res, 'Không tìm thấy file', 404);
-        return;
+      const { stream, stat } = await storageService.getStream(filename);
+
+      res.setHeader('Content-Type', stat.metaData?.['content-type'] || 'application/octet-stream');
+      res.setHeader('Content-Length', stat.size);
+      res.setHeader('Cache-Control', 'public, max-age=86400');
+
+      stream.pipe(res);
+    } catch (err: unknown) {
+      if (err && typeof err === 'object' && 'code' in err) {
+        const e = err as { code: string };
+        if (e.code === 'NoSuchKey' || e.code === 'NotFound') {
+          sendError(res, 'Không tìm thấy file', 404);
+          return;
+        }
       }
-
-      res.sendFile(filePath);
-    } catch (err) {
       const error = err instanceof Error ? err.message : 'Unknown error';
       sendError(res, 'Không thể tải file', 500, error);
     }
