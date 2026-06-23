@@ -63,6 +63,14 @@ export const storageService = {
 
   async getPublicUrl(filename: string): Promise<string> {
     const cl = getClient();
-    return await cl.presignedGetObject(env.minio.bucket, filename, 24 * 60 * 60);
+    const url = await cl.presignedGetObject(env.minio.bucket, filename, 24 * 60 * 60);
+
+    if (env.minio.publicUrl) {
+      const pub = env.minio.publicUrl.replace(/\/$/, '');
+      const urlObj = new URL(url);
+      return `${pub}${urlObj.pathname}${urlObj.search}`;
+    }
+
+    return url;
   },
 };

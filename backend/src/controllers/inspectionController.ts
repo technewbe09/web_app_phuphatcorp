@@ -250,14 +250,8 @@ export const inspectionController = {
   async serveFile(req: AuthRequest, res: Response): Promise<void> {
     try {
       const { filename } = req.params;
-
-      const { stream, stat } = await storageService.getStream(filename);
-
-      res.setHeader('Content-Type', stat.metaData?.['content-type'] || 'application/octet-stream');
-      res.setHeader('Content-Length', stat.size);
-      res.setHeader('Cache-Control', 'public, max-age=86400');
-
-      stream.pipe(res);
+      const url = await storageService.getPublicUrl(filename);
+      res.redirect(302, url);
     } catch (err: unknown) {
       if (err && typeof err === 'object' && 'code' in err) {
         const e = err as { code: string };
