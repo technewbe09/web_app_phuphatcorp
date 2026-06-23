@@ -34,6 +34,10 @@ const imageUpload = multer({
   },
 });
 
+// Public route: serve uploaded files (no auth — used by <img>/<a> tags)
+router.get('/files/:filename', inspectionController.serveFile);
+
+// All other routes require authentication
 router.use(authenticateToken);
 
 router.get('/', requirePermission('vehicle_data.view'), inspectionController.list);

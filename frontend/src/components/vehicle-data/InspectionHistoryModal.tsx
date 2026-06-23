@@ -172,16 +172,16 @@ export function InspectionHistoryModal({ isOpen, onClose, vehicle, onError }: Pr
                   {imagesMap[expandedId].map((img) => (
                     <div key={img.id} className="group">
                       {isImageFile(img.mime_type) ? (
-                        <a href={`/uploads/inspection-images/${img.filename}`} target="_blank" rel="noopener noreferrer">
+                        <a href={`/api/vehicle-inspections/files/${img.filename}`} target="_blank" rel="noopener noreferrer">
                           <img
-                            src={`/uploads/inspection-images/${img.filename}`}
+                            src={`/api/vehicle-inspections/files/${img.filename}`}
                             alt={img.original_filename}
                             className="w-full aspect-square object-cover rounded-lg border border-neutral-200 dark:border-neutral-700 hover:opacity-80 transition-opacity"
                           />
                         </a>
                       ) : (
                         <a
-                          href={`/uploads/inspection-images/${img.filename}`}
+                          href={`/api/vehicle-inspections/files/${img.filename}`}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="w-full aspect-square rounded-lg border border-neutral-200 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-800 flex flex-col items-center justify-center gap-1 hover:bg-neutral-100 dark:hover:bg-neutral-700 transition-colors"
