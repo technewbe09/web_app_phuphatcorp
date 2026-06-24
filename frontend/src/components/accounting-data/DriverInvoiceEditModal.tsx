@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
-import { useForm } from 'react-hook-form';
+import { useForm, Controller } from 'react-hook-form';
 import { Plus, Trash2 } from 'lucide-react';
 import { Modal } from '../ui/Modal';
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
+import { DateInput } from '../ui/DateInput';
 import { useUpdateDriverInvoice } from '../../hooks/useDriverInvoices';
 import type { DriverInvoice, InvoiceNumber } from '../../api/driverInvoiceApi';
 
@@ -25,7 +26,7 @@ interface FormValues {
 
 export function DriverInvoiceEditModal({ isOpen, onClose, onSuccess, invoice }: Props) {
   const updateMutation = useUpdateDriverInvoice();
-  const { register, handleSubmit, reset, formState: { errors } } = useForm<FormValues>();
+  const { register, handleSubmit, reset, control, formState: { errors } } = useForm<FormValues>();
   const [soHoaDon, setSoHoaDon] = useState<InvoiceNumber[]>([]);
 
   useEffect(() => {
@@ -103,12 +104,21 @@ export function DriverInvoiceEditModal({ isOpen, onClose, onSuccess, invoice }: 
           />
         </div>
         <div className="grid grid-cols-2 gap-3">
-          <Input
-            label="Ngày"
-            type="date"
-            error={errors.ngay?.message}
-            {...register('ngay', { required: 'Ngày là bắt buộc' })}
-          />
+          <div className="w-full">
+            <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1.5">Ngày</label>
+            <Controller
+              name="ngay"
+              control={control}
+              rules={{ required: 'Ngày là bắt buộc' }}
+              render={({ field }) => (
+                <DateInput
+                  value={field.value || ''}
+                  onChange={field.onChange}
+                  error={errors.ngay?.message}
+                />
+              )}
+            />
+          </div>
           <Input
             label="Số xe"
             error={errors.so_xe?.message}

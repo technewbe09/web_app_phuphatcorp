@@ -3,6 +3,7 @@ import { X, Upload, FileText } from 'lucide-react';
 import { Modal } from '../ui/Modal';
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
+import { DateInput } from '../ui/DateInput';
 import { useGetVehicles } from '../../hooks/useVehicleCatalog';
 import { useCreateInspection, useUpdateInspection } from '../../hooks/useVehicleInspections';
 import { vehicleInspectionApi } from '../../api/vehicleInspectionApi';
@@ -292,10 +293,9 @@ export function InspectionFormModal({ isOpen, onClose, onSuccess, onError, inspe
               <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
                 Ngày đăng kiểm <span className="text-red-500">*</span>
               </label>
-              <Input
-                type="date"
+              <DateInput
                 value={form.inspection_date}
-                onChange={(e) => setForm((f) => ({ ...f, inspection_date: e.target.value }))}
+                onChange={(v) => setForm((f) => ({ ...f, inspection_date: v }))}
                 error={fieldErrors.inspection_date}
                 disabled={isView}
               />
@@ -304,10 +304,9 @@ export function InspectionFormModal({ isOpen, onClose, onSuccess, onError, inspe
               <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
                 Ngày hết hạn <span className="text-red-500">*</span>
               </label>
-              <Input
-                type="date"
+              <DateInput
                 value={form.expiry_date}
-                onChange={(e) => setForm((f) => ({ ...f, expiry_date: e.target.value }))}
+                onChange={(v) => setForm((f) => ({ ...f, expiry_date: v }))}
                 error={fieldErrors.expiry_date}
                 disabled={isView}
               />

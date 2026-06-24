@@ -4,6 +4,7 @@ import { Pagination } from '../../../components/ui/Pagination';
 import { Card, CardContent } from '../../../components/ui/Card';
 import { Button } from '../../../components/ui/Button';
 import { Input } from '../../../components/ui/Input';
+import { DateInput } from '../../../components/ui/DateInput';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../../components/ui/Table';
 import { useGetDriverInvoices, useDeleteDriverInvoice } from '../../../hooks/useDriverInvoices';
 import { DriverInvoiceUploadModal } from '../../../components/accounting-data/DriverInvoiceUploadModal';
@@ -135,15 +136,13 @@ export function DriverInvoicesPage() {
                 value={filters.ghi_chu || ''}
                 onChange={(e) => handleFilterChange('ghi_chu', e.target.value)}
               />
-              <Input
-                type="date"
+              <DateInput
                 value={filters.ngay_from || ''}
-                onChange={(e) => handleFilterChange('ngay_from', e.target.value)}
+                onChange={(newValue) => handleFilterChange('ngay_from', newValue)}
               />
-              <Input
-                type="date"
+              <DateInput
                 value={filters.ngay_to || ''}
-                onChange={(e) => handleFilterChange('ngay_to', e.target.value)}
+                onChange={(newValue) => handleFilterChange('ngay_to', newValue)}
               />
             </div>
           </div>

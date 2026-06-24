@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Modal } from '../ui/Modal';
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
+import { DateInput } from '../ui/DateInput';
 import { useGetVehicles } from '../../hooks/useVehicleCatalog';
 import { useCreateOilChange, useUpdateOilChange } from '../../hooks/useVehicleOilChanges';
 import type { OilChangeRecord } from '../../api/vehicleOilChangeApi';
@@ -150,10 +151,9 @@ export function OilChangeFormModal({ isOpen, onClose, onSuccess, onError, record
               <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
                 Ngày thay <span className="text-red-500">*</span>
               </label>
-              <Input
-                type="date"
+              <DateInput
                 value={form.change_date}
-                onChange={(e) => setForm((f) => ({ ...f, change_date: e.target.value }))}
+                onChange={(v) => setForm((f) => ({ ...f, change_date: v }))}
                 error={fieldErrors.change_date}
               />
             </div>
