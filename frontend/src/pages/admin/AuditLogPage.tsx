@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { FileText, ChevronDown, ChevronRight, AlertTriangle, XCircle } from 'lucide-react';
 import { cn } from '../../utils/cn';
+import { DateInput } from '../../components/ui/DateInput';
 import { useAccessLogs, useAuditLogs } from '../../hooks/useAuditLogs';
 import type { AccessLogFilters, AuditLogFilters, AccessLog, AuditLog } from '../../api/auditLogApi';
 import { useUsers } from '../../hooks/useUsers';
@@ -272,11 +273,9 @@ export function AuditLogPage() {
               <label className="text-xs text-neutral-500 dark:text-neutral-400">
                 {t('auditLog.filters.dateFrom' as never)}
               </label>
-              <input
-                type="date"
-                className="px-3 py-2 border border-neutral-300 dark:border-neutral-700 rounded-lg bg-white dark:bg-neutral-900 text-sm text-neutral-900 dark:text-neutral-100"
+              <DateInput
                 value={draftAccessFilters.dateFrom || ''}
-                onChange={(e) => setDraftAccessFilters({ ...draftAccessFilters, dateFrom: e.target.value || undefined })}
+                onChange={(newValue) => setDraftAccessFilters({ ...draftAccessFilters, dateFrom: newValue || undefined })}
               />
             </div>
 
@@ -284,11 +283,9 @@ export function AuditLogPage() {
               <label className="text-xs text-neutral-500 dark:text-neutral-400">
                 {t('auditLog.filters.dateTo' as never)}
               </label>
-              <input
-                type="date"
-                className="px-3 py-2 border border-neutral-300 dark:border-neutral-700 rounded-lg bg-white dark:bg-neutral-900 text-sm text-neutral-900 dark:text-neutral-100"
+              <DateInput
                 value={draftAccessFilters.dateTo || ''}
-                onChange={(e) => setDraftAccessFilters({ ...draftAccessFilters, dateTo: e.target.value || undefined })}
+                onChange={(newValue) => setDraftAccessFilters({ ...draftAccessFilters, dateTo: newValue || undefined })}
               />
             </div>
 
@@ -503,11 +500,9 @@ export function AuditLogPage() {
               <label className="text-xs text-neutral-500 dark:text-neutral-400">
                 {t('auditLog.filters.dateFrom' as never)}
               </label>
-              <input
-                type="date"
-                className="px-3 py-2 border border-neutral-300 dark:border-neutral-700 rounded-lg bg-white dark:bg-neutral-900 text-sm text-neutral-900 dark:text-neutral-100"
+              <DateInput
                 value={draftAuditFilters.dateFrom || ''}
-                onChange={(e) => setDraftAuditFilters({ ...draftAuditFilters, dateFrom: e.target.value || undefined })}
+                onChange={(newValue) => setDraftAuditFilters({ ...draftAuditFilters, dateFrom: newValue || undefined })}
               />
             </div>
 
@@ -515,11 +510,9 @@ export function AuditLogPage() {
               <label className="text-xs text-neutral-500 dark:text-neutral-400">
                 {t('auditLog.filters.dateTo' as never)}
               </label>
-              <input
-                type="date"
-                className="px-3 py-2 border border-neutral-300 dark:border-neutral-700 rounded-lg bg-white dark:bg-neutral-900 text-sm text-neutral-900 dark:text-neutral-100"
+              <DateInput
                 value={draftAuditFilters.dateTo || ''}
-                onChange={(e) => setDraftAuditFilters({ ...draftAuditFilters, dateTo: e.target.value || undefined })}
+                onChange={(newValue) => setDraftAuditFilters({ ...draftAuditFilters, dateTo: newValue || undefined })}
               />
             </div>
 

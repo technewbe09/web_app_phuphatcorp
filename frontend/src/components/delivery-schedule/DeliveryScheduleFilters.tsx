@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import dayjs from 'dayjs';
 import { Search } from 'lucide-react';
 import { Input } from '../ui/Input';
+import { DateInput } from '../ui/DateInput';
 import { Button } from '../ui/Button';
 import { QuickFilterButtons } from './QuickFilterButtons';
 import type { ListFilters } from '../../api/deliveryScheduleApi';
@@ -94,8 +95,7 @@ export function DeliveryScheduleFilters({ filters, onFiltersChange, isLoading, a
           <label className="block text-xs font-medium text-neutral-600 dark:text-neutral-400 mb-1">
             Từ ngày
           </label>
-          <Input
-            type="date"
+          <DateInput
             value={fromDate}
             onChange={(e) => { setFromDate(e.target.value); setDateError(''); }}
             onKeyDown={handleKeyDown}
@@ -106,8 +106,7 @@ export function DeliveryScheduleFilters({ filters, onFiltersChange, isLoading, a
           <label className="block text-xs font-medium text-neutral-600 dark:text-neutral-400 mb-1">
             Đến ngày
           </label>
-          <Input
-            type="date"
+          <DateInput
             value={toDate}
             onChange={(e) => { setToDate(e.target.value); setDateError(''); }}
             onKeyDown={handleKeyDown}

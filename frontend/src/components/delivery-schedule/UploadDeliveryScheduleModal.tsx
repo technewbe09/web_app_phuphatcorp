@@ -6,6 +6,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Modal } from '../ui/Modal';
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
+import { DateInput } from '../ui/DateInput';
 import { deliveryScheduleApi, type UploadError } from '../../api/deliveryScheduleApi';
 
 interface Props {
@@ -158,8 +159,7 @@ export function UploadDeliveryScheduleModal({ isOpen, onClose, onSuccess }: Prop
             <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
               Từ ngày
             </label>
-            <Input
-              type="date"
+            <DateInput
               value={fromDate}
               onChange={(e) => { setFromDate(e.target.value); setDateError(''); }}
             />
@@ -168,8 +168,7 @@ export function UploadDeliveryScheduleModal({ isOpen, onClose, onSuccess }: Prop
             <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
               Đến ngày
             </label>
-            <Input
-              type="date"
+            <DateInput
               value={toDate}
               onChange={(e) => { setToDate(e.target.value); setDateError(''); }}
             />

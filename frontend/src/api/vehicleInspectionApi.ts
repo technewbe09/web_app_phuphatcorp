@@ -33,6 +33,24 @@ export interface InspectionListResult {
   limit: number;
 }
 
+export interface VehicleInspectionSummary {
+  vehicle_id: number;
+  plate_number: string;
+  driver_name: string;
+  latest_inspection_id: number | null;
+  latest_inspection_date: string | null;
+  latest_expiry_date: string | null;
+  latest_status: string | null;
+  inspection_count: number;
+}
+
+export interface VehicleSummaryResult {
+  vehicles: VehicleInspectionSummary[];
+  total: number;
+  page: number;
+  limit: number;
+}
+
 export interface CreateInspectionInput {
   vehicle_id: number;
   inspection_date: string;
@@ -56,6 +74,19 @@ export const vehicleInspectionApi = {
   }): Promise<InspectionListResult> => {
     const response = await axiosClient.get<{ data: InspectionListResult }>(
       '/vehicle-inspections',
+      { params },
+    );
+    return response.data.data;
+  },
+
+  fetchSummary: async (params?: {
+    search?: string;
+    status?: string;
+    page?: number;
+    limit?: number;
+  }): Promise<VehicleSummaryResult> => {
+    const response = await axiosClient.get<{ data: VehicleSummaryResult }>(
+      '/vehicle-inspections/summary',
       { params },
     );
     return response.data.data;

@@ -4,6 +4,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { X } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
+import { DateInput } from '../ui/DateInput';
 import { deliveryScheduleApi, type DeliverySchedule, type UpdateSchedulePayload } from '../../api/deliveryScheduleApi';
 
 interface Props {
@@ -105,8 +106,7 @@ export function EditDeliveryScheduleModal({ isOpen, record, onClose, onSuccess, 
               <label className="text-xs font-medium text-neutral-700 dark:text-neutral-300">
                 Ngày <span className="text-red-500">*</span>
               </label>
-              <Input
-                type="date"
+              <DateInput
                 {...register('ngay', { required: 'Ngày là bắt buộc' })}
                 className="text-sm"
               />

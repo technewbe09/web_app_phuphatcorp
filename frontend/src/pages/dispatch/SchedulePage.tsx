@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Plus } from 'lucide-react';
 import { useI18n } from '../../i18n/useI18n';
 import { Button } from '../../components/ui/Button';
+import { DateInput } from '../../components/ui/DateInput';
 import { ScheduleTable } from '../../components/dispatch/ScheduleTable';
 import { OutsideRouteTable } from '../../components/dispatch/OutsideRouteTable';
 import { CreateScheduleModal } from '../../components/dispatch/CreateScheduleModal';
@@ -94,8 +95,7 @@ export function SchedulePage() {
           {t('dispatch.schedule.title' as never)}
         </h1>
         <div className="flex items-center gap-3">
-          <input
-            type="date"
+          <DateInput
             value={selectedDate}
             onChange={(e) => setSelectedDate(e.target.value)}
             className="px-3 py-2 rounded-lg border border-neutral-300 dark:border-neutral-600 text-sm bg-white dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100 outline-none focus:border-neutral-500 dark:focus:border-neutral-400 transition-colors"

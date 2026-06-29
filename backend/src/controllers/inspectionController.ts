@@ -1,6 +1,7 @@
 import { Response } from 'express';
 import { body, param, query, validationResult } from 'express-validator';
 import { inspectionService } from '../services/inspectionService';
+import { storageService } from '../services/storageService';
 import { sendSuccess, sendError } from '../utils/response';
 import { auditService } from '../services/auditService';
 import { AuthRequest } from '../middleware/auth';
@@ -184,6 +185,21 @@ export const inspectionController = {
     }
   },
 
+  async getVehicleSummary(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      const search = req.query.search as string | undefined;
+      const status = req.query.status as string | undefined;
+      const page = parseInt(req.query.page as string, 10) || 1;
+      const limit = parseInt(req.query.limit as string, 10) || 20;
+
+      const data = await inspectionService.getVehicleSummary({ search, status, page, limit });
+      sendSuccess(res, data, 'Danh sách xe');
+    } catch (err) {
+      const error = err instanceof Error ? err.message : 'Unknown error';
+      sendError(res, 'Không thể tải danh sách xe', 500, error);
+    }
+  },
+
   async uploadImage(req: AuthRequest, res: Response): Promise<void> {
     try {
       const id = parseInt(req.params.id, 10);
@@ -228,6 +244,24 @@ export const inspectionController = {
       }
       const error = err instanceof Error ? err.message : 'Unknown error';
       sendError(res, 'Không thể xóa ảnh', 500, error);
+    }
+  },
+
+  async serveFile(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      const { filename } = req.params;
+      const url = await storageService.getPublicUrl(filename);
+      res.redirect(302, url);
+    } catch (err: unknown) {
+      if (err && typeof err === 'object' && 'code' in err) {
+        const e = err as { code: string };
+        if (e.code === 'NoSuchKey' || e.code === 'NotFound') {
+          sendError(res, 'Không tìm thấy file', 404);
+          return;
+        }
+      }
+      const error = err instanceof Error ? err.message : 'Unknown error';
+      sendError(res, 'Không thể tải file', 500, error);
     }
   },
 };

@@ -48,6 +48,9 @@ app.use(auditMiddleware);
 // Serve uploaded fuel images
 app.use('/uploads/fuel-images', express.static(path.resolve('uploads/fuel-images')));
 
+// Serve uploaded inspection files
+app.use('/uploads/inspection-images', express.static(path.resolve('uploads/inspection-images')));
+
 app.use('/api', routes);
 
 app.get('/health', (_req, res) => {

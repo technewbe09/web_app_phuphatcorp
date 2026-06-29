@@ -4,6 +4,7 @@ import { env } from './config/env';
 import { pool } from './config/database';
 import { schedulerService } from './services/schedulerService';
 import { initLogCleanup, destroyLogCleanup } from './services/logCleanupService';
+import { storageService } from './services/storageService';
 
 async function main(): Promise<void> {
   try {
@@ -17,6 +18,10 @@ async function main(): Promise<void> {
 
   await schedulerService.init();
   initLogCleanup();
+
+  await storageService.ensureBucket().catch((err) => {
+    console.warn('[MinIO] Bucket init failed (uploads may not work):', err instanceof Error ? err.message : err);
+  });
 
   app.listen(env.port, () => {
     console.log(`[Server] Running on http://localhost:${env.port}`);

@@ -1,7 +1,5 @@
 import { Router } from 'express';
 import multer from 'multer';
-import path from 'path';
-import fs from 'fs';
 import {
   inspectionController,
   inspectionCreateSchema,
@@ -14,33 +12,19 @@ import { validate } from '../middleware/validate';
 
 const router = Router();
 
-const uploadDir = path.resolve('uploads/inspection-images');
-if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir, { recursive: true });
-}
-
 const imageUpload = multer({
-  storage: multer.diskStorage({
-    destination: (_req, _file, cb) => cb(null, uploadDir),
-    filename: (_req, file, cb) => {
-      const unique = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
-      const ext = path.extname(file.originalname);
-      cb(null, `${unique}${ext}`);
-    },
-  }),
-  limits: { fileSize: 10 * 1024 * 1024 },
-  fileFilter: (_req, file, cb) => {
-    if (file.mimetype.startsWith('image/')) {
-      cb(null, true);
-    } else {
-      cb(new Error('Chỉ chấp nhận file ảnh'));
-    }
-  },
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 50 * 1024 * 1024 }, // 50MB for MinIO
 });
 
+// Public route: serve uploaded files (no auth — used by <img>/<a> tags)
+router.get('/files/:filename', inspectionController.serveFile);
+
+// All other routes require authentication
 router.use(authenticateToken);
 
 router.get('/', requirePermission('vehicle_data.view'), inspectionController.list);
+router.get('/summary', requirePermission('vehicle_data.view'), inspectionController.getVehicleSummary);
 router.get('/expiring', requirePermission('vehicle_data.view'), inspectionController.getExpiring);
 router.get('/:id', requirePermission('vehicle_data.view'), inspectionController.getById);
 
