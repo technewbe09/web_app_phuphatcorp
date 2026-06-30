@@ -97,7 +97,7 @@ export function DeliveryScheduleFilters({ filters, onFiltersChange, isLoading, a
           </label>
           <DateInput
             value={fromDate}
-            onChange={(e) => { setFromDate(e.target.value); setDateError(''); }}
+            onChange={(value) => { setFromDate(value); setDateError(''); }}
             onKeyDown={handleKeyDown}
             className="w-40"
           />
@@ -108,7 +108,7 @@ export function DeliveryScheduleFilters({ filters, onFiltersChange, isLoading, a
           </label>
           <DateInput
             value={toDate}
-            onChange={(e) => { setToDate(e.target.value); setDateError(''); }}
+            onChange={(value) => { setToDate(value); setDateError(''); }}
             onKeyDown={handleKeyDown}
             className="w-40"
           />

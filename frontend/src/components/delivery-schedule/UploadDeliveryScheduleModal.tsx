@@ -161,7 +161,7 @@ export function UploadDeliveryScheduleModal({ isOpen, onClose, onSuccess }: Prop
             </label>
             <DateInput
               value={fromDate}
-              onChange={(e) => { setFromDate(e.target.value); setDateError(''); }}
+              onChange={(value) => { setFromDate(value); setDateError(''); }}
             />
           </div>
           <div>
@@ -170,7 +170,7 @@ export function UploadDeliveryScheduleModal({ isOpen, onClose, onSuccess }: Prop
             </label>
             <DateInput
               value={toDate}
-              onChange={(e) => { setToDate(e.target.value); setDateError(''); }}
+              onChange={(value) => { setToDate(value); setDateError(''); }}
             />
           </div>
         </div>

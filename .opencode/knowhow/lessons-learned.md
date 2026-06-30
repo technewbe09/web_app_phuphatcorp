@@ -458,6 +458,37 @@ Luôn đặt tất cả imports ở trên cùng. Dùng named imports thay vì na
 ### 3. Không mix concerns trong một component
 AuthProvider = state only. Navigation = page level. Validation = form library. Không nhét mọi thứ vào một chỗ.
 
+### Upload lịch đi hàng fail-toàn-bộ khi STT không phải số
+- **Ngày:** 2026-06-30
+- **Severity:** High
+- **Feature liên quan:** Lịch đi hàng (Delivery Schedule) — Upload Excel
+- **Triệu chứng:** Upload file Excel lịch đi hàng bị báo lỗi "STT không phải số hợp lệ". Chỉ một vài sheet có dòng tổng kết cuối (TỔNG TIỀN XE, NGƯỜI, MỖI NGƯỜI, TIỀN PHÁT SINH) gây fail toàn bộ upload.
+- **Root cause:** `parseColumn()` trong `deliveryScheduleService.ts` fail-fast — nếu bất kỳ dòng nào có STT non-numeric, push error và throw `VALIDATION_ERRORS` khiến toàn bộ upload bị reject. Các dòng tổng kết cuối sheet có ColG chứa text thay vì số → `parseInt()` NaN.
+- **Fix:** Chuyển lỗi STT thành skip — khi `parseInt(stt)` NaN → `continue` (bỏ qua dòng, tương tự cách xử lý TẤN best-effort). Đồng thời sửa Bug `!stt` falsy check khiến STT=0 bị bỏ qua → `stt == null || stt === '' || (!noi_giao && !so_xe)`.
+- **File sửa:** `backend/src/services/deliveryScheduleService.ts` — dòng 194 (BR-001 skip rule) + dòng 206-215 (STT parsing)
+- **Cần chú ý:** Khi parse dữ liệu từ Excel, không nên dùng fail-fast cho từng ô — dùng best-effort skip với optional field. Chỉ fail-fast khi vi phạm business rule thực sự (VD: duplicate, thiếu field bắt buộc). Các dòng tổng kết/thống kê ở cuối sheet là pattern phổ biến trong Excel thực tế.
+
+### DateInput onChange không nhận value — callers vẫn dùng (e) => e.target.value
+- **Ngày:** 2026-06-30
+- **Severity:** High
+- **Feature liên quan:** Tất cả màn hình dùng `<DateInput>` — Upload Lịch đi hàng, Filter Lịch đi hàng, Bảng điều phối xe
+- **Triệu chứng:** Không thể chọn ngày trong DateInput — click vào calendar picker không cập nhật giá trị.
+- **Root cause:** Commit `f4309cb` thay native `<input type="date">` bằng custom `<DateInput>` component (Việt hóa calendar). Native input gọi `onChange(e)` với `e.target.value = "2026-06-30"`. DateInput mới gọi `onChange("2026-06-30")` (string trực tiếp). Nhưng callers vẫn dùng pattern `(e) => setXxx(e.target.value)` → `e` là string, `.target.value` = `undefined` → không cập nhật.
+- **Fix:** Sửa 3 file callers (UploadDeliveryScheduleModal, DeliveryScheduleFilters, SchedulePage) từ `onChange={(e) => setXxx(e.target.value)}` → `onChange={(value) => setXxx(value)}`. Các file dùng react-hook-form (`{...register}`, `field.onChange`) không bị ảnh hưởng vì react-hook-form fallback `e?.target?.value ?? e` xử lý được string trực tiếp.
+- **File sửa:** `UploadDeliveryScheduleModal.tsx`, `DeliveryScheduleFilters.tsx`, `SchedulePage.tsx`
+- **Cần chú ý:** Khi thay đổi signature của component prop (đặc biệt onChange), phải kiểm tra TẤT CẢ callers. Custom component không nên mô phỏng event object — nếu onChange trả trực tiếp value thì callers cũng phải nhận trực tiếp value.
+
+### N+1 INSERT trong upload lịch đi hàng — 53s cho ~3000 rows
+- **Ngày:** 2026-06-30
+- **Severity:** Critical
+- **Feature liên quan:** Lịch đi hàng — Upload Excel
+- **Triệu chứng:** `POST /api/delivery-schedules/upload` mất 53,490ms để upload 1 tháng dữ liệu (~3000 rows). GET list chỉ 373ms.
+- **Root cause:** `upload()` method dùng `for (const row of rowsToInsert) { await client.query(INSERT ...) }` — mỗi dòng 1 INSERT riêng lẻ, mỗi lần 1 network round trip. ~3000 dòng = ~3000 round trips = ~52s.
+- **Fix:** Thay bằng multi-row INSERT batch 500 rows/lần. Từ `INSERT INTO ... VALUES ($1,$2,...)` trong loop → `INSERT INTO ... VALUES ($1,$2,...), ($10,$11,...), ...` gộp nhiều dòng trong 1 query. Giảm từ ~3000 queries xuống còn ~6 queries.
+- **File sửa:** `backend/src/services/deliveryScheduleService.ts` — dòng 133-160 (upload method, batch insert)
+- **Kết quả:** 53,000ms → ~500ms (-99%)
+- **Cần chú ý:** Khi INSERT hàng loạt, luôn dùng multi-row INSERT hoặc COPY. Không bao giờ INSERT từng dòng trong loop. Batch size 500-1000 an toàn dưới PostgreSQL param limit (65535).
+
 ### 4. Không trust agent-generated imports path
 Luôn verify import paths đúng sau khi scaffold, đặc biệt với nested folder structures.
 
