@@ -130,22 +130,32 @@ export const deliveryScheduleService = {
         [fromDate, toDate]
       );
 
-      // Batch insert new records
-      for (const row of rowsToInsert) {
+      // Batch insert new records (500 rows/batch to avoid N+1)
+      const BATCH_SIZE = 500;
+      for (let b = 0; b < rowsToInsert.length; b += BATCH_SIZE) {
+        const batch = rowsToInsert.slice(b, b + BATCH_SIZE);
+        const columns = [
+          'ngay', 'stt', 'noi_giao', 'tan',
+          'so_xe', 'can_info', 'ghi_chu', 'loai', 'created_by'
+        ];
+        const valuePlaceholders: string[] = [];
+        const allValues: any[] = [];
+
+        batch.forEach((row, i) => {
+          const base = i * columns.length;
+          valuePlaceholders.push(
+            `(${columns.map((_, j) => `$${base + j + 1}`).join(', ')})`
+          );
+          allValues.push(
+            row.ngay, row.stt, row.noi_giao, row.tan,
+            row.so_xe, row.can_info, row.ghi_chu, row.loai, userId
+          );
+        });
+
         await client.query(
-          `INSERT INTO delivery_schedules (ngay, stt, noi_giao, tan, so_xe, can_info, ghi_chu, loai, created_by)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
-          [
-            row.ngay, // Already in YYYY-MM-DD format
-            row.stt,
-            row.noi_giao,
-            row.tan,
-            row.so_xe,
-            row.can_info,
-            row.ghi_chu,
-            row.loai,
-            userId
-          ]
+          `INSERT INTO delivery_schedules (${columns.join(', ')})
+           VALUES ${valuePlaceholders.join(', ')}`,
+          allValues
         );
       }
 
@@ -191,7 +201,7 @@ export const deliveryScheduleService = {
       const ghi_chu = row[colOffset + 5]; // Column F or L
 
       // BR-001: Skip if no STT or (no NƠI GIAO and no SỐ XE)
-      if (!stt || (!noi_giao && !so_xe)) {
+      if (stt == null || stt === '' || (!noi_giao && !so_xe)) {
         continue;
       }
 
@@ -204,17 +214,10 @@ export const deliveryScheduleService = {
       if (typeof stt === 'number') {
         normalizedStt = Math.floor(stt);
       } else if (typeof stt === 'string') {
-        const parsed = parseInt(stt, 10);
+        const trimmed = stt.trim();
+        const parsed = parseInt(trimmed, 10);
         if (isNaN(parsed)) {
-          errors.push({
-            sheet: sheetName,
-            row: i + 1,
-            ngay: ngayStr,
-            field: 'stt',
-            value: stt,
-            reason: 'STT không phải số hợp lệ'
-          });
-          continue;
+          continue; // Skip non-numeric STT (summary/footer rows, header text)
         }
         normalizedStt = parsed;
       } else {

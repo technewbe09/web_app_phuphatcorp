@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Trash2, Pencil } from 'lucide-react';
+import { Trash2, Pencil, Plus } from 'lucide-react';
 import { useI18n } from '../../i18n/useI18n';
 import { cn } from '../../utils/cn';
 import type { DispatchSchedule } from '../../api/dispatchApi';
@@ -11,6 +11,7 @@ interface ScheduleTableProps {
   onEdit: (schedule: DispatchSchedule) => void;
   onDelete: (id: number) => void;
   isDeleting: boolean;
+  onAdd?: () => void;
 }
 
 function SkeletonRow() {
@@ -25,7 +26,7 @@ function SkeletonRow() {
   );
 }
 
-export function ScheduleTable({ title, data, isLoading, onEdit, onDelete, isDeleting }: ScheduleTableProps) {
+export function ScheduleTable({ title, data, isLoading, onEdit, onDelete, isDeleting, onAdd }: ScheduleTableProps) {
   const { t } = useI18n();
   const [deletingId, setDeletingId] = useState<number | null>(null);
 
@@ -36,8 +37,17 @@ export function ScheduleTable({ title, data, isLoading, onEdit, onDelete, isDele
 
   return (
     <div className="bg-white dark:bg-neutral-900 rounded-xl border border-neutral-200 dark:border-neutral-800 overflow-hidden">
-      <div className="px-4 py-3 border-b border-neutral-200 dark:border-neutral-800">
+      <div className="px-4 py-3 border-b border-neutral-200 dark:border-neutral-800 flex items-center justify-between">
         <h2 className="text-base font-semibold text-neutral-900 dark:text-neutral-100">{title}</h2>
+        {onAdd && (
+          <button
+            onClick={onAdd}
+            className="p-1 rounded-lg hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors"
+            title={t('dispatch.schedule.addTrip' as never)}
+          >
+            <Plus className="w-4 h-4 text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-300" />
+          </button>
+        )}
       </div>
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
