@@ -417,6 +417,7 @@
       "tableXeNho": "Small Vehicles",
       "tableXeLon": "Large Vehicles",
       "tableTuyenNgoai": "Outside Routes",
+      "addTrip": "Add Trip",
       "emptyState": "No trips scheduled for this date",
       "emptyStateSub": "Click 'Create Trip' to add a new trip",
       "emptyStateTuyenNgoai": "No outside route trips scheduled",

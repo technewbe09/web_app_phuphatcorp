@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { ChevronLeft, Truck, Car, MapPin, Navigation } from 'lucide-react';
 import { useI18n } from '../../i18n/useI18n';
 import { Modal } from '../ui/Modal';
@@ -12,6 +12,8 @@ interface CreateScheduleModalProps {
   selectedDate: string;
   onSubmit: (data: CreateDispatchScheduleRequest) => Promise<void>;
   isSubmitting: boolean;
+  presetLoaiTuyen?: LoaiTuyen;
+  presetLoaiXe?: LoaiXe;
 }
 
 type LoaiTuyen = 'Tuyến cố định' | 'Tuyến ngoài';
@@ -44,6 +46,8 @@ export function CreateScheduleModal({
   selectedDate,
   onSubmit,
   isSubmitting,
+  presetLoaiTuyen,
+  presetLoaiXe,
 }: CreateScheduleModalProps) {
   const { t } = useI18n();
   const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
@@ -52,6 +56,23 @@ export function CreateScheduleModal({
   const [loai_xe, setLoaiXe] = useState<LoaiXe | null>(null);
   const [form, setForm] = useState<FormData>(initialForm);
   const [errors, setErrors] = useState<FieldErrors>({});
+
+  useEffect(() => {
+    if (isOpen) {
+      setLoaiTuyen(presetLoaiTuyen ?? null);
+      setLoaiXe(presetLoaiXe ?? null);
+      setXeType(null);
+      setForm(initialForm);
+      setErrors({});
+      if (presetLoaiTuyen && presetLoaiXe) {
+        setStep(2);
+      } else if (presetLoaiTuyen) {
+        setStep(2);
+      } else {
+        setStep(1);
+      }
+    }
+  }, [isOpen, presetLoaiTuyen, presetLoaiXe]);
 
   const handleClose = () => {
     setStep(1);
@@ -72,7 +93,11 @@ export function CreateScheduleModal({
   const handleSelectXeType = (type: XeType) => {
     setXeType(type);
     setForm(initialForm);
-    setStep(3);
+    if (loai_xe) {
+      setStep(4);
+    } else {
+      setStep(3);
+    }
   };
 
   const handleSelectLoaiXe = (loai: LoaiXe) => {

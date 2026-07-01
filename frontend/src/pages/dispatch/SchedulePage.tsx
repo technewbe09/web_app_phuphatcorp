@@ -15,6 +15,9 @@ import {
 } from '../../hooks/useDispatchSchedules';
 import type { CreateDispatchScheduleRequest, UpdateDispatchScheduleRequest, DispatchSchedule } from '../../api/dispatchApi';
 
+type LoaiTuyen = 'Tuyến cố định' | 'Tuyến ngoài';
+type LoaiXe = 'Xe lớn' | 'Xe nhỏ';
+
 function todayISO(): string {
   return new Date().toISOString().split('T')[0];
 }
@@ -27,6 +30,8 @@ export function SchedulePage() {
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [createError, setCreateError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
+  const [presetLoaiTuyen, setPresetLoaiTuyen] = useState<LoaiTuyen | undefined>();
+  const [presetLoaiXe, setPresetLoaiXe] = useState<LoaiXe | undefined>();
 
   const { data, isLoading, isError, refetch } = useDispatchSchedules(selectedDate);
   const createSchedule = useCreateDispatchSchedule();
@@ -41,6 +46,30 @@ export function SchedulePage() {
       setSuccessMsg(msg);
       setTimeout(() => setSuccessMsg(null), 3000);
     }
+  };
+
+  const handleAddXeNho = () => {
+    setPresetLoaiTuyen('Tuyến cố định');
+    setPresetLoaiXe('Xe nhỏ');
+    setIsCreateOpen(true);
+  };
+
+  const handleAddXeLon = () => {
+    setPresetLoaiTuyen('Tuyến cố định');
+    setPresetLoaiXe('Xe lớn');
+    setIsCreateOpen(true);
+  };
+
+  const handleAddTuyenNgoai = () => {
+    setPresetLoaiTuyen('Tuyến ngoài');
+    setPresetLoaiXe(undefined);
+    setIsCreateOpen(true);
+  };
+
+  const handleGlobalAdd = () => {
+    setPresetLoaiTuyen(undefined);
+    setPresetLoaiXe(undefined);
+    setIsCreateOpen(true);
   };
 
   const handleCreate = async (formData: CreateDispatchScheduleRequest) => {
@@ -97,10 +126,10 @@ export function SchedulePage() {
         <div className="flex items-center gap-3">
           <DateInput
             value={selectedDate}
-            onChange={(e) => setSelectedDate(e.target.value)}
+            onChange={(value) => setSelectedDate(value)}
             className="px-3 py-2 rounded-lg border border-neutral-300 dark:border-neutral-600 text-sm bg-white dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100 outline-none focus:border-neutral-500 dark:focus:border-neutral-400 transition-colors"
           />
-          <Button onClick={() => setIsCreateOpen(true)}>
+          <Button onClick={handleGlobalAdd}>
             <Plus className="w-4 h-4 mr-1.5" />
             {t('dispatch.schedule.createTrip' as never)}
           </Button>
@@ -142,6 +171,7 @@ export function SchedulePage() {
               onEdit={handleEdit}
               onDelete={handleDelete}
               isDeleting={deleteSchedule.isPending}
+              onAdd={handleAddXeNho}
             />
             <ScheduleTable
               title={t('dispatch.schedule.tableXeLon' as never)}
@@ -150,6 +180,7 @@ export function SchedulePage() {
               onEdit={handleEdit}
               onDelete={handleDelete}
               isDeleting={deleteSchedule.isPending}
+              onAdd={handleAddXeLon}
             />
           </div>
           <div className="mt-4">
@@ -160,6 +191,7 @@ export function SchedulePage() {
               onEdit={handleEdit}
               onDelete={handleDelete}
               isDeleting={deleteSchedule.isPending}
+              onAdd={handleAddTuyenNgoai}
             />
           </div>
         </>
@@ -175,6 +207,8 @@ export function SchedulePage() {
         selectedDate={selectedDate}
         onSubmit={handleCreate}
         isSubmitting={createSchedule.isPending}
+        presetLoaiTuyen={presetLoaiTuyen}
+        presetLoaiXe={presetLoaiXe}
       />
       {createError && (
         <div className="mt-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-sm text-red-700 dark:text-red-400">

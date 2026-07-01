@@ -417,6 +417,7 @@
       "tableXeNho": "Lịch xe nhỏ",
       "tableXeLon": "Lịch xe lớn",
       "tableTuyenNgoai": "Lịch tuyến ngoài",
+      "addTrip": "Thêm chuyến",
       "emptyState": "Chưa có chuyến xe nào cho ngày này",
       "emptyStateSub": "Nhấn 'Tạo chuyến' để thêm chuyến mới",
       "emptyStateTuyenNgoai": "Chưa có lịch tuyến ngoài nào",
