@@ -548,8 +548,13 @@ export const fuelRecordService = {
 
           // Skip TC (summary) rows
           if (String(row[3]).trim() === 'TC') continue;
-          if (!plateNum || isNaN(odoOld) || isNaN(odoNew) || isNaN(liters) || isNaN(unitPrice)) continue;
           if (!plateNum.match(/^\d{2}[A-Za-z]/)) continue;
+
+          // Default missing numeric values to 0
+          const odoOldVal = isNaN(odoOld) ? 0 : odoOld;
+          const odoNewVal = isNaN(odoNew) ? 0 : odoNew;
+          const litersVal = isNaN(liters) ? 0 : liters;
+          const unitPriceVal = isNaN(unitPrice) ? 0 : unitPrice;
 
           // Sanitize GPS values: NaN → null
           const gpsOldSanitized = (gpsOld != null && !isNaN(gpsOld)) ? gpsOld : null;
@@ -584,19 +589,19 @@ export const fuelRecordService = {
             } else continue;
           }
 
-          const distance = odoNew - odoOld;
-          const fuelRate = distance > 0 ? liters * 100 / distance : null;
+          const distance = odoNewVal - odoOldVal;
+          const fuelRate = distance > 0 ? litersVal * 100 / distance : null;
           const gpsDist = (gpsOldSanitized != null && gpsNewSanitized != null) ? gpsNewSanitized - gpsOldSanitized : null;
           const gpsFR = (gpsDist != null && gpsDist > 0 && gpsLitersSanitized != null)
             ? gpsLitersSanitized * 100 / gpsDist : null;
-          const totalCost = liters * unitPrice;
+          const totalCost = litersVal * unitPriceVal;
 
           batchRows.push([
-            vehicleId, recordDate, odoOld, odoNew,
-            distance, liters, fuelRate,
+            vehicleId, recordDate, odoOldVal, odoNewVal,
+            distance, litersVal, fuelRate,
             gpsOldSanitized, gpsNewSanitized, gpsDist,
             gpsLitersSanitized, gpsFR,
-            unitPrice, totalCost, batchId, userId,
+            unitPriceVal, totalCost, batchId, userId,
           ]);
 
           if (batchRows.length >= BATCH_SIZE) {
