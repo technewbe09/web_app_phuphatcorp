@@ -3,6 +3,7 @@ import {
   accountantInvoiceController,
   listInvoicesSchema,
   missingSummarySchema,
+  updateInvoiceSchema,
 } from '../controllers/accountantInvoiceController';
 import { validate } from '../middleware/validate';
 import { authenticateToken, requirePermission } from '../middleware/auth';
@@ -23,6 +24,13 @@ router.get(
   requirePermission('accounting_data.view'),
   ...validate(missingSummarySchema),
   accountantInvoiceController.missingSummary,
+);
+
+router.put(
+  '/:id',
+  requirePermission('accounting_data.manage'),
+  ...validate(updateInvoiceSchema),
+  accountantInvoiceController.update,
 );
 
 export default router;

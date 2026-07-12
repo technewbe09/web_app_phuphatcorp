@@ -1,14 +1,14 @@
 import { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { CheckCircle2, XCircle, FileSpreadsheet, ChevronDown, ChevronRight, Truck, ShieldCheck, ShieldQuestion, CalendarDays, X, MapPin, Building2 } from 'lucide-react';
+import { CheckCircle2, XCircle, FileSpreadsheet, ChevronDown, ChevronRight, Truck, ShieldCheck, ShieldQuestion, CalendarDays, X, MapPin, Building2, Pencil, AlertTriangle, Ban } from 'lucide-react';
 import { Card, CardContent, CardHeader } from '../../../components/ui/Card';
 import { Button } from '../../../components/ui/Button';
 import { Input } from '../../../components/ui/Input';
 import { Select } from '../../../components/ui/Select';
 import { Pagination } from '../../../components/ui/Pagination';
-import { useGetAccountantInvoices, useGetMissingSummary } from '../../../hooks/useAccountantInvoices';
+import { useGetAccountantInvoices, useGetMissingSummary, useUpdateAccountantInvoice } from '../../../hooks/useAccountantInvoices';
 import { useGetBatches } from '../../../hooks/useDeliveryData';
-import type { AccountantInvoiceFilters, MissingInvoice } from '../../../api/accountantInvoiceApi';
+import type { AccountantInvoiceFilters, AccountantInvoice, MissingInvoice } from '../../../api/accountantInvoiceApi';
 
 type TabId = 'all' | 'missing';
 
@@ -23,6 +23,7 @@ export function InvoiceMatchingPage() {
     limit: 30,
     batch_id: initialBatchId || undefined,
   });
+  const [editingInvoice, setEditingInvoice] = useState<AccountantInvoice | null>(null);
 
   useEffect(() => {
     if (initialBatchId) {
@@ -47,6 +48,8 @@ export function InvoiceMatchingPage() {
     { value: '', label: 'Tất cả trạng thái' },
     { value: 'đã có', label: 'Đã có' },
     { value: 'không có', label: 'Không có' },
+    { value: 'xe không chạy', label: 'Xe không chạy' },
+    { value: 'data sai', label: 'Data sai' },
   ];
 
   const handleFilterChange = (key: keyof AccountantInvoiceFilters, value: string) => {
@@ -171,6 +174,8 @@ export function InvoiceMatchingPage() {
                           <th className="text-left py-3 px-2 font-medium text-neutral-500">Số xe</th>
                           <th className="text-left py-3 px-2 font-medium text-neutral-500">Số HĐ</th>
                           <th className="text-left py-3 px-2 font-medium text-neutral-500">Trạng thái</th>
+                          <th className="text-left py-3 px-2 font-medium text-neutral-500">Ghi chú</th>
+                          <th className="text-left py-3 px-2 font-medium text-neutral-500 w-16"></th>
                         </tr>
                       </thead>
                       <tbody>
@@ -180,14 +185,39 @@ export function InvoiceMatchingPage() {
                             <td className="py-2.5 px-2 text-neutral-700 dark:text-neutral-300 font-mono">{invoice.so_xe}</td>
                             <td className="py-2.5 px-2 text-neutral-900 dark:text-neutral-100 font-mono">{invoice.so_hoa_don}</td>
                             <td className="py-2.5 px-2">
-                              {invoice.trang_thai === 'đã có' ? (
+                              {invoice.trang_thai === 'đã có' && (
                                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400">
                                   <CheckCircle2 className="w-3 h-3" />Đã có
                                 </span>
-                              ) : (
+                              )}
+                              {invoice.trang_thai === 'không có' && (
                                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-neutral-100 dark:bg-neutral-700 text-neutral-600 dark:text-neutral-400">
                                   <XCircle className="w-3 h-3" />Không có
                                 </span>
+                              )}
+                              {invoice.trang_thai === 'xe không chạy' && (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400">
+                                  <Ban className="w-3 h-3" />Xe không chạy
+                                </span>
+                              )}
+                              {invoice.trang_thai === 'data sai' && (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400">
+                                  <AlertTriangle className="w-3 h-3" />Data sai
+                                </span>
+                              )}
+                            </td>
+                            <td className="py-2.5 px-2 text-neutral-500 dark:text-neutral-400 text-xs max-w-32 truncate" title={invoice.ghi_chu || ''}>
+                              {invoice.ghi_chu || '—'}
+                            </td>
+                            <td className="py-2.5 px-2">
+                              {invoice.trang_thai !== 'đã có' && (
+                                <button
+                                  onClick={() => setEditingInvoice(invoice)}
+                                  className="p-1 text-neutral-400 dark:text-neutral-500 hover:text-neutral-600 dark:hover:text-neutral-300 rounded transition-colors"
+                                  title="Sửa"
+                                >
+                                  <Pencil className="w-4 h-4" />
+                                </button>
                               )}
                             </td>
                           </tr>
@@ -216,6 +246,15 @@ export function InvoiceMatchingPage() {
       {/* Tab: Missing Invoices */}
       {tab === 'missing' && (
         <MissingInvoicesTab />
+      )}
+
+      {/* Edit Modal */}
+      {editingInvoice && (
+        <EditInvoiceModal
+          invoice={editingInvoice}
+          onClose={() => setEditingInvoice(null)}
+          onSuccess={() => setEditingInvoice(null)}
+        />
       )}
     </div>
   );
@@ -534,6 +573,83 @@ function MonthView({ data, setSelectedInvoice }: { data: MissingVehicle[]; setSe
         </div>
       ))}
     </CardContent>
+  );
+}
+
+function EditInvoiceModal({ invoice, onClose, onSuccess }: { invoice: AccountantInvoice; onClose: () => void; onSuccess: () => void }) {
+  const updateMutation = useUpdateAccountantInvoice();
+  const [trangThai, setTrangThai] = useState(invoice.trang_thai);
+  const [ghiChu, setGhiChu] = useState(invoice.ghi_chu || '');
+
+  const statusOptionsEdit = [
+    { value: 'không có', label: 'Không có' },
+    { value: 'xe không chạy', label: 'Xe không chạy' },
+    { value: 'data sai', label: 'Data sai' },
+  ];
+
+  const handleSubmit = async () => {
+    try {
+      await updateMutation.mutateAsync({
+        id: invoice.id,
+        data: { trang_thai: trangThai, ghi_chu: ghiChu || null },
+      });
+      onSuccess();
+    } catch {}
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30" onClick={onClose}>
+      <div className="bg-white dark:bg-neutral-900 rounded-xl shadow-xl w-full max-w-md mx-4" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between px-5 py-4 border-b border-neutral-200 dark:border-neutral-800">
+          <h3 className="font-semibold text-neutral-900 dark:text-neutral-100">Sửa hóa đơn</h3>
+          <button onClick={onClose} className="p-1 rounded-lg text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+        <div className="px-5 py-4 space-y-4">
+          <div className="grid grid-cols-2 gap-3 text-sm">
+            <div>
+              <span className="text-neutral-400 dark:text-neutral-500">Số HĐ</span>
+              <p className="font-mono font-medium text-neutral-900 dark:text-neutral-100">{invoice.so_hoa_don}</p>
+            </div>
+            <div>
+              <span className="text-neutral-400 dark:text-neutral-500">Số xe</span>
+              <p className="font-mono text-neutral-700 dark:text-neutral-300">{invoice.so_xe}</p>
+            </div>
+            <div>
+              <span className="text-neutral-400 dark:text-neutral-500">Ngày</span>
+              <p className="text-neutral-700 dark:text-neutral-300">{invoice.ngay}</p>
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">Trạng thái</label>
+            <select
+              value={trangThai}
+              onChange={(e) => setTrangThai(e.target.value)}
+              className="w-full px-3 py-2 text-sm border border-neutral-200 dark:border-neutral-700 rounded-lg bg-white dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100 focus:outline-none focus:ring-2 focus:ring-neutral-900 dark:focus:ring-neutral-100"
+            >
+              {statusOptionsEdit.map((opt) => (
+                <option key={opt.value} value={opt.value}>{opt.label}</option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">Ghi chú</label>
+            <Input
+              placeholder="Nhập ghi chú..."
+              value={ghiChu}
+              onChange={(e) => setGhiChu(e.target.value)}
+            />
+          </div>
+        </div>
+        <div className="flex justify-end gap-3 px-5 py-4 border-t border-neutral-200 dark:border-neutral-800">
+          <Button variant="outline" onClick={onClose}>Hủy</Button>
+          <Button onClick={handleSubmit} isLoading={updateMutation.isPending}>Lưu</Button>
+        </div>
+      </div>
+    </div>
   );
 }
 

@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   accountantInvoiceApi,
   type AccountantInvoiceFilters,
@@ -18,5 +18,16 @@ export function useGetMissingSummary(batchId?: string, inCatalog?: boolean) {
   return useQuery({
     queryKey: [QUERY_KEY, 'missing', batchId, inCatalog],
     queryFn: () => accountantInvoiceApi.getMissingSummary(batchId, inCatalog),
+  });
+}
+
+export function useUpdateAccountantInvoice() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, data }: { id: number; data: { trang_thai: string; ghi_chu?: string | null } }) =>
+      accountantInvoiceApi.update(id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [QUERY_KEY] });
+    },
   });
 }
