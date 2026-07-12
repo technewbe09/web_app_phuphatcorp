@@ -7,6 +7,7 @@ export interface AccountantInvoice {
   so_xe: string;
   so_hoa_don: string;
   trang_thai: string;
+  ghi_chu: string | null;
   created_at: string;
 }
 
@@ -39,6 +40,7 @@ function rowToInvoice(row: Record<string, unknown>): AccountantInvoice {
     so_xe: row.so_xe as string,
     so_hoa_don: row.so_hoa_don as string,
     trang_thai: row.trang_thai as string,
+    ghi_chu: row.ghi_chu as string | null,
     created_at: row.created_at instanceof Date
       ? (row.created_at as Date).toISOString()
       : (row.created_at as string),
@@ -109,7 +111,7 @@ export const accountantInvoiceService = {
     const totalPages = Math.ceil(total / limit);
 
     const dataResult = await pool.query(
-      `SELECT id, batch_id, ngay::text as ngay, so_xe, so_hoa_don, trang_thai, created_at
+      `SELECT id, batch_id, ngay::text as ngay, so_xe, so_hoa_don, trang_thai, ghi_chu, created_at
        FROM accountant_invoices
        ${whereClause}
        ORDER BY ngay DESC, so_xe ASC, so_hoa_don ASC
@@ -210,5 +212,34 @@ export const accountantInvoiceService = {
       const missing_count = dates.reduce((sum, d) => sum + d.invoices.length, 0);
       return { so_xe, missing_count, in_catalog: v.in_catalog, dates };
     });
+  },
+
+  async update(id: number, data: { trang_thai: string; ghi_chu?: string | null }): Promise<AccountantInvoice> {
+    const existing = await this.findById(id);
+    if (!existing) {
+      throw { code: 'NOT_FOUND' };
+    }
+
+    if (existing.trang_thai === 'đã có') {
+      throw { code: 'CANNOT_EDIT' };
+    }
+
+    const result = await pool.query(
+      `UPDATE accountant_invoices
+       SET trang_thai = $1, ghi_chu = $2
+       WHERE id = $3
+       RETURNING id, batch_id, ngay::text as ngay, so_xe, so_hoa_don, trang_thai, ghi_chu, created_at`,
+      [data.trang_thai, data.ghi_chu ?? null, id],
+    );
+    return rowToInvoice(result.rows[0]);
+  },
+
+  async findById(id: number): Promise<AccountantInvoice | null> {
+    const result = await pool.query(
+      `SELECT id, batch_id, ngay::text as ngay, so_xe, so_hoa_don, trang_thai, ghi_chu, created_at
+       FROM accountant_invoices WHERE id = $1`,
+      [id],
+    );
+    return result.rows[0] ? rowToInvoice(result.rows[0]) : null;
   },
 };

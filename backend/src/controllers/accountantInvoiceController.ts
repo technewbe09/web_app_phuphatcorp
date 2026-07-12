@@ -1,5 +1,5 @@
 import { Response } from 'express';
-import { query, ValidationChain } from 'express-validator';
+import { query, param, body, ValidationChain } from 'express-validator';
 import { accountantInvoiceService } from '../services/accountantInvoiceService';
 import { sendSuccess, sendError } from '../utils/response';
 import { AuthRequest } from '../middleware/auth';
@@ -18,6 +18,14 @@ export const listInvoicesSchema: ValidationChain[] = [
 export const missingSummarySchema: ValidationChain[] = [
   query('batch_id').optional().isString(),
   query('in_catalog').optional().isBoolean().withMessage('in_catalog phải là true hoặc false'),
+];
+
+export const updateInvoiceSchema: ValidationChain[] = [
+  param('id').isInt({ min: 1 }).withMessage('ID không hợp lệ'),
+  body('trang_thai')
+    .notEmpty().withMessage('Trạng thái là bắt buộc')
+    .isIn(['không có', 'xe không chạy', 'data sai']).withMessage('Trạng thái không hợp lệ'),
+  body('ghi_chu').optional({ nullable: true }),
 ];
 
 export const accountantInvoiceController = {
@@ -52,6 +60,29 @@ export const accountantInvoiceController = {
     } catch (err) {
       const error = err instanceof Error ? err.message : 'Unknown error';
       sendError(res, 'Không thể tải danh sách hóa đơn thiếu', 500, error);
+    }
+  },
+
+  async update(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      const id = parseInt(req.params.id, 10);
+      const { trang_thai, ghi_chu } = req.body;
+      const row = await accountantInvoiceService.update(id, { trang_thai, ghi_chu: ghi_chu ?? null });
+      sendSuccess(res, row, 'Cập nhật hóa đơn thành công');
+    } catch (err: unknown) {
+      if (err && typeof err === 'object' && 'code' in err) {
+        const e = err as { code: string };
+        if (e.code === 'NOT_FOUND') {
+          sendError(res, 'Không tìm thấy hóa đơn', 404);
+          return;
+        }
+        if (e.code === 'CANNOT_EDIT') {
+          sendError(res, 'Không thể sửa hóa đơn đã có', 400);
+          return;
+        }
+      }
+      const error = err instanceof Error ? err.message : 'Unknown error';
+      sendError(res, 'Không thể cập nhật hóa đơn', 500, error);
     }
   },
 };

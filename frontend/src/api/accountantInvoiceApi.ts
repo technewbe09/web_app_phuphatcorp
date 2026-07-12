@@ -8,6 +8,7 @@ export interface AccountantInvoice {
   so_xe: string;
   so_hoa_don: string;
   trang_thai: string;
+  ghi_chu: string | null;
   created_at: string;
 }
 
@@ -68,6 +69,11 @@ export const accountantInvoiceApi = {
     const response = await axiosClient.get<{ data: MissingVehicle[] }>(
       `/accountant-invoices/missing-summary?${params.toString()}`,
     );
+    return response.data.data;
+  },
+
+  update: async (id: number, data: { trang_thai: string; ghi_chu?: string | null }): Promise<AccountantInvoice> => {
+    const response = await axiosClient.put<{ data: AccountantInvoice }>(`/accountant-invoices/${id}`, data);
     return response.data.data;
   },
 };
