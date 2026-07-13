@@ -66,6 +66,7 @@ function parseSheetRows(rawRows: unknown[][]): ParsedInvoiceRow[] {
     if (!ma) continue;
 
     const ten_tx = String(cells[1] ?? '').trim();
+    if (!ten_tx) continue;
 
     const ngayRaw = cells[2];
     const ngay = parseExcelDate(ngayRaw);
