@@ -285,6 +285,53 @@ export const fuelRecordService = {
     };
   },
 
+  async getStatisticsByLocation(filters: {
+    month?: string;
+  }): Promise<{
+    byLocation: {
+      location: string;
+      month: string;
+      total_distance: number;
+      total_liters: number;
+      total_cost: number;
+      avg_fuel_rate: number | null;
+      record_count: number;
+    }[];
+  }> {
+    const conditions: string[] = [];
+    const params: unknown[] = [];
+    let paramIndex = 0;
+
+    if (filters.month) {
+      paramIndex++;
+      conditions.push(`to_char(fr.record_date, 'YYYY-MM') = $${paramIndex}`);
+      params.push(filters.month);
+    }
+
+    const whereClause = conditions.length > 0
+      ? `WHERE ${conditions.join(' AND ')}`
+      : '';
+
+    const byLocationResult = await pool.query(
+      `SELECT
+         COALESCE(fr.location, 'Không xác định') as location,
+         to_char(fr.record_date, 'YYYY-MM') as month,
+         COALESCE(SUM(fr.distance), 0) as total_distance,
+         COALESCE(SUM(fr.liters), 0) as total_liters,
+         COALESCE(SUM(fr.total_cost), 0) as total_cost,
+         CASE WHEN SUM(fr.distance) > 0 THEN SUM(fr.liters) * 100.0 / SUM(fr.distance) ELSE NULL END as avg_fuel_rate,
+         COUNT(*)::int as record_count
+       FROM fuel_records fr ${whereClause}
+       GROUP BY location, month
+       ORDER BY month DESC, location ASC`,
+      params,
+    );
+
+    return {
+      byLocation: byLocationResult.rows,
+    };
+  },
+
   async getDistinctMonths(): Promise<string[]> {
     const result = await pool.query<{ month: string }>(
       `SELECT DISTINCT to_char(record_date, 'YYYY-MM') as month

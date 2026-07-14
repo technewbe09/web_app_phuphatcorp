@@ -56,6 +56,7 @@ router.use(authenticateToken);
 
 router.get('/', requirePermission('fuel.view'), fuelRecordController.list);
 router.get('/statistics', requirePermission('fuel.view'), fuelRecordController.statistics);
+router.get('/statistics/by-location', requirePermission('fuel.view'), fuelRecordController.statisticsByLocation);
 router.get('/months', requirePermission('fuel.view'), fuelRecordController.months);
 router.get('/batches', requirePermission('fuel.view'), fuelRecordController.batches);
 router.get('/latest-odometer/:vehicleId', requirePermission('fuel.view'), fuelRecordController.latestOdometer);

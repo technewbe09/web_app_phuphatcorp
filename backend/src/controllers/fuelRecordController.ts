@@ -221,6 +221,19 @@ export const fuelRecordController = {
     }
   },
 
+  async statisticsByLocation(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      const { month } = req.query;
+      const data = await fuelRecordService.getStatisticsByLocation({
+        month: month as string | undefined,
+      });
+      sendSuccess(res, data, 'Thống kê theo vị trí');
+    } catch (err) {
+      const error = err instanceof Error ? err.message : 'Unknown error';
+      sendError(res, 'Không thể tải thống kê theo vị trí', 500, error);
+    }
+  },
+
   async months(req: AuthRequest, res: Response): Promise<void> {
     try {
       const months = await fuelRecordService.getDistinctMonths();

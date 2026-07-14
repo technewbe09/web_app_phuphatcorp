@@ -17,6 +17,7 @@ const allowedOrigins = [
   'https://phuphatcorp.scrapetool.cloud',
   'https://app.phuphat.com',
   'https://app-staging.phuphat.com',
+  'https://app.phuphat.com',
 ];
 
 app.use(

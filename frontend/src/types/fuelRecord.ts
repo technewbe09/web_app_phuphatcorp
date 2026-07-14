@@ -68,10 +68,21 @@ export interface MonthlyFuelStat {
   record_count: number;
 }
 
+export interface LocationFuelStat {
+  location: string;
+  month: string;
+  total_distance: number;
+  total_liters: number;
+  total_cost: number;
+  avg_fuel_rate: number | null;
+  record_count: number;
+}
+
 export interface FuelStatisticsResult {
   summary: FuelStatistics;
   byVehicle: VehicleFuelStat[];
   byMonth: MonthlyFuelStat[];
+  byLocation?: LocationFuelStat[];
 }
 
 export interface UploadResult {
