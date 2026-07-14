@@ -8,6 +8,7 @@
     "build": "tsc",
     "start": "node dist/server.js",
     "migrate": "tsx src/migrate.ts",
+    "import:vn-provinces": "tsx src/scripts/import-vn-provinces.ts",
     "test": "jest --passWithNoTests"
   },
   "dependencies": {

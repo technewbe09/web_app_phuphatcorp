@@ -1,0 +1,118 @@
+export type PricingUnit = 'chuyen' | 'tan';
+export type PricingMode = 'by_weight' | 'by_trips';
+
+export interface Province {
+  code: string;
+  name: string;
+  full_name: string | null;
+}
+
+export interface Ward {
+  code: string;
+  name: string;
+  full_name: string | null;
+  province_code: string;
+}
+
+export interface DeliveryRoute {
+  id: number;
+  supplier_id: number;
+  province_code: string;
+  ward_code: string | null;
+  location_text: string | null;
+  note: string | null;
+  tinh: string;
+  phuong: string;
+  status: 'active' | 'deactive';
+  group_id?: number | null;
+  group_name?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface RouteGroupMember {
+  route_id: number;
+  province_code: string;
+  ward_code: string | null;
+  location_text: string | null;
+  note: string | null;
+  tinh: string;
+  phuong: string;
+}
+
+export interface RouteGroup {
+  id: number;
+  supplier_id: number;
+  name: string;
+  province_code: string;
+  tinh: string;
+  is_residual: boolean;
+  note: string | null;
+  status: 'active' | 'deactive';
+  members: RouteGroupMember[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface RoutePriceTier {
+  id?: number;
+  range_from: number;
+  range_to: number | null;
+  pricing_unit: PricingUnit;
+  price: number;
+  min_billable_ton?: number | null;
+  sort_order?: number;
+}
+
+export interface RoutePriceVersion {
+  id: number;
+  price_config_id: number;
+  effective_from: string;
+  effective_to: string | null;
+  pricing_mode: PricingMode;
+  pallet_trip_price: number;
+  adjustment_percent: number | null;
+  adjustment_batch_id: string | null;
+  base_version_id: number | null;
+  note: string | null;
+  tiers: RoutePriceTier[];
+  created_at: string;
+}
+
+export interface RoutePriceConfigSummary {
+  id: number;
+  route_group_id: number;
+  group_name: string;
+  is_residual: boolean;
+  province_code: string;
+  tinh: string;
+  current_version: RoutePriceVersion | null;
+  version_count: number;
+}
+
+export interface LookupResult {
+  route_group_id: number;
+  group_name: string;
+  is_residual: boolean;
+  price_version_id: number;
+  effective_from: string;
+  is_pallet: boolean;
+  khung_label: string;
+  don_vi: 'Chuyến' | 'Tấn';
+  pricing_unit: PricingUnit | null;
+  price: number;
+  billable_ton: number | null;
+  pallet_trip_price: number;
+}
+
+export function roundToThousands(value: number): number {
+  return Math.round(value / 1000) * 1000;
+}
+
+export function noteKey(note?: string | null): string {
+  return (note ?? '').trim();
+}
+
+export function normalizeLocation(text: string): string {
+  return text.trim();
+}

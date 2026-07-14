@@ -26,6 +26,7 @@ import { FuelDataPage } from './pages/admin/fuel-data/FuelDataPage';
 import { FuelStatisticsPage } from './pages/admin/fuel-data/FuelStatisticsPage';
 import { InspectionPage } from './pages/admin/vehicle-data/InspectionPage';
 import { OilChangePage } from './pages/admin/vehicle-data/OilChangePage';
+import { RoutePricingPage } from './pages/route-pricing/RoutePricingPage';
 
 function PlaceholderPage({ title }: { title: string }) {
   return (
@@ -82,6 +83,7 @@ export function Router() {
             <Route path="/catalog/vehicles" element={<VehicleCatalogPage />} />
             <Route path="/catalog/inner-city-customers" element={<InnerCityCustomerPage />} />
             <Route path="/catalog/suppliers" element={<SupplierCatalogPage />} />
+            <Route path="/route-pricing" element={<RoutePricingPage />} />
           </Route>
         </Route>
 

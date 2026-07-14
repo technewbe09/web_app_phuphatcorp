@@ -261,11 +261,42 @@ Base URL: `/api`
 | DELETE | /users/:id | JWT + ADMIN | — | `{ success, message }` |
 | PATCH | /users/:id/password | JWT + ADMIN | `{ new_password }` | `{ success, message }` |
 
+### Route Pricing — /route-pricing
+
+| Method | Path | Auth | Notes |
+|--------|------|------|-------|
+| GET | /route-pricing/geo/provinces | route_pricing.view | Master tỉnh |
+| GET | /route-pricing/geo/wards | route_pricing.view | `?province_code=` |
+| GET/POST/PUT/DELETE | /route-pricing/routes | view/manage | Scoped `supplier_id`; `ward_code` XOR `location_text`; `note` |
+| GET/POST/PUT/DELETE | /route-pricing/groups | view/manage | `ward_codes[]` XOR `location_text` (1 text) XOR residual; `note` → tên + unique |
+| GET/POST | /route-pricing/prices | view/manage | Absolute lần đầu; `pricing_mode` + `range_from`/`range_to`; `pallet_trip_price ≥ 0` |
+| POST | /route-pricing/prices/adjust | manage | % toàn hệ thống (copy `pricing_mode` + range) |
+| GET | /route-pricing/lookup | view | `weight_mt` (by_weight) / `trips_per_vehicle_day` (by_trips); `location_text`, `note` |
+
+**Schema CR (2026-07-12/13):** Migration `037_route_pricing_location_note_trips.sql`
+- `delivery_routes.ward_code` nullable; `location_text`, `note`; unique active `(supplier, province, ward, location, note_key)`
+- Residual unique theo `(supplier, province, note_key)`
+
+**Schema CR modes (2026-07-13):** Migration `038_route_pricing_modes_range.sql`
+- `route_price_versions.pricing_mode` ∈ {`by_weight`, `by_trips`}
+- `route_price_tiers.range_from` / `range_to` (gom ton/trips); drop `from_ton`/`to_ton`/`from|to_trips_*`
+- Backfill: trips ≠ null → range từ trips + mode `by_trips`; else ton + `by_weight`
+- `by_weight`: khoảng tấn `(from, to]`; `by_trips`: `[from, to]` mọi trọng lượng, ≥2 bậc, chain từ 1 → ∞
+
+**FE hiển thị Tab Bảng giá:** Badge chế độ; cột Trọng lượng hoặc Chuyến/xe/ngày | Đơn vị | Đơn giá; ẩn pallet nếu = 0.
+
+**Race guards (2026-07-12):** `route_price_versions` — partial UNIQUE một open version / config; UNIQUE `(price_config_id, effective_from)`. Create/adjust chạy trong TX + `FOR UPDATE`. Migration `036_route_price_versions_race_guards.sql`.
+
+BA: `docs/ba/20260711_route-pricing-analysis.md` + CR `docs/ba/20260712_route-pricing-change-request.md`  
+UI: `docs/ui/20260711_route-pricing-ui-spec.md` + CR modes `docs/ui/20260713_route-pricing-modes-cr-ui-spec.md`
+
 ### System
 
 | Method | Path | Auth | Response |
 |--------|------|------|----------|
 | GET | /health | No | `{ status: 'ok', timestamp }` |
+
+Frontend route: `/route-pricing` (sidebar top-level **Giá theo tuyến**)
 
 ### Dispatch Schedules — /dispatch-schedules
 

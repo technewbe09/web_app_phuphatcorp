@@ -29,6 +29,7 @@ import {
   BarChart3,
   ClipboardCheck,
   Beaker,
+  MapPinned,
 } from 'lucide-react';
 import { cn } from '../utils/cn';
 import { useAuth } from '../hooks/useAuth';
@@ -119,6 +120,13 @@ export function MainLayout() {
 
   const showDeliveryData = hasAnyPermission(['delivery_data.view', 'delivery_data.manage'])
     || user?.role === 'ADMIN';
+
+  const showRoutePricing = hasAnyPermission(['route_pricing.view', 'route_pricing.manage'])
+    || user?.role === 'ADMIN';
+
+  if (showRoutePricing) {
+    baseNavItems.push({ to: '/route-pricing', icon: MapPinned, label: 'Giá theo tuyến' });
+  }
 
   const userSettingsSubItems = [
     hasPermission('users.view') || user?.role === 'ADMIN'

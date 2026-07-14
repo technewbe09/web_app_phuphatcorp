@@ -35,6 +35,8 @@ Hệ thống dùng **RBAC** (Role-Based Access Control) — mỗi user gắn 1 r
 | transport.manage | Quản lý dữ liệu vận tải (CRUD trip codes, xe, tài xế) |
 | dispatch.view | Xem bảng điều phối xe |
 | dispatch.manage | Tạo/xóa lịch điều phối xe |
+| route_pricing.view | Xem giá theo tuyến |
+| route_pricing.manage | Quản lý giá theo tuyến |
 
 **Cơ chế enforcement:**
 - JWT payload chứa `roleId` và `permissions: string[]`
@@ -927,6 +929,40 @@ frontend/src/components/admin/CreateRoleModal.tsx
 frontend/src/components/admin/EditRoleModal.tsx
 frontend/src/components/admin/DeactivateRoleDialog.tsx
 ```
+
+---
+
+## 10. Giá theo tuyến (`route_pricing`)
+
+**Route FE:** `/route-pricing` (sidebar top-level)  
+**Permissions:** `route_pricing.view` / `route_pricing.manage`  
+**BA:** `docs/ba/20260711_route-pricing-analysis.md` + CR `docs/ba/20260712_route-pricing-change-request.md`
+
+### Flow chính
+1. Chọn NCC → tab Nhóm tuyến / Bảng giá (scoped theo NCC)
+2. Tạo nhóm: đích = Phường/Xã **hoặc** Địa điểm text **hoặc** Còn lại tỉnh; ghi chú optional → tên hệ thống có suffix `(ghi chú)`
+3. Nhập bảng giá gốc (1 lần/nhóm): chọn **chế độ** `by_weight` | `by_trips`; Pallet ≥ 0
+   - Theo trọng lượng: template 5 bậc tấn; đơn vị Chuyến|Tấn theo bậc
+   - Theo chuyến/xe/ngày: ≥2 bậc giá chuyến cho mọi trọng lượng; chain `1…n` → `n+1…∞`
+4. Cập nhật sau: Điều chỉnh % toàn hệ thống (giữ `pricing_mode`)
+5. Delivery Import: `GET /route-pricing/lookup` (`weight_mt` / `trips_per_vehicle_day` tùy mode)
+
+### Hiển thị Tab Bảng giá
+- Badge: Theo trọng lượng | Theo chuyến/xe/ngày
+- Cột: **Trọng lượng** hoặc **Chuyến/xe/ngày** | **Đơn vị** | **Đơn giá**
+- Ton: `≤ 2.5 tấn` · `>8-16` · `>16` (+ cước tối thiểu nếu có)
+- Trips: `1–n` / `từ n+1 trở lên`
+- Đơn vị: `vnđ/chuyến` | `vnđ/tấn`; Pallet = 0 → ẩn
+
+### Business rules (CR)
+- Unique tuyến active gồm note + location (cho phép lặp tỉnh/phường nếu note khác)
+- Residual unique theo `(supplier, province, note_key)`
+- Địa điểm: đúng **1** `location_text` (không multi)
+- XOR chế độ áp giá trên version; khoảng gom `range_from`/`range_to`
+- Lookup khớp member (ward hoặc location) + note_key, else residual cùng note_key
+- `pallet_trip_price` cho phép 0
+
+**UI Spec modes:** `docs/ui/20260713_route-pricing-modes-cr-ui-spec.md`
 
 ---
 
