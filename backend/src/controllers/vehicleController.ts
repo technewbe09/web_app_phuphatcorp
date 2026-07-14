@@ -16,6 +16,9 @@ export const vehicleCreateSchema = [
   body('plate_number')
     .notEmpty().withMessage('Biển số là bắt buộc')
     .isLength({ max: 20 }).withMessage('Biển số tối đa 20 ký tự'),
+  body('vehicle_type')
+    .optional()
+    .isIn(['Xe nhà', 'Xe ngoài']).withMessage('Phân loại không hợp lệ'),
 ];
 
 export const vehicleUpdateSchema = [
@@ -23,6 +26,9 @@ export const vehicleUpdateSchema = [
   body('driver_name')
     .notEmpty().withMessage('Tên tài xế là bắt buộc')
     .isLength({ max: 255 }).withMessage('Tên tài xế tối đa 255 ký tự'),
+  body('vehicle_type')
+    .optional()
+    .isIn(['Xe nhà', 'Xe ngoài']).withMessage('Phân loại không hợp lệ'),
 ];
 
 export const oilIntervalSchema = [
@@ -36,10 +42,11 @@ export const vehicleController = {
     try {
       const search = req.query.search as string | undefined;
       const status = req.query.status as string | undefined;
+      const vehicle_type = req.query.vehicle_type as string | undefined;
       const page = parseInt(req.query.page as string, 10) || 1;
       const limit = parseInt(req.query.limit as string, 10) || 20;
 
-      const data = await vehicleService.getAll(search, status, page, limit);
+      const data = await vehicleService.getAll(search, status, vehicle_type, page, limit);
       sendSuccess(res, data, 'Danh sách xe');
     } catch (err) {
       const error = err instanceof Error ? err.message : 'Unknown error';
@@ -55,8 +62,8 @@ export const vehicleController = {
         return;
       }
 
-      const { driver_name, plate_number } = req.body;
-      const vehicle = await vehicleService.create({ driver_name, plate_number });
+      const { driver_name, plate_number, vehicle_type } = req.body;
+      const vehicle = await vehicleService.create({ driver_name, plate_number, vehicle_type });
       sendSuccess(res, vehicle, 'Thêm xe thành công', 201);
       auditService.logAudit({
         userId: req.user!.userId,
@@ -238,8 +245,8 @@ export const vehicleController = {
       }
 
       const id = parseInt(req.params.id, 10);
-      const { driver_name } = req.body;
-      const vehicle = await vehicleService.update(id, { driver_name });
+      const { driver_name, vehicle_type } = req.body;
+      const vehicle = await vehicleService.update(id, { driver_name, vehicle_type });
       sendSuccess(res, vehicle, `Đã cập nhật xe ${vehicle.plate_number}`);
       auditService.logAudit({
         userId: req.user!.userId,

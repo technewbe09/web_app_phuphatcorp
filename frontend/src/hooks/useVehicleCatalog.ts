@@ -1,12 +1,12 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { vehicleCatalogApi, type VehicleData } from '../api/vehicleCatalogApi';
+import { vehicleCatalogApi, type VehicleData, type VehicleUpdateData } from '../api/vehicleCatalogApi';
 
 const QUERY_KEY = ['vehicles'];
 
-export function useGetVehicles(search?: string, status?: string, page: number = 1, limit: number = 20) {
+export function useGetVehicles(search?: string, status?: string, vehicle_type?: string, page: number = 1, limit: number = 20) {
   return useQuery({
-    queryKey: [...QUERY_KEY, { search, status, page, limit }],
-    queryFn: () => vehicleCatalogApi.fetchAll({ search, status, page, limit }),
+    queryKey: [...QUERY_KEY, { search, status, vehicle_type, page, limit }],
+    queryFn: () => vehicleCatalogApi.fetchAll({ search, status, vehicle_type, page, limit }),
   });
 }
 
@@ -43,7 +43,7 @@ export function useCreateVehicle() {
 export function useUpdateVehicle() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, data }: { id: number; data: { driver_name: string } }) =>
+    mutationFn: ({ id, data }: { id: number; data: VehicleUpdateData }) =>
       vehicleCatalogApi.update(id, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: QUERY_KEY });

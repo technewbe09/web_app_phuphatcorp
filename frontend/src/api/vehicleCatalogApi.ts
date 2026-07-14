@@ -4,10 +4,22 @@ export interface Vehicle {
   id: number;
   plate_number: string;
   driver_name: string;
+  vehicle_type: string;
   status: 'active' | 'deactive';
   oil_change_interval_km: number;
   created_at: string;
   updated_at: string;
+}
+
+export interface VehicleData {
+  driver_name: string;
+  plate_number: string;
+  vehicle_type?: string;
+}
+
+export interface VehicleUpdateData {
+  driver_name: string;
+  vehicle_type?: string;
 }
 
 export interface VehicleData {
@@ -38,6 +50,7 @@ export const vehicleCatalogApi = {
   fetchAll: async (params?: {
     search?: string;
     status?: string;
+    vehicle_type?: string;
     page?: number;
     limit?: number;
   }): Promise<VehicleListResponse> => {
@@ -69,7 +82,7 @@ export const vehicleCatalogApi = {
     return response.data.data;
   },
 
-  update: async (id: number, data: { driver_name: string }): Promise<Vehicle> => {
+  update: async (id: number, data: VehicleUpdateData): Promise<Vehicle> => {
     const response = await axiosClient.put<{ data: Vehicle }>(`/vehicles/${id}`, data);
     return response.data.data;
   },

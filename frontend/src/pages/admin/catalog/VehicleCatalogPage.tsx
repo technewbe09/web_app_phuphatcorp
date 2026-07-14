@@ -31,8 +31,9 @@ export function VehicleCatalogPage() {
   const PAGE_SIZE = 20;
 
   const [statusFilter, setStatusFilter] = useState('all');
+  const [typeFilter, setTypeFilter] = useState('all');
 
-  const { data, isLoading, isError, refetch } = useGetVehicles(search, statusFilter, page, PAGE_SIZE);
+  const { data, isLoading, isError, refetch } = useGetVehicles(search, statusFilter, typeFilter, page, PAGE_SIZE);
   const toggleMutation = useToggleVehicleStatus();
 
   const showToast = (message: string, variant: 'success' | 'error' = 'success') => {
@@ -107,6 +108,15 @@ export function VehicleCatalogPage() {
               <option value="active">Active</option>
               <option value="inactive">Inactive</option>
             </select>
+            <select
+              value={typeFilter}
+              onChange={(e) => { setTypeFilter(e.target.value); setPage(1); }}
+              className="px-3 py-2 text-sm border border-neutral-200 dark:border-neutral-700 rounded-lg bg-white dark:bg-neutral-900 text-neutral-900 dark:text-neutral-100 focus:outline-none focus:ring-2 focus:ring-neutral-900 dark:focus:ring-neutral-100"
+            >
+              <option value="all">Tất cả phân loại</option>
+              <option value="Xe nhà">Xe nhà</option>
+              <option value="Xe ngoài">Xe ngoài</option>
+            </select>
           </div>
         </CardContent>
       </Card>
@@ -153,6 +163,7 @@ export function VehicleCatalogPage() {
                     <TableHead className="w-14">STT</TableHead>
                     <TableHead className="w-48">Biển số</TableHead>
                     <TableHead>Tên tài xế</TableHead>
+                    <TableHead className="w-28 text-center">Phân loại</TableHead>
                     <TableHead className="w-28 text-center">Trạng thái</TableHead>
                     <TableHead className="w-44">Ngày tạo</TableHead>
                     <TableHead className="w-20 text-center">Thao tác</TableHead>
@@ -169,6 +180,9 @@ export function VehicleCatalogPage() {
                       </TableCell>
                       <TableCell className="text-neutral-700 dark:text-neutral-300">
                         {vehicle.driver_name}
+                      </TableCell>
+                      <TableCell className="text-center text-sm text-neutral-600 dark:text-neutral-400">
+                        {vehicle.vehicle_type}
                       </TableCell>
                       <TableCell className="text-center">
                         {vehicle.status === 'active' ? (

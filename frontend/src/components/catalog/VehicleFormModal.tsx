@@ -18,11 +18,15 @@ export function VehicleFormModal({ isOpen, onClose, onSuccess, onError, vehicle 
   const updateMutation = useUpdateVehicle();
   const isEdit = !!vehicle;
 
-  const [form, setForm] = useState({ driver_name: vehicle?.driver_name ?? '', plate_number: '' });
+  const [form, setForm] = useState({
+    driver_name: vehicle?.driver_name ?? '',
+    plate_number: '',
+    vehicle_type: vehicle?.vehicle_type ?? 'Xe nhà',
+  });
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
   const handleClose = () => {
-    setForm({ driver_name: '', plate_number: '' });
+    setForm({ driver_name: '', plate_number: '', vehicle_type: 'Xe nhà' });
     setFieldErrors({});
     onClose();
   };
@@ -42,10 +46,17 @@ export function VehicleFormModal({ isOpen, onClose, onSuccess, onError, vehicle 
 
     try {
       if (isEdit && vehicle) {
-        const result = await updateMutation.mutateAsync({ id: vehicle.id, data: { driver_name: form.driver_name } });
+        const result = await updateMutation.mutateAsync({
+          id: vehicle.id,
+          data: { driver_name: form.driver_name, vehicle_type: form.vehicle_type },
+        });
         onSuccess(`Đã cập nhật xe ${result.plate_number}.`);
       } else {
-        const result = await createMutation.mutateAsync({ driver_name: form.driver_name, plate_number: form.plate_number });
+        const result = await createMutation.mutateAsync({
+          driver_name: form.driver_name,
+          plate_number: form.plate_number,
+          vehicle_type: form.vehicle_type,
+        });
         onSuccess(`Đã thêm xe ${result.plate_number}.`);
       }
       handleClose();
@@ -110,6 +121,19 @@ export function VehicleFormModal({ isOpen, onClose, onSuccess, onError, vehicle 
               </p>
             </div>
           )}
+          <div>
+            <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
+              Phân loại
+            </label>
+            <select
+              value={form.vehicle_type}
+              onChange={(e) => setForm((f) => ({ ...f, vehicle_type: e.target.value }))}
+              className="w-full px-3 py-2 text-sm border border-neutral-200 dark:border-neutral-700 rounded-lg bg-white dark:bg-neutral-900 text-neutral-900 dark:text-neutral-100 focus:outline-none focus:ring-2 focus:ring-neutral-900 dark:focus:ring-neutral-100"
+            >
+              <option value="Xe nhà">Xe nhà</option>
+              <option value="Xe ngoài">Xe ngoài</option>
+            </select>
+          </div>
           <div className="flex justify-end gap-3 pt-2">
             <Button variant="outline" type="button" onClick={handleClose}>
               Hủy
