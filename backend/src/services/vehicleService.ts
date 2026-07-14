@@ -5,6 +5,7 @@ export interface Vehicle {
   id: number;
   plate_number: string;
   driver_name: string;
+  vehicle_type: string;
   status: 'active' | 'deactive';
   oil_change_interval_km: number;
   created_at: string;
@@ -33,10 +34,11 @@ export interface UploadError {
 export interface VehicleData {
   driver_name: string;
   plate_number: string;
+  vehicle_type?: string;
 }
 
 const SELECT_COLS = `
-  id, plate_number, driver_name, status, oil_change_interval_km, created_at, updated_at
+  id, plate_number, driver_name, vehicle_type, status, oil_change_interval_km, created_at, updated_at
 `;
 
 function normalizePlateNumber(raw: string): string | null {
@@ -55,6 +57,7 @@ export const vehicleService = {
   async getAll(
     search?: string,
     status?: string,
+    vehicle_type?: string,
     page: number = 1,
     limit: number = 20,
   ): Promise<VehicleListResult> {
@@ -71,6 +74,10 @@ export const vehicleService = {
       // no status filter
     } else {
       conditions.push("status = 'active'");
+    }
+
+    if (vehicle_type === 'Xe nhà' || vehicle_type === 'Xe ngoài') {
+      conditions.push(`vehicle_type = '${vehicle_type}'`);
     }
 
     if (conditions.length > 0) {
@@ -152,17 +159,19 @@ export const vehicleService = {
       [normalized],
     );
 
+    const vehicle_type = data.vehicle_type || 'Xe nhà';
+
     if (deactivated.rows.length > 0) {
       const result = await pool.query<Vehicle>(
-        `UPDATE vehicles SET status = 'active', driver_name = $1 WHERE id = $2 RETURNING ${SELECT_COLS}`,
-        [data.driver_name, deactivated.rows[0].id],
+        `UPDATE vehicles SET status = 'active', driver_name = $1, vehicle_type = $2 WHERE id = $3 RETURNING ${SELECT_COLS}`,
+        [data.driver_name, vehicle_type, deactivated.rows[0].id],
       );
       return result.rows[0];
     }
 
     const result = await pool.query<Vehicle>(
-      `INSERT INTO vehicles (plate_number, driver_name) VALUES ($1, $2) RETURNING ${SELECT_COLS}`,
-      [normalized, data.driver_name],
+      `INSERT INTO vehicles (plate_number, driver_name, vehicle_type) VALUES ($1, $2, $3) RETURNING ${SELECT_COLS}`,
+      [normalized, data.driver_name, vehicle_type],
     );
     return result.rows[0];
   },
@@ -194,15 +203,16 @@ export const vehicleService = {
     return result.rows[0];
   },
 
-  async update(id: number, data: { driver_name: string }): Promise<Vehicle> {
+  async update(id: number, data: { driver_name: string; vehicle_type?: string }): Promise<Vehicle> {
     const existing = await this.findById(id);
     if (!existing) {
       throw { code: 'NOT_FOUND' };
     }
 
+    const vehicle_type = data.vehicle_type || existing.vehicle_type;
     const result = await pool.query<Vehicle>(
-      `UPDATE vehicles SET driver_name = $1 WHERE id = $2 RETURNING ${SELECT_COLS}`,
-      [data.driver_name, id],
+      `UPDATE vehicles SET driver_name = $1, vehicle_type = $2 WHERE id = $3 RETURNING ${SELECT_COLS}`,
+      [data.driver_name, vehicle_type, id],
     );
     return result.rows[0];
   },
@@ -304,13 +314,13 @@ export const vehicleService = {
 
         if (deactivated.rows.length > 0) {
           await client.query(
-            `UPDATE vehicles SET status = 'active', driver_name = $1 WHERE id = $2`,
+            `UPDATE vehicles SET status = 'active', driver_name = $1, vehicle_type = 'Xe nhà' WHERE id = $2`,
             [row.driver_name, deactivated.rows[0].id],
           );
           reactivated++;
         } else {
           await client.query(
-            `INSERT INTO vehicles (plate_number, driver_name) VALUES ($1, $2)`,
+            `INSERT INTO vehicles (plate_number, driver_name, vehicle_type) VALUES ($1, $2, 'Xe nhà')`,
             [row.plate_number, row.driver_name],
           );
           imported++;
