@@ -15,6 +15,7 @@ export interface FuelRecord {
   unit_price: number;
   total_cost: number;
   batch_id: string | null;
+  location: string | null;
   notes: string | null;
   created_by: number | null;
   created_at: string;

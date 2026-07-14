@@ -501,6 +501,7 @@ export const fuelRecordService = {
         let sheetImported = 0;
         const batchRows: unknown[][] = [];
         const BATCH_SIZE = 100;
+        let currentLocation = 'ANH HUY'; // Default location
 
         const flushBatch = async () => {
           if (batchRows.length === 0) return;
@@ -509,9 +510,9 @@ export const fuelRecordService = {
           const flatParams: unknown[] = [];
           let idx = 0;
           for (const r of rows) {
-            const base = idx * 16;
+            const base = idx * 17;
             placeholders.push(
-              `($${base + 1}, $${base + 2}, $${base + 3}, $${base + 4}, $${base + 5}, $${base + 6}, $${base + 7}, $${base + 8}, $${base + 9}, $${base + 10}, $${base + 11}, $${base + 12}, $${base + 13}, $${base + 14}, $${base + 15}, $${base + 16})`,
+              `($${base + 1}, $${base + 2}, $${base + 3}, $${base + 4}, $${base + 5}, $${base + 6}, $${base + 7}, $${base + 8}, $${base + 9}, $${base + 10}, $${base + 11}, $${base + 12}, $${base + 13}, $${base + 14}, $${base + 15}, $${base + 16}, $${base + 17})`,
             );
             flatParams.push(...r);
             idx++;
@@ -520,7 +521,7 @@ export const fuelRecordService = {
             `INSERT INTO fuel_records
              (vehicle_id, record_date, odometer_old, odometer_new, distance, liters, fuel_rate,
               gps_old, gps_new, gps_distance, gps_liters, gps_fuel_rate,
-              unit_price, total_cost, batch_id, created_by)
+              unit_price, total_cost, batch_id, location, created_by)
              VALUES ${placeholders.join(', ')}`,
             flatParams,
           );
@@ -532,6 +533,13 @@ export const fuelRecordService = {
           const rowNum = i + 1;
 
           if (row.length === 0) continue;
+
+          // Detect location marker in column D
+          const colD = String(row[3] ?? '').trim();
+          if (colD.includes('XE LỚN') && colD.includes('CÂY XĂNG')) {
+            currentLocation = 'CÂY XĂNG HIỆP TÂN';
+            continue;
+          }
 
           const dateVal = row[0];
           const plateNum = String(row[1] ?? '').trim();
@@ -562,14 +570,18 @@ export const fuelRecordService = {
           const gpsLitersSanitized = (gpsLiters != null && !isNaN(gpsLiters)) ? gpsLiters : null;
 
           const normalizedPlate = plateNum.replace(/[-,\s.]/g, '').toUpperCase();
-          const vehicleId = vehicleMap.get(normalizedPlate);
+          let vehicleId = vehicleMap.get(normalizedPlate);
+          
+          // Auto-insert vehicle if not found
           if (!vehicleId) {
-            allErrors.push({
-              row: rowNum,
-              plate_number: plateNum,
-              reason: `Không tìm thấy xe với biển số "${plateNum}" trong danh mục`,
-            });
-            continue;
+            const insertResult = await client.query<{ id: number }>(
+              `INSERT INTO vehicles (plate_number, driver_name, vehicle_type, status)
+               VALUES ($1, $2, $3, $4)
+               RETURNING id`,
+              [normalizedPlate, 'Xe ngoài', 'Xe ngoài', 'active']
+            );
+            vehicleId = insertResult.rows[0].id;
+            vehicleMap.set(normalizedPlate, vehicleId);
           }
 
           let recordDate: string;
@@ -601,7 +613,7 @@ export const fuelRecordService = {
             distance, litersVal, fuelRate,
             gpsOldSanitized, gpsNewSanitized, gpsDist,
             gpsLitersSanitized, gpsFR,
-            unitPriceVal, totalCost, batchId, userId,
+            unitPriceVal, totalCost, batchId, currentLocation, userId,
           ]);
 
           if (batchRows.length >= BATCH_SIZE) {
