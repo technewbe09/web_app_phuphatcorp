@@ -17,6 +17,8 @@ const allowedOrigins = [
   'https://phuphatcorp.scrapetool.cloud',
   'https://app-staging.phuphat.com',
 ];
+  ...(process.env.CORS_ORIGIN ? [process.env.CORS_ORIGIN] : []),
+].filter(Boolean);
 
 app.use(
   cors({
