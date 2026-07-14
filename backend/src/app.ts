@@ -15,6 +15,7 @@ const allowedOrigins = [
   'http://localhost:5173',
   'http://localhost:5174',
   'https://phuphatcorp.scrapetool.cloud',
+  'https://app.phuphat.com',
   'https://app-staging.phuphat.com',
 ];
 
