@@ -8,6 +8,7 @@ import type {
   UpdateFuelRecordInput,
   BatchInfo,
   MonitoringVehicle,
+  LocationFuelStat,
   FuelRecordImage,
   WithoutFuelVehicle,
 } from '../types/fuelRecord';
@@ -79,6 +80,14 @@ export const fuelRecordApi = {
   fetchStatistics: async (params?: FuelStatsParams): Promise<FuelStatisticsResult> => {
     const response = await axiosClient.get<{ data: FuelStatisticsResult }>(
       '/fuel-records/statistics',
+      { params },
+    );
+    return response.data.data;
+  },
+
+  fetchStatisticsByLocation: async (params?: { month?: string }): Promise<{ byLocation: LocationFuelStat[] }> => {
+    const response = await axiosClient.get<{ data: { byLocation: LocationFuelStat[] } }>(
+      '/fuel-records/statistics/by-location',
       { params },
     );
     return response.data.data;

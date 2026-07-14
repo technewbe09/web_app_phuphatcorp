@@ -67,6 +67,13 @@ export function useGetFuelStatistics(params?: FuelStatsParams) {
   });
 }
 
+export function useGetFuelStatisticsByLocation(params?: { month?: string }) {
+  return useQuery({
+    queryKey: [...QUERY_KEY, 'statistics-by-location', params],
+    queryFn: () => fuelRecordApi.fetchStatisticsByLocation(params),
+  });
+}
+
 export function useGetFuelMonths() {
   return useQuery({
     queryKey: [...QUERY_KEY, 'months'],

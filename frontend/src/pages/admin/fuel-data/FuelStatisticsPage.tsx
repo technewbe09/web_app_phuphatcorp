@@ -7,12 +7,12 @@ import { Select } from '../../../components/ui/Select';
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '../../../components/ui/Table';
-import { useGetFuelStatistics, useGetFuelMonths, useGetFuelMonitoring, useGetVehiclesWithoutFuel } from '../../../hooks/useFuelRecords';
+import { useGetFuelStatistics, useGetFuelMonths, useGetFuelMonitoring, useGetVehiclesWithoutFuel, useGetFuelStatisticsByLocation } from '../../../hooks/useFuelRecords';
 import { useGetVehicles } from '../../../hooks/useVehicleCatalog';
 import { FuelStatisticsSummary } from '../../../components/fuel-data/FuelStatisticsSummary';
 import { cn } from '../../../utils/cn';
 
-type Tab = 'overview' | 'monitoring' | 'without-fuel';
+type Tab = 'overview' | 'monitoring' | 'without-fuel' | 'by-location';
 
 export function FuelStatisticsPage() {
   const navigate = useNavigate();
@@ -32,6 +32,9 @@ export function FuelStatisticsPage() {
 
   const { data: monitoringData, isLoading: monitoringLoading } = useGetFuelMonitoring(10);
   const { data: withoutFuelData, isLoading: withoutFuelLoading } = useGetVehiclesWithoutFuel(withoutFuelDays);
+  const { data: locationStats, isLoading: locationLoading } = useGetFuelStatisticsByLocation({
+    month: selectedMonth || undefined,
+  });
 
   const formatNum = (v: number | string | null | undefined, decimals = 1) =>
     v != null ? Number(v).toLocaleString('vi-VN', { minimumFractionDigits: decimals, maximumFractionDigits: decimals }) : '-';
@@ -40,6 +43,7 @@ export function FuelStatisticsPage() {
     { key: 'overview', label: 'Tổng quan' },
     { key: 'monitoring', label: 'Xe cần theo dõi' },
     { key: 'without-fuel', label: 'Xe chưa đổ dầu' },
+    { key: 'by-location', label: 'Theo vị trí' },
   ];
 
   return (
@@ -412,6 +416,76 @@ export function FuelStatisticsPage() {
                           {v.days_since_last != null
                             ? `${v.days_since_last} ngày`
                             : '—'}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* ============ TAB: Theo vị trí ============ */}
+      {activeTab === 'by-location' && (
+        <Card>
+          <CardContent className="p-0">
+            <div className="px-6 py-4 border-b border-neutral-200 dark:border-neutral-800">
+              <h2 className="text-lg font-semibold text-neutral-900 dark:text-neutral-100">
+                Thống kê theo vị trí đổ dầu
+              </h2>
+              <p className="text-sm text-neutral-500 dark:text-neutral-400 mt-1">
+                Phân tích tiêu hao nhiên liệu theo từng vị trí đổ dầu
+              </p>
+            </div>
+            {locationLoading ? (
+              <div className="p-6 space-y-3">
+                {Array.from({ length: 3 }).map((_, i) => (
+                  <div key={i} className="h-10 bg-neutral-100 dark:bg-neutral-800 rounded animate-pulse" />
+                ))}
+              </div>
+            ) : !locationStats || locationStats.byLocation.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-16 gap-3 text-neutral-500 dark:text-neutral-400">
+                <p className="text-sm">Không có dữ liệu thống kê theo vị trí.</p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Vị trí</TableHead>
+                      <TableHead>Tháng</TableHead>
+                      <TableHead className="text-right">Km đi</TableHead>
+                      <TableHead className="text-right">Lít</TableHead>
+                      <TableHead className="text-right">L/100km</TableHead>
+                      <TableHead className="text-right">Chi phí</TableHead>
+                      <TableHead className="text-right">Số lần đổ</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {locationStats.byLocation.map((loc, idx) => (
+                      <TableRow key={`${loc.location}-${loc.month}-${idx}`}>
+                        <TableCell className="font-medium text-neutral-900 dark:text-neutral-100">
+                          {loc.location}
+                        </TableCell>
+                        <TableCell className="text-neutral-700 dark:text-neutral-300">
+                          {loc.month}
+                        </TableCell>
+                        <TableCell className="text-right text-neutral-700 dark:text-neutral-300">
+                          {Number(loc.total_distance).toLocaleString('vi-VN')} km
+                        </TableCell>
+                        <TableCell className="text-right text-neutral-700 dark:text-neutral-300">
+                          {Number(loc.total_liters).toLocaleString('vi-VN')} L
+                        </TableCell>
+                        <TableCell className="text-right text-neutral-700 dark:text-neutral-300">
+                          {Number(loc.avg_fuel_rate)?.toFixed(2) ?? '-'}
+                        </TableCell>
+                        <TableCell className="text-right font-medium text-neutral-900 dark:text-neutral-100">
+                          {Number(loc.total_cost).toLocaleString('vi-VN')} đ
+                        </TableCell>
+                        <TableCell className="text-right text-neutral-500 dark:text-neutral-400">
+                          {loc.record_count}
                         </TableCell>
                       </TableRow>
                     ))}
