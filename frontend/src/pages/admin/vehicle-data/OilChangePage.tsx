@@ -43,7 +43,7 @@ export function OilChangePage() {
     limit: PAGE_SIZE,
   });
   const { data: dueVehicles, isLoading: dueLoading, isError: dueError, refetch: refetchDue } = useGetDueVehicles();
-  const { data: vehiclesData } = useGetVehicles('', 'active', 1, 200);
+  const { data: vehiclesData } = useGetVehicles('', 'active', undefined, 1, 200);
   const deleteMutation = useDeleteOilChange();
 
   const vehicles = vehiclesData?.vehicles ?? [];
