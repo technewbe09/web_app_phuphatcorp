@@ -32,7 +32,7 @@ export function FuelDataPage() {
   const [toasts, setToasts] = useState<Toast[]>([]);
   const PAGE_SIZE = 20;
 
-  const { data: vehicleData } = useGetVehicles('', undefined, 1, 200);
+  const { data: vehicleData } = useGetVehicles('', undefined, undefined, 1, 200);
   const vehicles = vehicleData?.vehicles ?? [];
 
   const { data, isLoading, isError, refetch } = useGetFuelRecords({

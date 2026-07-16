@@ -498,187 +498,199 @@ export const fuelRecordService = {
       vehicleMap.set(v.plate_number.toUpperCase().replace(/-/g, ''), v.id);
     }
 
-    // Process each sheet independently
+    // Collect ALL rows — grouped by month only for batchId tracking
+    const allRows: unknown[][] = [];
+    const monthSet = new Set<string>();
+
+    // Process each sheet — parse rows, month from column A date
     for (let sheetIdx = 0; sheetIdx < wb.SheetNames.length; sheetIdx++) {
       const sheetName = wb.SheetNames[sheetIdx];
       const ws = wb.Sheets[sheetName];
       const rawRows = XLSX.utils.sheet_to_json<unknown[]>(ws, { header: 1, defval: null });
 
-      // Detect month from sheet title (row 1) or sheet name
-      let monthStr = '';
-      const titleRow = rawRows[0];
-      const titleText = String(titleRow?.[0] ?? '').trim();
-      const monthMatch = titleText.match(/(\d{1,2})\/(\d{4})/);
-      if (monthMatch) {
-        monthStr = `${monthMatch[2]}-${monthMatch[1].padStart(2, '0')}`;
-      } else {
-        const nameMonth = sheetName.match(/^(\d{1,2}).*20(\d{2})$/);
-        if (nameMonth) {
-          monthStr = `20${nameMonth[2]}-${nameMonth[1].padStart(2, '0')}`;
-        } else {
-          const parts = sheetName.split('-');
-          if (parts.length === 2 && parts[1].match(/^\d{4}$/)) {
-            monthStr = `${parts[1]}-${parts[0].padStart(2, '0')}`;
-          }
+      let currentLocation = 'ANH HUY';
+
+      for (let i = 2; i < rawRows.length; i++) {
+        const row = rawRows[i] as unknown[];
+        const rowNum = i + 1;
+
+        if (row.length === 0) continue;
+
+        // Detect location marker in column D
+        const colD = String(row[3] ?? '').trim();
+        if (colD.includes('XE LỚN') && colD.includes('CÂY XĂNG')) {
+          currentLocation = 'CÂY XĂNG HIỆP TÂN';
+          continue;
         }
+
+        const dateVal = row[0];
+        const plateNum = String(row[1] ?? '').trim();
+        const odoOld = parseFloat(String(row[2] ?? ''));
+        const odoNew = parseFloat(String(row[3] ?? ''));
+        const liters = parseFloat(String(row[5] ?? ''));
+        const gpsOldRaw = row[7] != null ? String(row[7]) : '';
+        const gpsNewRaw = row[8] != null ? String(row[8]) : '';
+        const gpsLitersRaw = row[10] != null ? String(row[10]) : '';
+        const gpsOld = gpsOldRaw !== '' ? parseFloat(gpsOldRaw) : null;
+        const gpsNew = gpsNewRaw !== '' ? parseFloat(gpsNewRaw) : null;
+        const gpsLiters = gpsLitersRaw !== '' ? parseFloat(gpsLitersRaw) : null;
+        const unitPrice = parseFloat(String(row[12] ?? ''));
+
+        // Skip TC (summary) rows
+        if (String(row[3]).trim() === 'TC') continue;
+        if (!plateNum.match(/^\d{2}[A-Za-z]/)) continue;
+
+        // Parse record date FIRST — used for month grouping
+        let recordDate: string;
+        if (dateVal instanceof Date) {
+          recordDate = dateVal.toISOString().split('T')[0];
+        } else if (typeof dateVal === 'number' && dateVal > 40000 && dateVal < 80000) {
+          const excelEpoch = new Date(1899, 11, 30);
+          const dateObj = new Date(excelEpoch.getTime() + dateVal * 86400000);
+          recordDate = dateObj.toISOString().split('T')[0];
+        } else {
+          const dateStr = String(dateVal ?? '').trim();
+          if (dateStr) {
+            const parsed = new Date(dateStr);
+            if (!isNaN(parsed.getTime())) {
+              recordDate = parsed.toISOString().split('T')[0];
+            } else continue;
+          } else continue;
+        }
+
+        const month = recordDate.substring(0, 7);
+        monthSet.add(month);
+
+        // Default missing numeric values to 0
+        const odoOldVal = isNaN(odoOld) ? 0 : odoOld;
+        const odoNewVal = isNaN(odoNew) ? 0 : odoNew;
+        const litersVal = isNaN(liters) ? 0 : liters;
+        const unitPriceVal = isNaN(unitPrice) ? 0 : unitPrice;
+
+        // Sanitize GPS values: NaN → null
+        const gpsOldSanitized = (gpsOld != null && !isNaN(gpsOld)) ? gpsOld : null;
+        const gpsNewSanitized = (gpsNew != null && !isNaN(gpsNew)) ? gpsNew : null;
+        const gpsLitersSanitized = (gpsLiters != null && !isNaN(gpsLiters)) ? gpsLiters : null;
+
+        const normalizedPlate = plateNum.replace(/[-,\s.]/g, '').toUpperCase();
+        let vehicleId = vehicleMap.get(normalizedPlate);
+
+        // Auto-insert vehicle if not found
+        if (!vehicleId) {
+          const insertResult = await pool.query<{ id: number }>(
+            `INSERT INTO vehicles (plate_number, driver_name, vehicle_type, status)
+             VALUES ($1, $2, $3, $4)
+             ON CONFLICT DO NOTHING
+             RETURNING id`,
+            [normalizedPlate, 'Xe ngoài', 'Xe ngoài', 'active'],
+          );
+          if (insertResult.rows.length > 0) {
+            vehicleId = insertResult.rows[0].id;
+          } else {
+            const retry = await pool.query<{ id: number }>(
+              `SELECT id FROM vehicles WHERE plate_number = $1 AND status = 'active'`,
+              [normalizedPlate],
+            );
+            if (retry.rows.length > 0) {
+              vehicleId = retry.rows[0].id;
+            } else {
+              allErrors.push({
+                row: rowNum,
+                plate_number: plateNum,
+                reason: `Không thể thêm xe "${plateNum}" vào danh mục`,
+              });
+              continue;
+            }
+          }
+          vehicleMap.set(normalizedPlate, vehicleId);
+        }
+
+        const distance = odoNewVal - odoOldVal;
+        const fuelRate = distance > 0 ? litersVal * 100 / distance : null;
+        const gpsDist = (gpsOldSanitized != null && gpsNewSanitized != null) ? gpsNewSanitized - gpsOldSanitized : null;
+        const gpsFR = (gpsDist != null && gpsDist > 0 && gpsLitersSanitized != null)
+          ? gpsLitersSanitized * 100 / gpsDist : null;
+        const totalCost = litersVal * unitPriceVal;
+
+        // Row data: [vehicleId, recordDate, odoOld, odoNew, distance, liters, fuelRate,
+        //            gpsOld, gpsNew, gpsDist, gpsLiters, gpsFR,
+        //            unitPrice, totalCost, location, userId]
+        allRows.push([
+          vehicleId, recordDate, odoOldVal, odoNewVal,
+          distance, litersVal, fuelRate,
+          gpsOldSanitized, gpsNewSanitized, gpsDist,
+          gpsLitersSanitized, gpsFR,
+          unitPriceVal, totalCost, currentLocation, userId,
+        ]);
       }
+    }
 
-      if (!monthStr) {
-        allErrors.push({
-          row: 0,
-          plate_number: '',
-          reason: `Không thể xác định tháng từ sheet "${sheetName}"`,
-        });
-        continue;
-      }
+    // Batch UPSERT — NO DELETE, use ON CONFLICT to update or insert
+    if (allRows.length === 0) {
+      return { imported: 0, skipped: 0, errors: allErrors.length, details: allErrors.length > 0 ? allErrors : undefined };
+    }
 
-      const batchId = `fuel_${monthStr}_${Date.now()}`;
+    // Generate a compact batch ID from the months present + timestamp
+    const monthsList = [...monthSet].sort();
+    const monthPrefix = monthsList.length <= 3
+      ? monthsList.join('_')
+      : `${monthsList[0]}_to_${monthsList[monthsList.length - 1]}`;
+    const batchId = `fuel_${monthPrefix}_${Date.now()}`.substring(0, 50);
+    const BATCH_SIZE = 100;
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
 
-      // Delete existing records for this month before inserting
-      const client = await pool.connect();
-      try {
-        await client.query('BEGIN');
+      for (let i = 0; i < allRows.length; i += BATCH_SIZE) {
+        const batch = allRows.slice(i, i + BATCH_SIZE);
+        const placeholders: string[] = [];
+        const flatParams: unknown[] = [];
+        let idx = 0;
+
+        for (const r of batch) {
+          const base = idx * 17;
+          placeholders.push(
+            `($${base + 1}, $${base + 2}, $${base + 3}, $${base + 4}, $${base + 5}, $${base + 6}, $${base + 7}, $${base + 8}, $${base + 9}, $${base + 10}, $${base + 11}, $${base + 12}, $${base + 13}, $${base + 14}, $${base + 15}, $${base + 16}, $${base + 17})`,
+          );
+          flatParams.push(
+            r[0], r[1], r[2], r[3], r[4], r[5], r[6], r[7], r[8], r[9], r[10], r[11], r[12], r[13], batchId, r[14], r[15],
+          );
+          idx++;
+        }
 
         await client.query(
-          `DELETE FROM fuel_records WHERE to_char(record_date, 'YYYY-MM') = $1`,
-          [monthStr],
+          `INSERT INTO fuel_records
+           (vehicle_id, record_date, odometer_old, odometer_new, distance, liters, fuel_rate,
+            gps_old, gps_new, gps_distance, gps_liters, gps_fuel_rate,
+            unit_price, total_cost, batch_id, location, created_by)
+           VALUES ${placeholders.join(', ')}
+           ON CONFLICT (vehicle_id, record_date) DO UPDATE SET
+            odometer_old = EXCLUDED.odometer_old,
+            odometer_new = EXCLUDED.odometer_new,
+            distance = EXCLUDED.distance,
+            liters = EXCLUDED.liters,
+            fuel_rate = EXCLUDED.fuel_rate,
+            gps_old = EXCLUDED.gps_old,
+            gps_new = EXCLUDED.gps_new,
+            gps_distance = EXCLUDED.gps_distance,
+            gps_liters = EXCLUDED.gps_liters,
+            gps_fuel_rate = EXCLUDED.gps_fuel_rate,
+            unit_price = EXCLUDED.unit_price,
+            total_cost = EXCLUDED.total_cost,
+            batch_id = EXCLUDED.batch_id,
+            location = EXCLUDED.location,
+            updated_at = NOW()`,
+          flatParams,
         );
-
-        // Process data rows (skip row 1 title, row 2 header)
-        let sheetImported = 0;
-        const batchRows: unknown[][] = [];
-        const BATCH_SIZE = 100;
-        let currentLocation = 'ANH HUY'; // Default location
-
-        const flushBatch = async () => {
-          if (batchRows.length === 0) return;
-          const rows = batchRows.splice(0);
-          const placeholders: string[] = [];
-          const flatParams: unknown[] = [];
-          let idx = 0;
-          for (const r of rows) {
-            const base = idx * 17;
-            placeholders.push(
-              `($${base + 1}, $${base + 2}, $${base + 3}, $${base + 4}, $${base + 5}, $${base + 6}, $${base + 7}, $${base + 8}, $${base + 9}, $${base + 10}, $${base + 11}, $${base + 12}, $${base + 13}, $${base + 14}, $${base + 15}, $${base + 16}, $${base + 17})`,
-            );
-            flatParams.push(...r);
-            idx++;
-          }
-          await client.query(
-            `INSERT INTO fuel_records
-             (vehicle_id, record_date, odometer_old, odometer_new, distance, liters, fuel_rate,
-              gps_old, gps_new, gps_distance, gps_liters, gps_fuel_rate,
-              unit_price, total_cost, batch_id, location, created_by)
-             VALUES ${placeholders.join(', ')}`,
-            flatParams,
-          );
-          sheetImported += rows.length;
-        };
-
-        for (let i = 2; i < rawRows.length; i++) {
-          const row = rawRows[i] as unknown[];
-          const rowNum = i + 1;
-
-          if (row.length === 0) continue;
-
-          // Detect location marker in column D
-          const colD = String(row[3] ?? '').trim();
-          if (colD.includes('XE LỚN') && colD.includes('CÂY XĂNG')) {
-            currentLocation = 'CÂY XĂNG HIỆP TÂN';
-            continue;
-          }
-
-          const dateVal = row[0];
-          const plateNum = String(row[1] ?? '').trim();
-          const odoOld = parseFloat(String(row[2] ?? ''));
-          const odoNew = parseFloat(String(row[3] ?? ''));
-          const liters = parseFloat(String(row[5] ?? ''));
-          const gpsOldRaw = row[7] != null ? String(row[7]) : '';
-          const gpsNewRaw = row[8] != null ? String(row[8]) : '';
-          const gpsLitersRaw = row[10] != null ? String(row[10]) : '';
-          const gpsOld = gpsOldRaw !== '' ? parseFloat(gpsOldRaw) : null;
-          const gpsNew = gpsNewRaw !== '' ? parseFloat(gpsNewRaw) : null;
-          const gpsLiters = gpsLitersRaw !== '' ? parseFloat(gpsLitersRaw) : null;
-          const unitPrice = parseFloat(String(row[12] ?? ''));
-
-          // Skip TC (summary) rows
-          if (String(row[3]).trim() === 'TC') continue;
-          if (!plateNum.match(/^\d{2}[A-Za-z]/)) continue;
-
-          // Default missing numeric values to 0
-          const odoOldVal = isNaN(odoOld) ? 0 : odoOld;
-          const odoNewVal = isNaN(odoNew) ? 0 : odoNew;
-          const litersVal = isNaN(liters) ? 0 : liters;
-          const unitPriceVal = isNaN(unitPrice) ? 0 : unitPrice;
-
-          // Sanitize GPS values: NaN → null
-          const gpsOldSanitized = (gpsOld != null && !isNaN(gpsOld)) ? gpsOld : null;
-          const gpsNewSanitized = (gpsNew != null && !isNaN(gpsNew)) ? gpsNew : null;
-          const gpsLitersSanitized = (gpsLiters != null && !isNaN(gpsLiters)) ? gpsLiters : null;
-
-          const normalizedPlate = plateNum.replace(/[-,\s.]/g, '').toUpperCase();
-          let vehicleId = vehicleMap.get(normalizedPlate);
-          
-          // Auto-insert vehicle if not found
-          if (!vehicleId) {
-            const insertResult = await client.query<{ id: number }>(
-              `INSERT INTO vehicles (plate_number, driver_name, vehicle_type, status)
-               VALUES ($1, $2, $3, $4)
-               RETURNING id`,
-              [normalizedPlate, 'Xe ngoài', 'Xe ngoài', 'active']
-            );
-            vehicleId = insertResult.rows[0].id;
-            vehicleMap.set(normalizedPlate, vehicleId);
-          }
-
-          let recordDate: string;
-          if (dateVal instanceof Date) {
-            recordDate = dateVal.toISOString().split('T')[0];
-          } else if (typeof dateVal === 'number' && dateVal > 40000 && dateVal < 80000) {
-            const excelEpoch = new Date(1899, 11, 30);
-            const dateObj = new Date(excelEpoch.getTime() + dateVal * 86400000);
-            recordDate = dateObj.toISOString().split('T')[0];
-          } else {
-            const dateStr = String(dateVal ?? '').trim();
-            if (dateStr) {
-              const parsed = new Date(dateStr);
-              if (!isNaN(parsed.getTime())) {
-                recordDate = parsed.toISOString().split('T')[0];
-              } else continue;
-            } else continue;
-          }
-
-          const distance = odoNewVal - odoOldVal;
-          const fuelRate = distance > 0 ? litersVal * 100 / distance : null;
-          const gpsDist = (gpsOldSanitized != null && gpsNewSanitized != null) ? gpsNewSanitized - gpsOldSanitized : null;
-          const gpsFR = (gpsDist != null && gpsDist > 0 && gpsLitersSanitized != null)
-            ? gpsLitersSanitized * 100 / gpsDist : null;
-          const totalCost = litersVal * unitPriceVal;
-
-          batchRows.push([
-            vehicleId, recordDate, odoOldVal, odoNewVal,
-            distance, litersVal, fuelRate,
-            gpsOldSanitized, gpsNewSanitized, gpsDist,
-            gpsLitersSanitized, gpsFR,
-            unitPriceVal, totalCost, batchId, currentLocation, userId,
-          ]);
-
-          if (batchRows.length >= BATCH_SIZE) {
-            await flushBatch();
-          }
-        }
-
-        // Flush remaining
-        await flushBatch();
-
-        await client.query('COMMIT');
-        totalImported += sheetImported;
-      } catch (err) {
-        await client.query('ROLLBACK');
-        throw err;
-      } finally {
-        client.release();
+        totalImported += batch.length;
       }
+
+      await client.query('COMMIT');
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
     }
 
     return {

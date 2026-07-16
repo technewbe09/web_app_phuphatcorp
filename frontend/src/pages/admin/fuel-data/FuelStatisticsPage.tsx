@@ -21,7 +21,7 @@ export function FuelStatisticsPage() {
   const [selectedVehicleId, setSelectedVehicleId] = useState('');
   const [withoutFuelDays, setWithoutFuelDays] = useState(30);
 
-  const { data: vehicleData } = useGetVehicles('', undefined, 1, 200);
+  const { data: vehicleData } = useGetVehicles('', undefined, undefined, 1, 200);
   const vehicles = vehicleData?.vehicles ?? [];
   const { data: months } = useGetFuelMonths();
 

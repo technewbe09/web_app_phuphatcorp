@@ -34,7 +34,7 @@ export function OilChangeFormModal({ isOpen, onClose, onSuccess, onError, record
   const [showCustomOil, setShowCustomOil] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
-  const { data: vehiclesData } = useGetVehicles('', 'active', 1, 200);
+  const { data: vehiclesData } = useGetVehicles('', 'active', undefined, 1, 200);
   const vehicles = vehiclesData?.vehicles ?? [];
 
   useEffect(() => {
