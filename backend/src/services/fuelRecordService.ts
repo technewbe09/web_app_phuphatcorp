@@ -15,7 +15,7 @@ import {
 } from '../types/fuelRecord';
 
 const SELECT_COLS = `
-  fr.id, fr.vehicle_id, fr.record_date,
+  fr.id, fr.vehicle_id, to_char(fr.record_date, 'YYYY-MM-DD') as record_date,
   fr.odometer_old, fr.odometer_new, fr.distance, fr.liters, fr.fuel_rate,
   fr.gps_old, fr.gps_new, fr.gps_distance, fr.gps_liters, fr.gps_fuel_rate,
   fr.unit_price, fr.total_cost,
@@ -545,8 +545,8 @@ export const fuelRecordService = {
         if (dateVal instanceof Date) {
           recordDate = dateVal.toISOString().split('T')[0];
         } else if (typeof dateVal === 'number' && dateVal > 40000 && dateVal < 80000) {
-          const excelEpoch = new Date(1899, 11, 30);
-          const dateObj = new Date(excelEpoch.getTime() + dateVal * 86400000);
+          // Standard Excel serial → JS Date: (serial - 25569) days from Unix epoch
+          const dateObj = new Date((dateVal - 25569) * 86400000);
           recordDate = dateObj.toISOString().split('T')[0];
         } else {
           const dateStr = String(dateVal ?? '').trim();
@@ -610,7 +610,11 @@ export const fuelRecordService = {
         const gpsDist = (gpsOldSanitized != null && gpsNewSanitized != null) ? gpsNewSanitized - gpsOldSanitized : null;
         const gpsFR = (gpsDist != null && gpsDist > 0 && gpsLitersSanitized != null)
           ? gpsLitersSanitized * 100 / gpsDist : null;
-        const totalCost = litersVal * unitPriceVal;
+        // totalCost: use column N value if present, else calculate
+        const totalCostFromExcel = parseFloat(String(row[13] ?? ''));
+        const totalCost = !isNaN(totalCostFromExcel) && totalCostFromExcel > 0
+          ? totalCostFromExcel
+          : litersVal * unitPriceVal;
 
         // Row data: [vehicleId, recordDate, odoOld, odoNew, distance, liters, fuelRate,
         //            gpsOld, gpsNew, gpsDist, gpsLiters, gpsFR,
