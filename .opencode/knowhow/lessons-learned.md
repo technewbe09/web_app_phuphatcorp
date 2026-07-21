@@ -502,3 +502,37 @@ Vite không hot-reload `.env` khi dev server đang chạy. Phải restart `npm r
 - [ ] Cấu hình path alias (`@/` → `src/`) cho import ngắn hơn
 - [ ] Thêm `.env.example` đầy đủ cho cả backend và frontend
 - [ ] Setup Pre-commit hook (husky + lint-staged)
+
+---
+
+## Perf: N+1 INSERT pattern in create/update methods
+- **Ngày:** 2026-07-21
+- **Feature:** Lịch sử sửa xe (`repairService`)
+- **Vấn đề:** Loop item dùng INSERT riêng lẻ → N roundtrips DB (mỗi item 1 query)
+- **Fix:** Dùng multi-row INSERT — gộp tất cả items vào 1 query với dynamic placeholders `($1,$2,$3,$4), ($5,$6,$7,$8), ...`
+- **Pattern:** Khi insert array of child records, luôn dùng batch INSERT thay vì loop. Áp dụng cho cả `create()` và `update()`.
+- **Files:** `backend/src/services/repairService.ts:223-234, 294-310`
+
+## Perf: Sequential queries instead of parallel
+- **Ngày:** 2026-07-21
+- **Feature:** Lịch sử sửa xe (`repairService.getById`)
+- **Vấn đề:** 3 queries (record, items, images) chạy tuần tự → tổng latency = sum
+- **Fix:** `Promise.all([query1, query2, query3])` → 3 queries song song, latency = max
+- **Pattern:** Khi nhiều queries độc lập (không phụ thuộc kết quả của nhau), luôn dùng Promise.all.
+- **Files:** `backend/src/services/repairService.ts:185-205`
+
+## Perf: Missing composite index for DISTINCT ON query
+- **Ngày:** 2026-07-21
+- **Feature:** Lịch sử sửa xe (`repairService.getSummary`)
+- **Vấn đề:** CTE `DISTINCT ON (vehicle_id) ORDER BY vehicle_id, repair_date DESC` chỉ có index trên `vehicle_id`, thiếu `repair_date DESC`
+- **Fix:** Composite partial index `(vehicle_id, repair_date DESC) WHERE status = 'active'`
+- **Pattern:** Khi dùng DISTINCT ON kèm ORDER BY nhiều cột, cần composite index khớp với cả DISTINCT và ORDER BY columns.
+- **Files:** `backend/src/migrations/038_repair_composite_index.sql`
+
+## Perf: Separate COUNT query when COUNT(*) OVER() available
+- **Ngày:** 2026-07-21
+- **Feature:** Lịch sử sửa xe (`repairService.listByVehicle`)
+- **Vấn đề:** Chạy `SELECT COUNT(*)` riêng trước khi `SELECT data` → 2 roundtrips
+- **Fix:** Gộp thành 1 query với `COUNT(*) OVER()::int AS total_count`
+- **Pattern:** Paginated list queries nên dùng `COUNT(*) OVER()` để lấy total trong cùng 1 query.
+- **Files:** `backend/src/services/repairService.ts:159-178`

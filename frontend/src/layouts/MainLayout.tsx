@@ -29,6 +29,8 @@ import {
   BarChart3,
   ClipboardCheck,
   Beaker,
+  ShieldCheck,
+  Wrench,
 } from 'lucide-react';
 import { cn } from '../utils/cn';
 import { useAuth } from '../hooks/useAuth';
@@ -89,6 +91,8 @@ export function MainLayout() {
     { to: '/vehicle-data/driver-invoices', icon: ReceiptText, label: t('vehicleData.driverInvoices' as never) },
     { to: '/vehicle-data/inspections', icon: ClipboardCheck, label: 'Quản lý đăng kiểm' },
     { to: '/vehicle-data/oil-changes', icon: Beaker, label: 'Quản lý thay nhớt' },
+    { to: '/vehicle-data/insurances', icon: ShieldCheck, label: 'Quản lý bảo hiểm' },
+    { to: '/vehicle-data/repairs', icon: Wrench, label: 'Lịch sử sửa xe' },
     { to: '/fuel-data', icon: Droplets, label: 'Quản lý dữ liệu dầu' },
     { to: '/fuel-data/statistics', icon: BarChart3, label: 'Thống kê dầu' },
   ];
