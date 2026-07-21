@@ -26,6 +26,8 @@ import { FuelDataPage } from './pages/admin/fuel-data/FuelDataPage';
 import { FuelStatisticsPage } from './pages/admin/fuel-data/FuelStatisticsPage';
 import { InspectionPage } from './pages/admin/vehicle-data/InspectionPage';
 import { OilChangePage } from './pages/admin/vehicle-data/OilChangePage';
+import { InsurancePage } from './pages/admin/vehicle-data/InsurancePage';
+import { RepairPage } from './pages/admin/vehicle-data/RepairPage';
 
 function PlaceholderPage({ title }: { title: string }) {
   return (
@@ -65,6 +67,8 @@ export function Router() {
             <Route path="/vehicle-data/driver-invoices" element={<DriverInvoicesPage />} />
             <Route path="/vehicle-data/inspections" element={<InspectionPage />} />
             <Route path="/vehicle-data/oil-changes" element={<OilChangePage />} />
+            <Route path="/vehicle-data/insurances" element={<InsurancePage />} />
+            <Route path="/vehicle-data/repairs" element={<RepairPage />} />
             {/* Dispatch */}
             <Route path="/dispatch/schedule" element={<SchedulePage />} />
             {/* Accounting Data */}
