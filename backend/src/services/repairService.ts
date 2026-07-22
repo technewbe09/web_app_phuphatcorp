@@ -72,6 +72,24 @@ export interface UpdateRepairInput {
   }[];
 }
 
+export interface UploadBillInput {
+  plate_number: string;
+  repair_date: string;
+  garage_name: string;
+  notes?: string;
+  items: {
+    item_name: string;
+    parts_cost: number;
+    labor_cost: number;
+  }[];
+}
+
+export interface UploadError {
+  row: number;
+  plate_number: string;
+  reason: string;
+}
+
 const RECORD_SELECT = `
   rr.id, rr.vehicle_id, rr.repair_date, rr.garage_name,
   rr.total_amount, rr.notes, rr.status, rr.created_by,
@@ -90,6 +108,7 @@ function calcTotal(items: { parts_cost: number; labor_cost: number }[]): number 
 export const repairService = {
   async getSummary(params: {
     search?: string;
+    vehicle_id?: number;
     page?: number;
     limit?: number;
   }): Promise<{ vehicles: VehicleRepairSummary[]; total: number; page: number; limit: number }> {
@@ -99,6 +118,12 @@ export const repairService = {
     const conditions: string[] = [`v.status = 'active'`];
     const queryParams: unknown[] = [];
     let paramIdx = 1;
+
+    if (params.vehicle_id) {
+      conditions.push(`v.id = $${paramIdx}`);
+      queryParams.push(params.vehicle_id);
+      paramIdx++;
+    }
 
     if (params.search) {
       const q = `%${params.search}%`;
@@ -356,5 +381,105 @@ export const repairService = {
 
     await storageService.delete(result.rows[0].filename);
     await pool.query(`DELETE FROM repair_images WHERE id = $1`, [imageId]);
+  },
+
+  async uploadMany(bills: UploadBillInput[], userId: number): Promise<{ inserted: number }> {
+    const errors: UploadError[] = [];
+
+    for (let i = 0; i < bills.length; i++) {
+      const bill = bills[i];
+      if (!bill.plate_number) {
+        errors.push({ row: i + 1, plate_number: '', reason: 'Thiếu biển số' });
+        continue;
+      }
+      if (!bill.repair_date) {
+        errors.push({ row: i + 1, plate_number: bill.plate_number, reason: 'Thiếu ngày sửa' });
+        continue;
+      }
+      if (!bill.garage_name) {
+        errors.push({ row: i + 1, plate_number: bill.plate_number, reason: 'Thiếu tên gara' });
+        continue;
+      }
+      if (!bill.items || bill.items.length === 0) {
+        errors.push({ row: i + 1, plate_number: bill.plate_number, reason: 'Không có hạng mục nào' });
+        continue;
+      }
+      for (let j = 0; j < bill.items.length; j++) {
+        const item = bill.items[j];
+        if (!item.item_name) {
+          errors.push({ row: i + 1, plate_number: bill.plate_number, reason: `Hạng mục ${j + 1}: thiếu tên` });
+        }
+        if (item.parts_cost < 0) {
+          errors.push({ row: i + 1, plate_number: bill.plate_number, reason: `Hạng mục ${j + 1}: tiền phụ tùng < 0` });
+        }
+        if (item.labor_cost < 0) {
+          errors.push({ row: i + 1, plate_number: bill.plate_number, reason: `Hạng mục ${j + 1}: tiền công < 0` });
+        }
+      }
+    }
+
+    if (errors.length > 0) {
+      throw { code: 'UPLOAD_ERRORS', errors };
+    }
+
+    const vehicleMap = new Map<string, number>();
+    const vehicleResult = await pool.query<{ id: number; plate_number: string }>(
+      `SELECT id, plate_number FROM vehicles WHERE status = 'active'`,
+    );
+    for (const v of vehicleResult.rows) {
+      vehicleMap.set(v.plate_number, v.id);
+    }
+
+    for (let i = 0; i < bills.length; i++) {
+      const bill = bills[i];
+      if (!vehicleMap.has(bill.plate_number)) {
+        errors.push({ row: i + 1, plate_number: bill.plate_number, reason: 'Không tìm thấy xe' });
+      }
+    }
+
+    if (errors.length > 0) {
+      throw { code: 'UPLOAD_ERRORS', errors };
+    }
+
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      for (const bill of bills) {
+        const vehicleId = vehicleMap.get(bill.plate_number)!;
+        const totalAmount = calcTotal(bill.items);
+
+        const recordResult = await client.query<{ id: number }>(
+          `INSERT INTO repair_records (vehicle_id, repair_date, garage_name, total_amount, notes, created_by)
+           VALUES ($1, $2, $3, $4, $5, $6)
+           RETURNING id`,
+          [vehicleId, bill.repair_date, bill.garage_name, totalAmount, bill.notes || null, userId],
+        );
+
+        const repairId = recordResult.rows[0].id;
+
+        if (bill.items.length > 0) {
+          const values: unknown[] = [repairId];
+          const placeholders = bill.items.map((item, idx) => {
+            const base = idx * 3 + 2;
+            values.push(item.item_name, item.parts_cost || 0, item.labor_cost || 0);
+            return `($1, $${base}, $${base + 1}, $${base + 2})`;
+          });
+          await client.query(
+            `INSERT INTO repair_items (repair_id, item_name, parts_cost, labor_cost) VALUES ${placeholders.join(', ')}`,
+            values,
+          );
+        }
+      }
+
+      await client.query('COMMIT');
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
+
+    return { inserted: bills.length };
   },
 };

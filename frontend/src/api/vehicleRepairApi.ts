@@ -74,6 +74,18 @@ export interface CreateRepairInput {
   }[];
 }
 
+export interface UploadBillRow {
+  plate_number: string;
+  repair_date: string;
+  garage_name: string;
+  notes?: string;
+  items: {
+    item_name: string;
+    parts_cost: number;
+    labor_cost: number;
+  }[];
+}
+
 export interface UpdateRepairInput {
   repair_date?: string;
   garage_name?: string;
@@ -83,6 +95,16 @@ export interface UpdateRepairInput {
     parts_cost: number;
     labor_cost: number;
   }[];
+}
+
+export interface UploadResult {
+  inserted: number;
+}
+
+export interface UploadError {
+  row: number;
+  plate_number: string;
+  reason: string;
 }
 
 export const vehicleRepairApi = {
@@ -149,5 +171,13 @@ export const vehicleRepairApi = {
 
   deleteImage: async (repairId: number, imageId: number): Promise<void> => {
     await axiosClient.delete(`/vehicle-repairs/${repairId}/images/${imageId}`);
+  },
+
+  uploadMany: async (bills: UploadBillRow[]): Promise<UploadResult> => {
+    const response = await axiosClient.post<{ data: UploadResult }>(
+      '/vehicle-repairs/upload',
+      { bills },
+    );
+    return response.data.data;
   },
 };

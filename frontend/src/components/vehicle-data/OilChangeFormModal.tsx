@@ -14,11 +14,12 @@ interface Props {
   onSuccess: (message: string) => void;
   onError: (message: string) => void;
   record: OilChangeRecord | null;
+  preselectedVehicleId?: number;
 }
 
 const OIL_TYPES = ['15W-40', '20W-50'];
 
-export function OilChangeFormModal({ isOpen, onClose, onSuccess, onError, record }: Props) {
+export function OilChangeFormModal({ isOpen, onClose, onSuccess, onError, record, preselectedVehicleId }: Props) {
   const isEdit = !!record;
   const createMutation = useCreateOilChange();
   const updateMutation = useUpdateOilChange();
@@ -42,7 +43,7 @@ export function OilChangeFormModal({ isOpen, onClose, onSuccess, onError, record
       const oilType = record?.oil_type ?? '';
       const isPreset = OIL_TYPES.includes(oilType);
       setForm({
-        vehicle_id: record?.vehicle_id ?? '',
+        vehicle_id: record?.vehicle_id ?? preselectedVehicleId ?? '',
         change_date: record?.change_date ? record.change_date.split('T')[0] : '',
         odometer_at: record?.odometer_at?.toString() ?? '',
         oil_type: isPreset ? oilType : 'other',

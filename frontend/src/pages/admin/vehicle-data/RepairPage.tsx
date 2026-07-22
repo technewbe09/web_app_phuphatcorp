@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Plus, Eye, History, AlertTriangle, RefreshCw, Search, X, Wrench } from 'lucide-react';
+import { Plus, Eye, History, AlertTriangle, RefreshCw, Search, X, Upload } from 'lucide-react';
 import { Pagination } from '../../../components/ui/Pagination';
 import { Card, CardContent } from '../../../components/ui/Card';
 import { Button } from '../../../components/ui/Button';
@@ -10,6 +10,7 @@ import { useGetRepairSummary } from '../../../hooks/useVehicleRepairs';
 import { useGetVehicles } from '../../../hooks/useVehicleCatalog';
 import { RepairFormModal } from '../../../components/vehicle-data/RepairFormModal';
 import { RepairHistoryModal } from '../../../components/vehicle-data/RepairHistoryModal';
+import { RepairUploadModal } from '../../../components/vehicle-data/RepairUploadModal';
 import type { VehicleRepairSummary } from '../../../api/vehicleRepairApi';
 import { cn } from '../../../utils/cn';
 import { formatCurrency } from '../../../utils/format';
@@ -27,6 +28,7 @@ export function RepairPage() {
     { type: 'view'; vehicle: VehicleRepairSummary } |
     null
   >(null);
+  const [uploadOpen, setUploadOpen] = useState(false);
   const [search, setSearch] = useState('');
   const [vehicleSearch, setVehicleSearch] = useState('');
   const [dropdownOpen, setDropdownOpen] = useState(false);
@@ -79,10 +81,16 @@ export function RepairPage() {
         <h1 className="text-2xl font-semibold text-neutral-900 dark:text-neutral-100">
           Lịch sử sửa xe
         </h1>
-        <Button onClick={() => setModal({ type: 'create' })}>
-          <Plus className="w-4 h-4 mr-2" />
-          Thêm sửa xe
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={() => setUploadOpen(true)}>
+            <Upload className="w-4 h-4 mr-2" />
+            Import Excel
+          </Button>
+          <Button onClick={() => setModal({ type: 'create' })}>
+            <Plus className="w-4 h-4 mr-2" />
+            Thêm sửa xe
+          </Button>
+        </div>
       </div>
 
       <Card>
@@ -291,6 +299,13 @@ export function RepairPage() {
           onError={(msg) => showToast(msg, 'error')}
         />
       )}
+
+      <RepairUploadModal
+        isOpen={uploadOpen}
+        onClose={() => setUploadOpen(false)}
+        onSuccess={() => showToast('Import thành công')}
+        onError={(msg) => showToast(msg, 'error')}
+      />
     </div>
   );
 }

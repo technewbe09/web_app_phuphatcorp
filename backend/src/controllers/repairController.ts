@@ -47,14 +47,26 @@ export const repairImageDeleteSchema = [
   param('imageId').isInt({ min: 1 }).withMessage('Image ID không hợp lệ'),
 ];
 
+export const repairUploadSchema = [
+  body('bills').isArray({ min: 1 }).withMessage('Dữ liệu upload không được trống'),
+  body('bills.*.plate_number').notEmpty().withMessage('Thiếu biển số'),
+  body('bills.*.repair_date').notEmpty().withMessage('Thiếu ngày sửa'),
+  body('bills.*.garage_name').notEmpty().withMessage('Thiếu tên gara'),
+  body('bills.*.items').isArray({ min: 1 }).withMessage('Phải có ít nhất 1 hạng mục'),
+  body('bills.*.items.*.item_name').notEmpty().withMessage('Thiếu tên hạng mục'),
+  body('bills.*.items.*.parts_cost').isInt({ min: 0 }).withMessage('Tiền phụ tùng không được âm'),
+  body('bills.*.items.*.labor_cost').isInt({ min: 0 }).withMessage('Tiền công không được âm'),
+];
+
 export const repairController = {
   async summary(req: AuthRequest, res: Response): Promise<void> {
     try {
       const search = req.query.search as string | undefined;
+      const vehicleId = req.query.vehicle_id ? parseInt(req.query.vehicle_id as string, 10) : undefined;
       const page = parseInt(req.query.page as string, 10) || 1;
       const limit = parseInt(req.query.limit as string, 10) || 20;
 
-      const data = await repairService.getSummary({ search, page, limit });
+      const data = await repairService.getSummary({ search, vehicle_id: vehicleId, page, limit });
       sendSuccess(res, data, 'Danh sách lịch sử sửa xe');
     } catch (err) {
       const error = err instanceof Error ? err.message : 'Unknown error';
@@ -255,6 +267,44 @@ export const repairController = {
       }
       const error = err instanceof Error ? err.message : 'Unknown error';
       sendError(res, 'Không thể tải file', 500, error);
+    }
+  },
+
+  async upload(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        res.status(400).json({ success: false, errors: errors.array() });
+        return;
+      }
+
+      const { bills } = req.body;
+      const result = await repairService.uploadMany(bills, req.user!.userId);
+      sendSuccess(res, result, `Đã import ${result.inserted} bill sửa xe`, 201);
+
+      auditService.logAudit({
+        userId: req.user!.userId,
+        username: req.user!.email,
+        action: 'UPLOAD',
+        entityType: 'repair',
+        entityLabel: 'Batch upload',
+        details: { inserted: result.inserted, total: bills.length },
+        ipAddress: req.ip,
+      });
+    } catch (err: unknown) {
+      if (err && typeof err === 'object' && 'code' in err) {
+        const e = err as { code: string; errors?: unknown[] };
+        if (e.code === 'UPLOAD_ERRORS') {
+          res.status(422).json({
+            success: false,
+            message: 'Upload thất bại — có lỗi dữ liệu',
+            data: { errors: e.errors },
+          });
+          return;
+        }
+      }
+      const error = err instanceof Error ? err.message : 'Unknown error';
+      sendError(res, 'Không thể upload dữ liệu', 500, error);
     }
   },
 };

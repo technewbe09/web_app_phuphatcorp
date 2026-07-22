@@ -203,6 +203,116 @@ export const vehicleService = {
     return result.rows[0];
   },
 
+  async getSummary(vehicleId: number): Promise<{
+    vehicle: Vehicle;
+    inspection: { status: string; expiry_date: string | null; count: number };
+    insurance: { status: string; expiry_date: string | null; count: number };
+    oil_change: { status: string; last_change_date: string | null; last_odometer: number | null; current_km: number | null; km_since_change: number | null };
+    repair: { count: number; total_amount: number };
+    fuel: { avg_fuel_rate: number | null; last_odometer: number | null; record_count: number };
+  }> {
+    const vehicle = await this.findById(vehicleId);
+    if (!vehicle) {
+      throw { code: 'NOT_FOUND' };
+    }
+
+    const [inspectionRes, insuranceRes, oilRes, repairRes, fuelRes] = await Promise.all([
+      pool.query<{ id: number; expiry_date: string; status: string; inspection_count: number }>(
+        `SELECT id, expiry_date, status,
+          (SELECT COUNT(*) FROM inspection_records WHERE vehicle_id = $1 AND status IN ('active','expired','superseded'))::int AS inspection_count
+         FROM inspection_records
+         WHERE vehicle_id = $1 AND status = 'active'
+         ORDER BY inspection_date DESC LIMIT 1`,
+        [vehicleId],
+      ),
+      pool.query<{ id: number; expiry_date: string; status: string; insurance_count: number }>(
+        `SELECT id, expiry_date, status,
+          (SELECT COUNT(*) FROM insurance_records WHERE vehicle_id = $1 AND status IN ('active','expired','superseded'))::int AS insurance_count
+         FROM insurance_records
+         WHERE vehicle_id = $1 AND status = 'active'
+         ORDER BY purchase_date DESC LIMIT 1`,
+        [vehicleId],
+      ),
+      pool.query<{ id: number; change_date: string; odometer_at: number }>(
+        `SELECT id, change_date, odometer_at
+         FROM oil_change_records
+         WHERE vehicle_id = $1 AND status = 'active'
+         ORDER BY change_date DESC LIMIT 1`,
+        [vehicleId],
+      ),
+      pool.query<{ repair_count: number; total_amount: string }>(
+        `SELECT COUNT(*)::int AS repair_count,
+                COALESCE(SUM(total_amount), 0)::text AS total_amount
+         FROM repair_records
+         WHERE vehicle_id = $1 AND status = 'active'`,
+        [vehicleId],
+      ),
+      pool.query<{ record_count: number; last_odometer: number | null; avg_fuel_rate: string | null }>(
+        `WITH recent AS (
+           SELECT odometer_new, fuel_rate
+           FROM fuel_records WHERE vehicle_id = $1
+           ORDER BY record_date DESC LIMIT 10
+         )
+         SELECT
+           (SELECT COUNT(*)::int FROM fuel_records WHERE vehicle_id = $1) AS record_count,
+           (SELECT MAX(odometer_new) FROM fuel_records WHERE vehicle_id = $1) AS last_odometer,
+           (SELECT AVG(fuel_rate) FROM recent WHERE fuel_rate IS NOT NULL)::text AS avg_fuel_rate`,
+        [vehicleId],
+      ),
+    ]);
+
+    const insp = inspectionRes.rows[0] || null;
+    const ins = vehicle.vehicle_type === 'Xe nhà' ? (insuranceRes.rows[0] || null) : null;
+    const oil = oilRes.rows[0] || null;
+    const rep = repairRes.rows[0];
+    const fuel = fuelRes.rows[0];
+
+    const currentKm = fuel?.last_odometer ?? null;
+    const lastOilOdo = oil?.odometer_at ?? null;
+    const kmSinceChange = (currentKm !== null && lastOilOdo !== null) ? currentKm - lastOilOdo : null;
+
+    let oilStatus = 'no_data';
+    if (oil) {
+      oilStatus = 'ok';
+      if (kmSinceChange !== null && vehicle.oil_change_interval_km > 0) {
+        const pct = kmSinceChange / vehicle.oil_change_interval_km;
+        if (kmSinceChange > vehicle.oil_change_interval_km) {
+          oilStatus = 'overdue';
+        } else if (pct >= 0.8) {
+          oilStatus = 'due_soon';
+        }
+      }
+    }
+
+    return {
+      vehicle,
+      inspection: insp
+        ? { status: insp.status, expiry_date: insp.expiry_date, count: insp.inspection_count }
+        : { status: 'none', expiry_date: null, count: 0 },
+      insurance: vehicle.vehicle_type === 'Xe ngoài'
+        ? { status: 'not_applicable', expiry_date: null, count: 0 }
+        : ins
+          ? { status: ins.status, expiry_date: ins.expiry_date, count: ins.insurance_count }
+          : { status: 'none', expiry_date: null, count: 0 },
+      oil_change: {
+        status: oilStatus,
+        last_change_date: oil?.change_date ?? null,
+        last_odometer: lastOilOdo,
+        current_km: currentKm,
+        km_since_change: kmSinceChange,
+      },
+      repair: {
+        count: rep?.repair_count ?? 0,
+        total_amount: parseInt(rep?.total_amount ?? '0', 10),
+      },
+      fuel: {
+        avg_fuel_rate: fuel?.avg_fuel_rate ? parseFloat(fuel.avg_fuel_rate) : null,
+        last_odometer: currentKm,
+        record_count: fuel?.record_count ?? 0,
+      },
+    };
+  },
+
   async update(id: number, data: { driver_name: string; vehicle_type?: string }): Promise<Vehicle> {
     const existing = await this.findById(id);
     if (!existing) {

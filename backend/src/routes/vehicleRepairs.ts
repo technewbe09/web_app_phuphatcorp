@@ -6,6 +6,7 @@ import {
   repairUpdateSchema,
   repairDeleteSchema,
   repairImageDeleteSchema,
+  repairUploadSchema,
 } from '../controllers/repairController';
 import { authenticateToken, requirePermission } from '../middleware/auth';
 import { validate } from '../middleware/validate';
@@ -26,6 +27,7 @@ router.get('/vehicle/:vehicleId', requirePermission('vehicle_data.view'), repair
 router.get('/:id', requirePermission('vehicle_data.view'), repairController.getById);
 
 router.post('/', requirePermission('vehicle_data.manage'), ...validate(repairCreateSchema), repairController.create);
+router.post('/upload', requirePermission('vehicle_data.manage'), ...validate(repairUploadSchema), repairController.upload);
 router.post('/:id/images', requirePermission('vehicle_data.manage'), imageUpload.single('image'), repairController.uploadImage);
 
 router.put('/:id', requirePermission('vehicle_data.manage'), ...validate(repairUpdateSchema), repairController.update);
