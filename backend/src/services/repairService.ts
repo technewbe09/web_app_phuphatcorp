@@ -410,6 +410,19 @@ export const repairService = {
         errors.push({ row: i + 1, plate_number: bill.plate_number, reason: 'Thiếu ngày sửa' });
         continue;
       }
+      const dateParts = bill.repair_date.split('-').map(Number);
+      if (dateParts.length !== 3 || dateParts.some(isNaN)) {
+        errors.push({ row: i + 1, plate_number: bill.plate_number, reason: `Ngày sửa không hợp lệ: ${bill.repair_date}` });
+        continue;
+      }
+      const parsedDate = new Date(bill.repair_date);
+      if (isNaN(parsedDate.getTime()) ||
+          parsedDate.getFullYear() !== dateParts[0] ||
+          parsedDate.getMonth() + 1 !== dateParts[1] ||
+          parsedDate.getDate() !== dateParts[2]) {
+        errors.push({ row: i + 1, plate_number: bill.plate_number, reason: `Ngày sửa không tồn tại: ${bill.repair_date}` });
+        continue;
+      }
       if (!bill.garage_name) {
         errors.push({ row: i + 1, plate_number: bill.plate_number, reason: 'Thiếu tên gara' });
         continue;
@@ -455,38 +468,43 @@ export const repairService = {
       throw { code: 'UPLOAD_ERRORS', errors };
     }
 
+    const CHUNK_SIZE = 50;
     const client = await pool.connect();
     try {
-      await client.query('BEGIN');
+      for (let chunkStart = 0; chunkStart < bills.length; chunkStart += CHUNK_SIZE) {
+        const chunk = bills.slice(chunkStart, chunkStart + CHUNK_SIZE);
 
-      for (const bill of bills) {
-        const vehicleId = vehicleMap.get(bill.plate_number)!;
-        const totalAmount = calcTotal(bill.items);
+        await client.query('BEGIN');
 
-        const recordResult = await client.query<{ id: number }>(
-          `INSERT INTO repair_records (vehicle_id, repair_date, garage_name, total_amount, notes, created_by)
-           VALUES ($1, $2, $3, $4, $5, $6)
-           RETURNING id`,
-          [vehicleId, bill.repair_date, bill.garage_name, totalAmount, bill.notes || null, userId],
-        );
+        for (const bill of chunk) {
+          const vehicleId = vehicleMap.get(bill.plate_number)!;
+          const totalAmount = calcTotal(bill.items);
 
-        const repairId = recordResult.rows[0].id;
-
-        if (bill.items.length > 0) {
-          const values: unknown[] = [repairId];
-          const placeholders = bill.items.map((item, idx) => {
-            const base = idx * 3 + 2;
-            values.push(item.item_name, item.parts_cost || 0, item.labor_cost || 0);
-            return `($1, $${base}, $${base + 1}, $${base + 2})`;
-          });
-          await client.query(
-            `INSERT INTO repair_items (repair_id, item_name, parts_cost, labor_cost) VALUES ${placeholders.join(', ')}`,
-            values,
+          const recordResult = await client.query<{ id: number }>(
+            `INSERT INTO repair_records (vehicle_id, repair_date, garage_name, total_amount, notes, created_by)
+             VALUES ($1, $2, $3, $4, $5, $6)
+             RETURNING id`,
+            [vehicleId, bill.repair_date, bill.garage_name, totalAmount, bill.notes || null, userId],
           );
-        }
-      }
 
-      await client.query('COMMIT');
+          const repairId = recordResult.rows[0].id;
+
+          if (bill.items.length > 0) {
+            const values: unknown[] = [repairId];
+            const placeholders = bill.items.map((item, idx) => {
+              const base = idx * 3 + 2;
+              values.push(item.item_name, item.parts_cost || 0, item.labor_cost || 0);
+              return `($1, $${base}, $${base + 1}, $${base + 2})`;
+            });
+            await client.query(
+              `INSERT INTO repair_items (repair_id, item_name, parts_cost, labor_cost) VALUES ${placeholders.join(', ')}`,
+              values,
+            );
+          }
+        }
+
+        await client.query('COMMIT');
+      }
     } catch (err) {
       await client.query('ROLLBACK');
       throw err;

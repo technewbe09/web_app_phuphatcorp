@@ -94,6 +94,18 @@ function parseFile(file: File): Promise<ParseResult> {
           if (!plate) continue;
 
           const repairDate = parseExcelDate(row[colDate]);
+          if (repairDate) {
+            const dateParts = repairDate.split('-').map(Number);
+            if (dateParts.length === 3 && !dateParts.some(isNaN)) {
+              const d = new Date(repairDate);
+              if (isNaN(d.getTime()) ||
+                  d.getFullYear() !== dateParts[0] ||
+                  d.getMonth() + 1 !== dateParts[1] ||
+                  d.getDate() !== dateParts[2]) {
+                throw new Error(`Hàng ${i + 1}: Ngày sửa không tồn tại: ${repairDate}`);
+              }
+            }
+          }
           const garage = String(row[colGarage] ?? '').trim();
           const itemName = String(row[colItem] ?? '').trim();
           if (!itemName) continue;
@@ -197,13 +209,14 @@ export function RepairUploadModal({ isOpen, onClose, onSuccess, onError }: Props
       handleClose();
     } catch (err: unknown) {
       if (err && typeof err === 'object' && 'response' in err) {
-        const e = err as { response?: { data?: { data?: { errors?: UploadError[] }; message?: string } } };
+        const e = err as { response?: { data?: { data?: { errors?: UploadError[] }; message?: string; error?: string } } };
         if (e.response?.data?.data?.errors) {
           setUploadErrors(e.response.data.data.errors);
           setStep('errors');
           return;
         }
-        onError(e.response?.data?.message || 'Lỗi import');
+        const serverMsg = e.response?.data?.error || e.response?.data?.message || 'Lỗi import';
+        onError(serverMsg);
       } else {
         onError('Lỗi kết nối');
       }
