@@ -50,3 +50,13 @@ export function useUpdateVehicle() {
     },
   });
 }
+
+const SUMMARY_KEY = ['vehicleSummary'];
+
+export function useGetVehicleSummary(vehicleId: number) {
+  return useQuery({
+    queryKey: [...SUMMARY_KEY, vehicleId],
+    queryFn: () => vehicleCatalogApi.getSummary(vehicleId),
+    enabled: vehicleId > 0,
+  });
+}

@@ -46,6 +46,15 @@ export interface VehicleUploadError {
   reason: string;
 }
 
+export interface VehicleSummaryRes {
+  vehicle: Vehicle;
+  inspection: { status: string; expiry_date: string | null; count: number };
+  insurance: { status: string; expiry_date: string | null; count: number };
+  oil_change: { status: string; last_change_date: string | null; last_odometer: number | null; current_km: number | null; km_since_change: number | null };
+  repair: { count: number; total_amount: number };
+  fuel: { avg_fuel_rate: number | null; last_odometer: number | null; record_count: number };
+}
+
 export const vehicleCatalogApi = {
   fetchAll: async (params?: {
     search?: string;
@@ -84,6 +93,13 @@ export const vehicleCatalogApi = {
 
   update: async (id: number, data: VehicleUpdateData): Promise<Vehicle> => {
     const response = await axiosClient.put<{ data: Vehicle }>(`/vehicles/${id}`, data);
+    return response.data.data;
+  },
+
+  getSummary: async (id: number): Promise<VehicleSummaryRes> => {
+    const response = await axiosClient.get<{ data: VehicleSummaryRes }>(
+      `/vehicles/${id}/summary`,
+    );
     return response.data.data;
   },
 };

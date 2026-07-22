@@ -3,6 +3,7 @@ import {
   vehicleRepairApi,
   type CreateRepairInput,
   type UpdateRepairInput,
+  type UploadBillRow,
 } from '../api/vehicleRepairApi';
 
 const QUERY_KEY = ['repairs'];
@@ -84,6 +85,16 @@ export function useDeleteRepairImage() {
   return useMutation({
     mutationFn: ({ repairId, imageId }: { repairId: number; imageId: number }) =>
       vehicleRepairApi.deleteImage(repairId, imageId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: QUERY_KEY });
+    },
+  });
+}
+
+export function useUploadRepairs() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (bills: UploadBillRow[]) => vehicleRepairApi.uploadMany(bills),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: QUERY_KEY });
     },
