@@ -126,7 +126,14 @@ export const repairController = {
         entityLabel: `Repair #${repair.id}`,
         ipAddress: req.ip,
       });
-    } catch (err) {
+    } catch (err: unknown) {
+      if (err && typeof err === 'object' && 'code' in err) {
+        const e = err as { code: string; message?: string };
+        if (e.code === 'INVALID_VEHICLE_TYPE') {
+          sendError(res, e.message || 'Chỉ được tạo bill cho xe loại Xe nhà', 400);
+          return;
+        }
+      }
       const error = err instanceof Error ? err.message : 'Unknown error';
       sendError(res, 'Không thể thêm bill sửa xe', 500, error);
     }

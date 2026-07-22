@@ -115,7 +115,7 @@ export const repairService = {
     const page = params.page || 1;
     const limit = params.limit || 20;
     const offset = (page - 1) * limit;
-    const conditions: string[] = [`v.status = 'active'`];
+    const conditions: string[] = [`v.status = 'active'`, `v.vehicle_type = 'Xe nhà'`];
     const queryParams: unknown[] = [];
     let paramIdx = 1;
 
@@ -227,6 +227,17 @@ export const repairService = {
   },
 
   async create(input: CreateRepairInput, userId: number): Promise<RepairRecord> {
+    const vehicleCheck = await pool.query<{ vehicle_type: string }>(
+      `SELECT vehicle_type FROM vehicles WHERE id = $1 AND status = 'active'`,
+      [input.vehicle_id],
+    );
+    if (!vehicleCheck.rows[0]) {
+      throw { code: 'NOT_FOUND' };
+    }
+    if (vehicleCheck.rows[0].vehicle_type !== 'Xe nhà') {
+      throw { code: 'INVALID_VEHICLE_TYPE', message: 'Chỉ được tạo bill cho xe loại Xe nhà' };
+    }
+
     const totalAmount = calcTotal(input.items);
     const client = await pool.connect();
 
@@ -424,7 +435,7 @@ export const repairService = {
 
     const vehicleMap = new Map<string, number>();
     const vehicleResult = await pool.query<{ id: number; plate_number: string }>(
-      `SELECT id, plate_number FROM vehicles WHERE status = 'active'`,
+      `SELECT id, plate_number FROM vehicles WHERE status = 'active' AND vehicle_type = 'Xe nhà'`,
     );
     for (const v of vehicleResult.rows) {
       vehicleMap.set(v.plate_number, v.id);
