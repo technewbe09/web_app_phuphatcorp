@@ -257,7 +257,7 @@ export function RepairFormModal({ isOpen, onClose, onSuccess, onError, repairId,
   const isEdit = !!(repairId && !isView);
 
   return (
-    <Modal isOpen={isOpen} onClose={handleClose} title={isView ? 'Chi tiết sửa xe' : isEdit ? 'Sửa bill sửa xe' : 'Thêm sửa xe mới'} size="lg">
+    <Modal isOpen={isOpen} onClose={handleClose} title={isView ? 'Chi tiết sửa xe' : isEdit ? 'Sửa bill sửa xe' : 'Thêm sửa xe mới'} size="xl" className="max-w-4xl">
       {isOpen && (
         <div className="space-y-4">
           <div>
@@ -326,9 +326,9 @@ export function RepairFormModal({ isOpen, onClose, onSuccess, onError, repairId,
             <div className="border border-neutral-200 dark:border-neutral-700 rounded-lg overflow-hidden">
               <div className="grid grid-cols-12 gap-2 px-3 py-2 bg-neutral-50 dark:bg-neutral-800 text-xs font-medium text-neutral-500 dark:text-neutral-400">
                 <div className="col-span-1">#</div>
-                <div className="col-span-5">Tên hạng mục</div>
-                <div className="col-span-2">Tiền phụ tùng</div>
-                <div className="col-span-2">Tiền công</div>
+                <div className="col-span-3">Tên hạng mục</div>
+                <div className="col-span-3">Tiền phụ tùng</div>
+                <div className="col-span-3">Tiền công</div>
                 <div className="col-span-1 text-right">Tổng</div>
                 {!isView && <div className="col-span-1"></div>}
               </div>
@@ -344,7 +344,7 @@ export function RepairFormModal({ isOpen, onClose, onSuccess, onError, repairId,
                       <div className="col-span-1 pt-2 text-sm text-neutral-500 dark:text-neutral-400">
                         {idx + 1}
                       </div>
-                      <div className="col-span-5">
+                      <div className="col-span-3">
                         <input
                           type="text"
                           value={item.item_name}
@@ -359,7 +359,7 @@ export function RepairFormModal({ isOpen, onClose, onSuccess, onError, repairId,
                         />
                         {itemErr.item_name && <p className="text-xs text-red-500 mt-0.5">{itemErr.item_name}</p>}
                       </div>
-                      <div className="col-span-2">
+                      <div className="col-span-3">
                         <input
                           type="number"
                           value={item.parts_cost}
@@ -375,7 +375,7 @@ export function RepairFormModal({ isOpen, onClose, onSuccess, onError, repairId,
                         />
                         {itemErr.parts_cost && <p className="text-xs text-red-500 mt-0.5">{itemErr.parts_cost}</p>}
                       </div>
-                      <div className="col-span-2">
+                      <div className="col-span-3">
                         <input
                           type="number"
                           value={item.labor_cost}
