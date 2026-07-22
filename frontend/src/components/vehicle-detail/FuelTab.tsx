@@ -49,9 +49,10 @@ export function FuelTab({ vehicleId, vehicle, setToasts }: Props) {
     return n.toLocaleString('vi-VN');
   };
 
-  const formatFuelRate = (r: number | null | undefined): string => {
-    if (r === null || r === undefined) return '-';
-    return r.toFixed(2);
+  const formatFuelRate = (r: unknown): string => {
+    const num = Number(r);
+    if (!Number.isFinite(num)) return '-';
+    return num.toFixed(2);
   };
 
   return (
