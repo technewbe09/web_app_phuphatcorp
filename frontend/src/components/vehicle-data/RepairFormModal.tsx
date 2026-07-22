@@ -54,7 +54,7 @@ export function RepairFormModal({ isOpen, onClose, onSuccess, onError, repairId,
   const [existingImages, setExistingImages] = useState<RepairImage[]>([]);
   const [uploadingFiles, setUploadingFiles] = useState(false);
 
-  const { data: vehiclesData } = useGetVehicles('', 'active', undefined, 1, 200);
+  const { data: vehiclesData } = useGetVehicles('', 'active', 'Xe nhà', 1, 200);
   const vehicles = vehiclesData?.vehicles ?? [];
 
   useEffect(() => {
