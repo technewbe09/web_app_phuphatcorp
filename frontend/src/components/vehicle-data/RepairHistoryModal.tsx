@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Eye, Pencil, Trash2, AlertTriangle, RefreshCw } from 'lucide-react';
 import { Modal } from '../ui/Modal';
 import { Button } from '../ui/Button';
@@ -26,6 +26,10 @@ export function RepairHistoryModal({ isOpen, onClose, vehicle, onError }: Props)
   const [confirmDelete, setConfirmDelete] = useState<RepairRecord | null>(null);
   const PAGE_SIZE = 10;
 
+  useEffect(() => {
+    setPage(1);
+  }, [vehicle.vehicle_id]);
+
   const { data, isLoading, isError, refetch } = useGetVehicleRepairs(vehicle.vehicle_id, {
     page,
     limit: PAGE_SIZE,
@@ -34,14 +38,14 @@ export function RepairHistoryModal({ isOpen, onClose, vehicle, onError }: Props)
 
   const repairs = data?.repairs ?? [];
   const totalPages = data ? Math.ceil(data.total / PAGE_SIZE) : 0;
-  const totalAmount = repairs.reduce((sum, r) => sum + r.total_amount, 0);
+  const grandTotal = repairs.length > 0 ? (repairs[0] as unknown as { grand_total?: string }).grand_total : undefined;
+  const displayTotal = grandTotal ? parseInt(grandTotal, 10) : 0;
 
   const handleDelete = async () => {
     if (!confirmDelete) return;
     try {
       await deleteMutation.mutateAsync(confirmDelete.id);
       setConfirmDelete(null);
-      refetch();
     } catch {
       onError('Không thể xóa bill sửa xe');
     }
@@ -107,7 +111,7 @@ export function RepairHistoryModal({ isOpen, onClose, vehicle, onError }: Props)
                             {formatCurrency(r.total_amount)}
                           </TableCell>
                           <TableCell className="text-center text-sm text-neutral-700 dark:text-neutral-300">
-                            {r.items ? r.items.length : '-'}
+                            {((r as unknown as { item_count?: number }).item_count) ?? (r.items ? r.items.length : '-')}
                           </TableCell>
                           <TableCell className="text-center">
                             <div className="flex items-center justify-center gap-1">
@@ -142,7 +146,7 @@ export function RepairHistoryModal({ isOpen, onClose, vehicle, onError }: Props)
 
                 <div className="flex items-center justify-between pt-2 border-t border-neutral-200 dark:border-neutral-700">
                   <span className="text-sm text-neutral-500 dark:text-neutral-400">
-                    {data.total} bill — Tổng tiền: {formatCurrency(totalAmount)}
+                    {data.total} bill — Tổng tiền: {formatCurrency(displayTotal)}
                   </span>
                   <Pagination
                     currentPage={page}
@@ -161,7 +165,7 @@ export function RepairHistoryModal({ isOpen, onClose, vehicle, onError }: Props)
       {viewRepairId && (
         <RepairFormModal
           isOpen={true}
-          onClose={() => { setViewRepairId(null); refetch(); }}
+          onClose={() => setViewRepairId(null)}
           onSuccess={() => {}}
           onError={onError}
           repairId={viewRepairId}
@@ -172,7 +176,7 @@ export function RepairHistoryModal({ isOpen, onClose, vehicle, onError }: Props)
       {editRepairId && (
         <RepairFormModal
           isOpen={true}
-          onClose={() => { setEditRepairId(null); refetch(); }}
+          onClose={() => setEditRepairId(null)}
           onSuccess={() => {}}
           onError={onError}
           repairId={editRepairId}

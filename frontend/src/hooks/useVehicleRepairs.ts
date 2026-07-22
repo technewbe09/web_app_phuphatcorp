@@ -1,4 +1,4 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import {
   vehicleRepairApi,
   type CreateRepairInput,
@@ -27,6 +27,7 @@ export function useGetVehicleRepairs(vehicleId: number, params?: {
     queryKey: [...QUERY_KEY, 'vehicle', vehicleId, params],
     queryFn: () => vehicleRepairApi.fetchByVehicle(vehicleId, params),
     enabled: vehicleId > 0,
+    placeholderData: keepPreviousData,
   });
 }
 

@@ -189,8 +189,11 @@ export const repairService = {
     const limit = params.limit || 20;
     const offset = (page - 1) * limit;
 
-    const result = await pool.query<RepairRecord & { total_count: number }>(
-      `SELECT ${RECORD_SELECT}, COUNT(*) OVER()::int AS total_count
+    const result = await pool.query<RepairRecord & { total_count: number; item_count: number; grand_total: string }>(
+      `SELECT ${RECORD_SELECT},
+         COUNT(*) OVER()::int AS total_count,
+         (SELECT COUNT(*)::int FROM repair_items WHERE repair_id = rr.id) AS item_count,
+         (SELECT COALESCE(SUM(total_amount), 0)::text FROM repair_records WHERE vehicle_id = $1 AND status = 'active') AS grand_total
        FROM repair_records rr
        LEFT JOIN vehicles v ON rr.vehicle_id = v.id
        WHERE rr.vehicle_id = $1 AND rr.status = 'active'
