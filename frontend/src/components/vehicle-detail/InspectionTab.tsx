@@ -49,7 +49,7 @@ export function InspectionTab({ vehicleId, setToasts }: Props) {
     }
   };
 
-  const records = data?.records ?? [];
+  const records = data?.inspections ?? [];
   const totalPages = data ? Math.ceil(data.total / PAGE_SIZE) : 0;
 
   return (

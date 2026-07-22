@@ -58,7 +58,7 @@ export function InsuranceTab({ vehicleId, vehicleType, setToasts }: Props) {
     );
   }
 
-  const records = data?.records ?? [];
+  const records = data?.insurances ?? [];
   const totalPages = data ? Math.ceil(data.total / PAGE_SIZE) : 0;
 
   return (
