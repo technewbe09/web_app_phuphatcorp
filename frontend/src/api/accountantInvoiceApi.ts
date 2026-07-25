@@ -72,7 +72,7 @@ export const accountantInvoiceApi = {
     return response.data.data;
   },
 
-  update: async (id: number, data: { trang_thai: string; ghi_chu?: string | null }): Promise<AccountantInvoice> => {
+  update: async (id: number, data: { trang_thai: string; ghi_chu?: string | null; so_xe?: string }): Promise<AccountantInvoice> => {
     const response = await axiosClient.put<{ data: AccountantInvoice }>(`/accountant-invoices/${id}`, data);
     return response.data.data;
   },

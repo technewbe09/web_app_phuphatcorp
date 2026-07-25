@@ -580,6 +580,7 @@ function EditInvoiceModal({ invoice, onClose, onSuccess }: { invoice: Accountant
   const updateMutation = useUpdateAccountantInvoice();
   const [trangThai, setTrangThai] = useState(invoice.trang_thai);
   const [ghiChu, setGhiChu] = useState(invoice.ghi_chu || '');
+  const [soXe, setSoXe] = useState(invoice.so_xe);
 
   const statusOptionsEdit = [
     { value: 'không có', label: 'Không có' },
@@ -591,7 +592,7 @@ function EditInvoiceModal({ invoice, onClose, onSuccess }: { invoice: Accountant
     try {
       await updateMutation.mutateAsync({
         id: invoice.id,
-        data: { trang_thai: trangThai, ghi_chu: ghiChu || null },
+        data: { trang_thai: trangThai, ghi_chu: ghiChu || null, so_xe: soXe },
       });
       onSuccess();
     } catch {}
@@ -613,13 +614,18 @@ function EditInvoiceModal({ invoice, onClose, onSuccess }: { invoice: Accountant
               <p className="font-mono font-medium text-neutral-900 dark:text-neutral-100">{invoice.so_hoa_don}</p>
             </div>
             <div>
-              <span className="text-neutral-400 dark:text-neutral-500">Số xe</span>
-              <p className="font-mono text-neutral-700 dark:text-neutral-300">{invoice.so_xe}</p>
-            </div>
-            <div>
               <span className="text-neutral-400 dark:text-neutral-500">Ngày</span>
               <p className="text-neutral-700 dark:text-neutral-300">{invoice.ngay}</p>
             </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">Số xe</label>
+            <Input
+              placeholder="Nhập số xe..."
+              value={soXe}
+              onChange={(e) => setSoXe(e.target.value)}
+            />
           </div>
 
           <div>

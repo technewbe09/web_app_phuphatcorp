@@ -26,6 +26,7 @@ export const updateInvoiceSchema: ValidationChain[] = [
     .notEmpty().withMessage('Trạng thái là bắt buộc')
     .isIn(['không có', 'xe không chạy', 'data sai']).withMessage('Trạng thái không hợp lệ'),
   body('ghi_chu').optional({ nullable: true }),
+  body('so_xe').optional().isLength({ max: 100 }).withMessage('Số xe tối đa 100 ký tự'),
 ];
 
 export const accountantInvoiceController = {
@@ -66,8 +67,8 @@ export const accountantInvoiceController = {
   async update(req: AuthRequest, res: Response): Promise<void> {
     try {
       const id = parseInt(req.params.id, 10);
-      const { trang_thai, ghi_chu } = req.body;
-      const row = await accountantInvoiceService.update(id, { trang_thai, ghi_chu: ghi_chu ?? null });
+      const { trang_thai, ghi_chu, so_xe } = req.body;
+      const row = await accountantInvoiceService.update(id, { trang_thai, ghi_chu: ghi_chu ?? null, so_xe });
       sendSuccess(res, row, 'Cập nhật hóa đơn thành công');
     } catch (err: unknown) {
       if (err && typeof err === 'object' && 'code' in err) {
