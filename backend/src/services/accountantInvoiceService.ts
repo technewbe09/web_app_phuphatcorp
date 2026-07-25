@@ -214,7 +214,7 @@ export const accountantInvoiceService = {
     });
   },
 
-  async update(id: number, data: { trang_thai: string; ghi_chu?: string | null }): Promise<AccountantInvoice> {
+  async update(id: number, data: { trang_thai: string; ghi_chu?: string | null; so_xe?: string }): Promise<AccountantInvoice> {
     const existing = await this.findById(id);
     if (!existing) {
       throw { code: 'NOT_FOUND' };
@@ -224,12 +224,16 @@ export const accountantInvoiceService = {
       throw { code: 'CANNOT_EDIT' };
     }
 
+    const so_xe = data.so_xe
+      ? data.so_xe.replace(/^[^\d]*/, '').replace(/[-,\s]/g, '').replace(/\/.*$/, '')
+      : existing.so_xe;
+
     const result = await pool.query(
       `UPDATE accountant_invoices
-       SET trang_thai = $1, ghi_chu = $2
-       WHERE id = $3
+       SET trang_thai = $1, ghi_chu = $2, so_xe = $3
+       WHERE id = $4
        RETURNING id, batch_id, ngay::text as ngay, so_xe, so_hoa_don, trang_thai, ghi_chu, created_at`,
-      [data.trang_thai, data.ghi_chu ?? null, id],
+      [data.trang_thai, data.ghi_chu ?? null, so_xe, id],
     );
     return rowToInvoice(result.rows[0]);
   },

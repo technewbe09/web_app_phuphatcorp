@@ -24,7 +24,7 @@ export function useGetMissingSummary(batchId?: string, inCatalog?: boolean) {
 export function useUpdateAccountantInvoice() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, data }: { id: number; data: { trang_thai: string; ghi_chu?: string | null } }) =>
+    mutationFn: ({ id, data }: { id: number; data: { trang_thai: string; ghi_chu?: string | null; so_xe?: string } }) =>
       accountantInvoiceApi.update(id, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [QUERY_KEY] });
