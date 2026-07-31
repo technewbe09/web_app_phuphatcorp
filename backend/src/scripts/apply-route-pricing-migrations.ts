@@ -5,16 +5,13 @@ import { pool } from '../config/database';
 
 async function main() {
   const files = [
-    '033_create_vn_provinces_wards.sql',
-    '034_create_route_pricing.sql',
-    '035_seed_route_pricing_permissions.sql',
-    '036_route_price_versions_race_guards.sql',
-    '037_route_pricing_location_note_trips.sql',
-    '038_route_pricing_modes_range.sql',
+    '039_create_vn_provinces_wards.sql',
+    '040_create_route_pricing.sql',
+    '041_seed_route_pricing_permissions.sql',
   ];
   const executed = await pool.query<{ filename: string }>('SELECT filename FROM schema_migrations');
   const set = new Set(executed.rows.map((r) => r.filename));
-  console.log('Already:', [...set].filter((f) => f.startsWith('03')).join(', ') || '(none 03x)');
+  console.log('Already:', [...set].filter((f) => /^(03[3-9]|04[0-1])_/.test(f)).join(', ') || '(none 039–041)');
 
   for (const file of files) {
     if (set.has(file)) {

@@ -1,5 +1,5 @@
 -- ============================================================
--- Migration 035: Seed Route Pricing Permissions
+-- Migration 041: Seed Route Pricing Permissions
 -- Date: 2026-07-11
 -- Module: route_pricing
 -- ============================================================

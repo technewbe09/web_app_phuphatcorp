@@ -1,5 +1,5 @@
 -- ============================================================
--- Migration 033: VN provinces + wards master (2-tier)
+-- Migration 039: VN provinces + wards master (2-tier)
 -- Source: https://github.com/thanglequoc/vietnamese-provinces-database
 -- Data load: run `npx tsx src/scripts/import-vn-provinces.ts` after migrate
 --   (or embedded seed if data file present)
