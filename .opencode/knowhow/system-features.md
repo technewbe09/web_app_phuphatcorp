@@ -936,34 +936,28 @@ frontend/src/components/admin/DeactivateRoleDialog.tsx
 
 **Route FE:** `/route-pricing` (sidebar top-level)  
 **Permissions:** `route_pricing.view` / `route_pricing.manage`  
-**BA:** `docs/ba/20260711_route-pricing-analysis.md` + CR `docs/ba/20260712_route-pricing-change-request.md`
+**BA:** `docs/ba/20260711_route-pricing-analysis.md` + CR `docs/ba/20260712_route-pricing-change-request.md`  
+**UI periods:** `docs/ui/20260731_route-pricing-adjustment-periods-cr-ui-spec.md`
 
 ### Flow chính
-1. Chọn NCC → tab Nhóm tuyến / Bảng giá (scoped theo NCC)
-2. Tạo nhóm: đích = Phường/Xã **hoặc** Địa điểm text **hoặc** Còn lại tỉnh; ghi chú optional → tên hệ thống có suffix `(ghi chú)`
-3. Nhập bảng giá gốc (1 lần/nhóm): chọn **chế độ** `by_weight` | `by_trips`; Pallet ≥ 0
-   - Theo trọng lượng: template 5 bậc tấn; đơn vị Chuyến|Tấn theo bậc
-   - Theo chuyến/xe/ngày: ≥2 bậc giá chuyến cho mọi trọng lượng; chain `1…n` → `n+1…∞`
-4. Cập nhật sau: Điều chỉnh % toàn hệ thống (giữ `pricing_mode`)
-5. Delivery Import: `GET /route-pricing/lookup` (`weight_mt` / `trips_per_vehicle_day` tùy mode)
+1. Tab **Kỳ điều chỉnh** (global): tạo kỳ (`start_date`, `%`, `note`) → BE đóng kỳ trước (`end_date`) + apply % mọi version mở toàn hệ thống. Không sửa kỳ — chỉ xóa kỳ gần nhất (= rollback versions gắn kỳ + mở lại kỳ trước).
+2. Chọn NCC → tab Nhóm tuyến / Bảng giá
+3. Tạo nhóm: đích = Phường/Xã **hoặc** Địa điểm text **hoặc** Còn lại tỉnh; ghi chú optional
+4. Nhập bảng giá gốc (1 lần/nhóm): chọn **kỳ gốc** + chế độ `by_weight` | `by_trips`; BE cascade tạo version cho mọi kỳ sau kỳ gốc
+5. Sửa bảng giá gốc → recompute cascade kỳ sau
+6. Delivery Import: `GET /route-pricing/lookup`
 
 ### Hiển thị Tab Bảng giá
-- Badge: Theo trọng lượng | Theo chuyến/xe/ngày
+- Badge: Theo trọng lượng | Theo chuyến/xe/ngày | Giá gốc | Điều chỉnh ±%
 - Cột: **Trọng lượng** hoặc **Chuyến/xe/ngày** | **Đơn vị** | **Đơn giá**
-- Ton: `≤ 2.5 tấn` · `>8-16` · `>16` (+ cước tối thiểu nếu có)
-- Trips: `1–n` / `từ n+1 trở lên`
-- Đơn vị: `vnđ/chuyến` | `vnđ/tấn`; Pallet = 0 → ẩn
 
-### Business rules (CR)
-- Unique tuyến active gồm note + location (cho phép lặp tỉnh/phường nếu note khác)
-- Residual unique theo `(supplier, province, note_key)`
-- Địa điểm: đúng **1** `location_text` (không multi)
-- XOR chế độ áp giá trên version; khoảng gom `range_from`/`range_to`
-- Lookup khớp member (ward hoặc location) + note_key, else residual cùng note_key
-- `pallet_trip_price` cho phép 0
-
-**UI Spec modes:** `docs/ui/20260713_route-pricing-modes-cr-ui-spec.md`
-
+### Business rules (CR periods 2026-07-31)
+- Kỳ = master global; UI không nhập `end_date` (BE tự quản)
+- Thêm kỳ = điều chỉnh % toàn hệ thống (thay modal Điều chỉnh riêng)
+- Tạo absolute bắt buộc có kỳ; cascade kỳ `start > kỳ gốc`
+- Version gắn `adjustment_period_id` bắt buộc; ngày hiệu lực / % derive từ kỳ (không lưu trùng trên version)
+- Không sửa kỳ; xóa kỳ gần nhất = rollback versions; muốn đổi % → xóa rồi tạo lại
+- Note kỳ ≠ note bảng giá
 ---
 
 - Password hash: bcrypt, 10 salt rounds, sync API

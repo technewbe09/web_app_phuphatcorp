@@ -8,10 +8,11 @@ async function main() {
     '039_create_vn_provinces_wards.sql',
     '040_create_route_pricing.sql',
     '041_seed_route_pricing_permissions.sql',
+    '042_route_pricing_adjustment_periods.sql',
   ];
   const executed = await pool.query<{ filename: string }>('SELECT filename FROM schema_migrations');
   const set = new Set(executed.rows.map((r) => r.filename));
-  console.log('Already:', [...set].filter((f) => /^(03[3-9]|04[0-1])_/.test(f)).join(', ') || '(none 039–041)');
+  console.log('Already:', [...set].filter((f) => /^(03[3-9]|04[0-2])_/.test(f)).join(', ') || '(none 039–042)');
 
   for (const file of files) {
     if (set.has(file)) {

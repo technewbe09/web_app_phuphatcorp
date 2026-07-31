@@ -46,3 +46,6 @@ lerna-debug.log*
 # Local docker migrate artifacts
 .docker-migrate/
 *.remote.bak
+
+.cursor/
+graphify-out/

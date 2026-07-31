@@ -50,6 +50,16 @@ export interface RouteGroup {
 
 export type PricingMode = 'by_weight' | 'by_trips';
 
+export interface AdjustmentPeriod {
+  id: number;
+  start_date: string;
+  end_date: string | null;
+  percent: number;
+  note: string | null;
+  created_at?: string;
+  updated_at?: string;
+}
+
 export interface PriceTierInput {
   range_from: number;
   range_to?: number | null;
@@ -66,8 +76,8 @@ export interface RoutePriceVersion {
   pricing_mode: PricingMode;
   pallet_trip_price: number;
   adjustment_percent: number | null;
-  adjustment_batch_id?: string | null;
   base_version_id?: number | null;
+  adjustment_period_id: number;
   note: string | null;
   tiers: PriceTierInput[];
   created_at?: string;
@@ -196,7 +206,7 @@ export const routePricingApi = {
 
   createPrice: async (body: {
     route_group_id: number;
-    effective_from: string;
+    adjustment_period_id: number;
     pricing_mode: PricingMode;
     pallet_trip_price: number;
     note?: string | null;
@@ -206,14 +216,43 @@ export const routePricingApi = {
     return res.data.data;
   },
 
-  adjustPrices: async (body: {
-    percent: number;
-    effective_from: string;
-    note?: string | null;
-  }): Promise<{ adjusted: number; batch_id: string }> => {
-    const res = await axiosClient.post<{ data: { adjusted: number; batch_id: string } }>(
-      '/route-pricing/prices/adjust',
+  updateAbsolutePrice: async (
+    routeGroupId: number,
+    body: {
+      pricing_mode: PricingMode;
+      pallet_trip_price: number;
+      note?: string | null;
+      tiers: PriceTierInput[];
+    },
+  ): Promise<RoutePriceVersion> => {
+    const res = await axiosClient.put<{ data: RoutePriceVersion }>(
+      `/route-pricing/prices/groups/${routeGroupId}/absolute`,
       body,
+    );
+    return res.data.data;
+  },
+
+  listAdjustmentPeriods: async (): Promise<AdjustmentPeriod[]> => {
+    const res = await axiosClient.get<{ data: AdjustmentPeriod[] }>(
+      '/route-pricing/adjustment-periods',
+    );
+    return res.data.data;
+  },
+
+  createAdjustmentPeriod: async (body: {
+    start_date: string;
+    percent: number;
+    note?: string | null;
+  }): Promise<{ period: AdjustmentPeriod; adjusted: number }> => {
+    const res = await axiosClient.post<{
+      data: { period: AdjustmentPeriod; adjusted: number };
+    }>('/route-pricing/adjustment-periods', body);
+    return res.data.data;
+  },
+
+  deleteAdjustmentPeriod: async (id: number): Promise<{ deleted_versions: number }> => {
+    const res = await axiosClient.delete<{ data: { deleted_versions: number } }>(
+      `/route-pricing/adjustment-periods/${id}`,
     );
     return res.data.data;
   },

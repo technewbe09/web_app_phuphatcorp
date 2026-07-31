@@ -20,9 +20,12 @@ function handleServiceError(res: Response, err: unknown, fallback: string): void
       message: 'Đã có nhóm còn lại với cùng ghi chú cho tỉnh này',
     },
     DUPLICATE_GROUP_NAME: { status: 409, message: 'Tên nhóm đã tồn tại' },
+    PERIOD_REQUIRED: { status: 400, message: e.message || 'Cần chọn kỳ điều chỉnh' },
+    INVALID_PERIOD: { status: 400, message: e.message || 'Kỳ điều chỉnh không hợp lệ' },
+    DUPLICATE_PERIOD: { status: 409, message: e.message || 'Kỳ điều chỉnh đã tồn tại' },
+    PERIOD_NOT_LATEST: { status: 409, message: e.message || 'Chỉ được xóa kỳ gần nhất' },
     ABSOLUTE_UPDATE_FORBIDDEN: { status: 400, message: 'Đã có giá — chỉ được cập nhật bằng điều chỉnh %' },
-    NOTHING_TO_ADJUST: { status: 400, message: 'Không có bảng giá để điều chỉnh' },
-    OVERLAPPING_VERSION: { status: 409, message: 'Đã có phiên bản trùng ngày hiệu lực' },
+    OVERLAPPING_VERSION: { status: 409, message: 'Đã có phiên bản trùng kỳ điều chỉnh' },
     INVALID_TIERS: { status: 400, message: e.message || 'Bậc điều kiện không hợp lệ' },
     INVALID_DESTINATION: {
       status: 400,
@@ -100,7 +103,7 @@ export const pricesListSchema: ValidationChain[] = [
 
 export const priceCreateSchema: ValidationChain[] = [
   body('route_group_id').isInt({ min: 1 }),
-  body('effective_from').notEmpty().isISO8601().toDate(),
+  body('adjustment_period_id').isInt({ min: 1 }).withMessage('adjustment_period_id là bắt buộc'),
   body('pricing_mode').isIn(['by_weight', 'by_trips']).withMessage('pricing_mode không hợp lệ'),
   body('pallet_trip_price').isFloat({ min: 0 }).withMessage('Giá Pallet phải ≥ 0'),
   body('tiers').isArray({ min: 1 }),
@@ -123,10 +126,38 @@ export const priceCreateSchema: ValidationChain[] = [
   body('note').optional({ nullable: true }),
 ];
 
-export const priceAdjustSchema: ValidationChain[] = [
-  body('percent').isFloat().withMessage('percent là bắt buộc'),
-  body('effective_from').notEmpty().isISO8601().toDate(),
+export const priceUpdateAbsoluteSchema: ValidationChain[] = [
+  param('routeGroupId').isInt({ min: 1 }),
+  body('pricing_mode').isIn(['by_weight', 'by_trips']).withMessage('pricing_mode không hợp lệ'),
+  body('pallet_trip_price').isFloat({ min: 0 }).withMessage('Giá Pallet phải ≥ 0'),
+  body('tiers').isArray({ min: 1 }),
+  body('tiers.*.range_from').isFloat({ min: 0 }),
+  body('tiers.*.range_to')
+    .optional({ nullable: true })
+    .customSanitizer((v) => (v === '' || v === undefined ? null : v))
+    .custom((v) => v == null || (typeof v === 'number' ? !Number.isNaN(v) : !Number.isNaN(parseFloat(String(v)))))
+    .withMessage('range_to phải là số hoặc null'),
+  body('tiers.*.pricing_unit').isIn(['chuyen', 'tan']),
+  body('tiers.*.price').isFloat({ gt: 0 }),
+  body('tiers.*.min_billable_ton')
+    .optional({ nullable: true })
+    .customSanitizer((v) => {
+      if (v === '' || v === undefined || v === null || Number(v) === 0) return null;
+      return v;
+    })
+    .custom((v) => v == null || (typeof v === 'number' ? v > 0 : parseFloat(String(v)) > 0))
+    .withMessage('min_billable_ton phải > 0 hoặc để trống'),
   body('note').optional({ nullable: true }),
+];
+
+export const periodCreateSchema: ValidationChain[] = [
+  body('start_date').notEmpty().isISO8601().toDate(),
+  body('percent').isFloat().withMessage('percent là bắt buộc'),
+  body('note').optional({ nullable: true }),
+];
+
+export const periodDeleteSchema: ValidationChain[] = [
+  param('id').isInt({ min: 1 }),
 ];
 
 export const versionsSchema: ValidationChain[] = [
@@ -283,14 +314,10 @@ export const routePricingController = {
 
   async createPrice(req: AuthRequest, res: Response): Promise<void> {
     try {
-      const effectiveFrom =
-        req.body.effective_from instanceof Date
-          ? req.body.effective_from.toISOString().slice(0, 10)
-          : String(req.body.effective_from).slice(0, 10);
       const data = await routePricingService.createAbsolutePrice(
         {
           route_group_id: req.body.route_group_id,
-          effective_from: effectiveFrom,
+          adjustment_period_id: Number(req.body.adjustment_period_id),
           pricing_mode: req.body.pricing_mode,
           pallet_trip_price: Number(req.body.pallet_trip_price),
           note: req.body.note,
@@ -304,23 +331,65 @@ export const routePricingController = {
     }
   },
 
-  async adjustPrices(req: AuthRequest, res: Response): Promise<void> {
+  async updateAbsolutePrice(req: AuthRequest, res: Response): Promise<void> {
     try {
-      const effectiveFrom =
-        req.body.effective_from instanceof Date
-          ? req.body.effective_from.toISOString().slice(0, 10)
-          : String(req.body.effective_from).slice(0, 10);
-      const data = await routePricingService.adjustPercentGlobal(
+      const routeGroupId = parseInt(req.params.routeGroupId, 10);
+      const data = await routePricingService.updateAbsolutePrice(
+        routeGroupId,
         {
+          pricing_mode: req.body.pricing_mode,
+          pallet_trip_price: Number(req.body.pallet_trip_price),
+          note: req.body.note,
+          tiers: req.body.tiers,
+        },
+        req.user!.userId,
+      );
+      sendSuccess(res, data, 'Đã cập nhật bảng giá gốc');
+    } catch (err) {
+      handleServiceError(res, err, 'Không cập nhật được bảng giá gốc');
+    }
+  },
+
+  async listPeriods(_req: AuthRequest, res: Response): Promise<void> {
+    try {
+      const data = await routePricingService.listAdjustmentPeriods();
+      sendSuccess(res, data, 'Danh sách kỳ điều chỉnh');
+    } catch (err) {
+      handleServiceError(res, err, 'Không tải được kỳ điều chỉnh');
+    }
+  },
+
+  async createPeriod(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      const startDate =
+        req.body.start_date instanceof Date
+          ? req.body.start_date.toISOString().slice(0, 10)
+          : String(req.body.start_date).slice(0, 10);
+      const data = await routePricingService.createAdjustmentPeriod(
+        {
+          start_date: startDate,
           percent: Number(req.body.percent),
-          effective_from: effectiveFrom,
           note: req.body.note,
         },
         req.user!.userId,
       );
-      sendSuccess(res, data, `Đã điều chỉnh giá cho ${data.adjusted} bảng giá`);
+      const msg =
+        data.adjusted > 0
+          ? `Đã tạo kỳ và điều chỉnh ${data.adjusted} bảng giá`
+          : 'Đã tạo kỳ điều chỉnh';
+      sendSuccess(res, data, msg, 201);
     } catch (err) {
-      handleServiceError(res, err, 'Không điều chỉnh được giá');
+      handleServiceError(res, err, 'Không tạo được kỳ điều chỉnh');
+    }
+  },
+
+  async deletePeriod(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      const id = parseInt(req.params.id, 10);
+      const data = await routePricingService.deleteAdjustmentPeriod(id);
+      sendSuccess(res, data, 'Đã xóa kỳ điều chỉnh');
+    } catch (err) {
+      handleServiceError(res, err, 'Không xóa được kỳ điều chỉnh');
     }
   },
 

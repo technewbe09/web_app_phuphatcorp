@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { MapPinned, Percent, Plus, Pencil, Trash2, Search } from 'lucide-react';
+import { MapPinned, Plus, Pencil, Trash2, Search } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { supplierCatalogApi } from '../../api/supplierCatalogApi';
 import {
+  useAdjustmentPeriods,
   useGroups,
   usePriceVersions,
   usePrices,
@@ -27,10 +28,28 @@ import {
   TableHead,
   TableCell,
 } from '../../components/ui/Table';
-import type { PriceTierInput, PricingMode, RouteGroup, RoutePriceVersion } from '../../api/routePricingApi';
+import type {
+  AdjustmentPeriod,
+  PriceTierInput,
+  PricingMode,
+  RouteGroup,
+  RoutePriceVersion,
+} from '../../api/routePricingApi';
 import { formatDate } from '../../utils/format';
 
-type TabKey = 'groups' | 'prices';
+type TabKey = 'periods' | 'groups' | 'prices';
+
+function formatPercentLabel(percent: number): string {
+  const abs = Math.abs(percent);
+  if (percent > 0) return `tăng ${abs}%`;
+  if (percent < 0) return `giảm ${abs}%`;
+  return `${percent}%`;
+}
+
+function periodLabel(p: AdjustmentPeriod): string {
+  const note = p.note ? ` - ${p.note}` : '';
+  return `${formatDate(p.start_date)} (${formatPercentLabel(p.percent)})${note}`;
+}
 
 /** Bỏ dấu tiếng Việt — "ha tie" khớp "Hà Tiên" */
 function normalizeVn(text: string): string {
@@ -69,7 +88,9 @@ export function RoutePricingPage() {
     : undefined;
   const tabParam = params.get('tab');
   const tab: TabKey =
-    tabParam === 'prices' || tabParam === 'groups' ? tabParam : 'groups';
+    tabParam === 'prices' || tabParam === 'groups' || tabParam === 'periods'
+      ? tabParam
+      : 'groups';
 
   const setTab = (t: TabKey) => {
     const next = new URLSearchParams(params);
@@ -91,14 +112,13 @@ export function RoutePricingPage() {
 
   // Tự chọn nhà cung cấp mặc định: mã nhỏ nhất (theo thứ tự danh mục)
   useEffect(() => {
+    if (tab === 'periods') return;
     if (supplierId || suppliers.length === 0) return;
     const sorted = [...suppliers].sort((a, b) =>
       a.supplier_code.localeCompare(b.supplier_code, 'vi', { numeric: true }),
     );
     setSupplier(String(sorted[0].id));
-  }, [suppliers, supplierId]);
-
-  const [adjustOpen, setAdjustOpen] = useState(false);
+  }, [suppliers, supplierId, tab]);
 
   return (
     <div className="p-6 space-y-4">
@@ -109,70 +129,67 @@ export function RoutePricingPage() {
             Giá theo tuyến
           </h1>
           <p className="text-sm text-neutral-500 mt-1">
-            Quản lý nhóm tuyến và bảng giá theo từng nhà cung cấp
+            Quản lý kỳ điều chỉnh, nhóm tuyến và bảng giá theo từng nhà cung cấp
           </p>
         </div>
-        {canManage && (
-          <Button variant="outline" onClick={() => setAdjustOpen(true)} disabled={!supplierId}>
-            <Percent className="w-4 h-4 mr-1" />
-            Điều chỉnh (mọi nhà cung cấp)
-          </Button>
-        )}
+        <div
+          className={`min-w-[220px] w-full max-w-sm sm:w-auto ${
+            tab === 'periods' ? 'invisible pointer-events-none' : ''
+          }`}
+          aria-hidden={tab === 'periods'}
+        >
+          <Select
+            label="Nhà cung cấp *"
+            value={supplierId ? String(supplierId) : ''}
+            onChange={(e) => setSupplier(e.target.value)}
+            options={[
+              { value: '', label: 'Chọn nhà cung cấp' },
+              ...suppliers.map((s) => ({
+                value: String(s.id),
+                label: `${s.supplier_code} — ${s.name}`,
+              })),
+            ]}
+          />
+        </div>
       </div>
 
-      <div className="min-w-[220px] max-w-sm">
-        <Select
-          label="Nhà cung cấp *"
-          value={supplierId ? String(supplierId) : ''}
-          onChange={(e) => setSupplier(e.target.value)}
-          options={[
-            { value: '', label: 'Chọn nhà cung cấp' },
-            ...suppliers.map((s) => ({
-              value: String(s.id),
-              label: `${s.supplier_code} — ${s.name}`,
-            })),
-          ]}
-        />
+      <div className="flex gap-1 border-b border-neutral-200 dark:border-neutral-700">
+        {(
+          [
+            ['periods', 'Kỳ điều chỉnh'],
+            ['groups', 'Nhóm tuyến'],
+            ['prices', 'Bảng giá'],
+          ] as const
+        ).map(([k, label]) => (
+          <button
+            key={k}
+            type="button"
+            onClick={() => setTab(k)}
+            className={`px-4 py-2.5 text-sm font-medium border-b-2 -mb-px ${
+              tab === k
+                ? 'border-neutral-900 dark:border-neutral-100 text-neutral-900 dark:text-neutral-100'
+                : 'border-transparent text-neutral-500 hover:text-neutral-800'
+            }`}
+          >
+            {label}
+          </button>
+        ))}
       </div>
 
-      {!supplierId ? (
+      {tab === 'periods' && <PeriodsTab canManage={canManage} />}
+
+      {tab !== 'periods' && !supplierId ? (
         <div className="rounded-lg border border-dashed border-neutral-300 dark:border-neutral-700 p-10 text-center text-neutral-500">
           Đang tải nhà cung cấp…
         </div>
-      ) : (
-        <>
-          <div className="flex gap-1 border-b border-neutral-200 dark:border-neutral-700">
-            {(
-              [
-                ['groups', 'Nhóm tuyến'],
-                ['prices', 'Bảng giá'],
-              ] as const
-            ).map(([k, label]) => (
-              <button
-                key={k}
-                type="button"
-                onClick={() => setTab(k)}
-                className={`px-4 py-2.5 text-sm font-medium border-b-2 -mb-px ${
-                  tab === k
-                    ? 'border-neutral-900 dark:border-neutral-100 text-neutral-900 dark:text-neutral-100'
-                    : 'border-transparent text-neutral-500 hover:text-neutral-800'
-                }`}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
+      ) : null}
 
-          {tab === 'groups' && (
-            <GroupsTab supplierId={supplierId} canManage={canManage} />
-          )}
-          {tab === 'prices' && (
-            <PricesTab supplierId={supplierId} canManage={canManage} />
-          )}
-        </>
+      {tab === 'groups' && supplierId && (
+        <GroupsTab supplierId={supplierId} canManage={canManage} />
       )}
-
-      {adjustOpen && <AdjustModal onClose={() => setAdjustOpen(false)} />}
+      {tab === 'prices' && supplierId && (
+        <PricesTab supplierId={supplierId} canManage={canManage} />
+      )}
     </div>
   );
 }
@@ -610,8 +627,12 @@ function PricesTab({
     isLoading: versionsLoading,
   } = usePriceVersions(configId);
   const [formOpen, setFormOpen] = useState(false);
+  const [editAbsolute, setEditAbsolute] = useState(false);
 
   const groupMeta = groups.find((g) => g.id === groupId);
+  const absoluteVersion = versions.find(
+    (v) => v.adjustment_percent == null && (v.base_version_id == null || v.base_version_id === undefined),
+  );
 
   return (
     <div className="space-y-4">
@@ -646,11 +667,18 @@ function PricesTab({
                   : 'Chưa có bảng giá'}
               </p>
             </div>
-            {canManage && !configId && (
-              <Button onClick={() => setFormOpen(true)}>
-                <Plus className="w-4 h-4 mr-1" /> Thêm bảng giá gốc
-              </Button>
-            )}
+            <div className="flex gap-2">
+              {canManage && !configId && (
+                <Button onClick={() => setFormOpen(true)}>
+                  <Plus className="w-4 h-4 mr-1" /> Thêm bảng giá gốc
+                </Button>
+              )}
+              {canManage && configId && absoluteVersion && (
+                <Button variant="outline" onClick={() => setEditAbsolute(true)}>
+                  <Pencil className="w-4 h-4 mr-1" /> Sửa bảng giá gốc
+                </Button>
+              )}
+            </div>
           </div>
 
           {!configId && (
@@ -686,6 +714,13 @@ function PricesTab({
         <PriceFormModal
           routeGroupId={groupId}
           onClose={() => setFormOpen(false)}
+        />
+      )}
+      {editAbsolute && groupId && absoluteVersion && (
+        <PriceFormModal
+          routeGroupId={groupId}
+          editVersion={absoluteVersion}
+          onClose={() => setEditAbsolute(false)}
         />
       )}
     </div>
@@ -849,20 +884,40 @@ function rechainTrips(tiers: PriceTierInput[]): PriceTierInput[] {
 
 function PriceFormModal({
   routeGroupId,
+  editVersion,
   onClose,
 }: {
   routeGroupId: number;
+  editVersion?: RoutePriceVersion;
   onClose: () => void;
 }) {
   const mutations = useRoutePricingMutations();
-  const [effectiveFrom, setEffectiveFrom] = useState(
-    new Date().toISOString().slice(0, 10),
+  const { data: periods = [], isLoading: periodsLoading } = useAdjustmentPeriods();
+  const isEdit = Boolean(editVersion);
+  const [periodId, setPeriodId] = useState(
+    editVersion?.adjustment_period_id
+      ? String(editVersion.adjustment_period_id)
+      : periods[periods.length - 1]
+        ? String([...periods].sort((a, b) => a.start_date.localeCompare(b.start_date))[0]?.id ?? '')
+        : '',
   );
-  const [pallet, setPallet] = useState('0');
-  const [pricingMode, setPricingMode] = useState<PricingMode>('by_weight');
+  const [pallet, setPallet] = useState(String(editVersion?.pallet_trip_price ?? '0'));
+  const [pricingMode, setPricingMode] = useState<PricingMode>(
+    editVersion?.pricing_mode ?? 'by_weight',
+  );
   const [tiers, setTiers] = useState<PriceTierInput[]>(() =>
-    WEIGHT_TEMPLATE.map((t) => ({ ...t })),
+    editVersion
+      ? editVersion.tiers.map((t) => ({ ...t }))
+      : WEIGHT_TEMPLATE.map((t) => ({ ...t })),
   );
+
+  useEffect(() => {
+    if (isEdit || periodId || periods.length === 0) return;
+    const earliest = [...periods].sort((a, b) => a.start_date.localeCompare(b.start_date))[0];
+    if (earliest) setPeriodId(String(earliest.id));
+  }, [periods, periodId, isEdit]);
+
+  const selectedPeriod = periods.find((p) => String(p.id) === periodId);
 
   const switchMode = (mode: PricingMode) => {
     if (mode === pricingMode) return;
@@ -914,14 +969,49 @@ function PriceFormModal({
   };
 
   return (
-    <Modal isOpen onClose={onClose} title="Thêm bảng giá gốc" size="lg">
+    <Modal
+      isOpen
+      onClose={onClose}
+      title={isEdit ? 'Sửa bảng giá gốc' : 'Thêm bảng giá gốc'}
+      size="lg"
+    >
       <div className="space-y-3 max-h-[70vh] overflow-y-auto">
-        <div>
-          <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1.5">
-            Ngày hiệu lực *
-          </label>
-          <DateInput value={effectiveFrom} onChange={setEffectiveFrom} />
-        </div>
+        {!isEdit && (
+          <div>
+            <Select
+              label="Kỳ gốc *"
+              value={periodId}
+              onChange={(e) => setPeriodId(e.target.value)}
+              options={[
+                {
+                  value: '',
+                  label: periodsLoading
+                    ? 'Đang tải kỳ…'
+                    : periods.length
+                      ? 'Chọn kỳ gốc'
+                      : 'Chưa có kỳ — vào tab Kỳ điều chỉnh để tạo',
+                },
+                ...[...periods]
+                  .sort((a, b) => a.start_date.localeCompare(b.start_date))
+                  .map((p) => ({
+                    value: String(p.id),
+                    label: periodLabel(p),
+                  })),
+              ]}
+            />
+            {selectedPeriod && (
+              <p className="mt-1 text-xs text-neutral-500">
+                Ngày hiệu lực gốc: {formatDate(selectedPeriod.start_date)}. Hệ thống sẽ tự tạo
+                bảng giá cho các kỳ tiếp theo (sau kỳ gốc), nhân % từng kỳ.
+              </p>
+            )}
+          </div>
+        )}
+        {isEdit && (
+          <p className="text-sm text-neutral-500">
+            Sửa giá gốc sẽ tính lại các kỳ tiếp theo theo %.
+          </p>
+        )}
         <Input
           label="Giá Pallet (chuyến) *"
           type="number"
@@ -1138,7 +1228,11 @@ function PriceFormModal({
             Hủy
           </Button>
           <Button
-            disabled={mutations.createPrice.isPending}
+            disabled={
+              mutations.createPrice.isPending ||
+              mutations.updateAbsolutePrice.isPending ||
+              (!isEdit && !periodId)
+            }
             onClick={() => {
               const normalizedTiers =
                 pricingMode === 'by_trips'
@@ -1152,10 +1246,28 @@ function PriceFormModal({
                       min_billable_ton:
                         tier.pricing_unit === 'tan' ? tier.min_billable_ton ?? null : null,
                     }));
+              if (isEdit) {
+                mutations.updateAbsolutePrice.mutate(
+                  {
+                    routeGroupId,
+                    pricing_mode: pricingMode,
+                    pallet_trip_price: Number(pallet),
+                    tiers: normalizedTiers,
+                  },
+                  {
+                    onSuccess: () => {
+                      toast('Đã cập nhật bảng giá gốc');
+                      onClose();
+                    },
+                    onError: (e) => toast(apiError(e, 'Không cập nhật được'), true),
+                  },
+                );
+                return;
+              }
               mutations.createPrice.mutate(
                 {
                   route_group_id: routeGroupId,
-                  effective_from: effectiveFrom,
+                  adjustment_period_id: Number(periodId),
                   pricing_mode: pricingMode,
                   pallet_trip_price: Number(pallet),
                   tiers: normalizedTiers,
@@ -1178,59 +1290,169 @@ function PriceFormModal({
   );
 }
 
-function AdjustModal({ onClose }: { onClose: () => void }) {
+function PeriodsTab({ canManage }: { canManage: boolean }) {
+  const { data: periods = [], isLoading, isError, refetch } = useAdjustmentPeriods();
   const mutations = useRoutePricingMutations();
-  const [percent, setPercent] = useState('8');
-  const [effectiveFrom, setEffectiveFrom] = useState(
-    new Date().toISOString().slice(0, 10),
-  );
+  const [formOpen, setFormOpen] = useState(false);
+  const latestId = periods[0]?.id;
 
   return (
-    <Modal
-      isOpen
-      onClose={onClose}
-      title="Điều chỉnh giá theo % — mọi nhà cung cấp"
-      size="lg"
-    >
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-end gap-3">
+        <p className="text-xs text-neutral-500 flex-1 min-w-[200px]">
+          Kỳ điều chỉnh áp dụng mọi nhà cung cấp — chỉ xóa được kỳ gần nhất (rollback)
+        </p>
+        <div className="ml-auto">
+          {canManage && (
+            <Button onClick={() => setFormOpen(true)}>
+              <Plus className="w-4 h-4 mr-1" /> Thêm kỳ
+            </Button>
+          )}
+        </div>
+      </div>
+
+      {isLoading && <p className="text-sm text-neutral-500">Đang tải…</p>}
+      {isError && (
+        <p className="text-sm text-red-600">
+          Không tải được kỳ điều chỉnh.{' '}
+          <button type="button" className="underline" onClick={() => void refetch()}>
+            Thử lại
+          </button>
+        </p>
+      )}
+      {!isLoading && !isError && periods.length === 0 && (
+        <p className="text-sm text-neutral-500">Chưa có kỳ điều chỉnh</p>
+      )}
+
+      {periods.length > 0 && (
+        <div className="rounded-lg border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 overflow-hidden">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Ngày bắt đầu</TableHead>
+                <TableHead>%</TableHead>
+                <TableHead>Ghi chú</TableHead>
+                {canManage && <TableHead className="text-right">Hành động</TableHead>}
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {periods.map((p) => (
+                <TableRow
+                  key={p.id}
+                  className="hover:bg-neutral-50 dark:hover:bg-neutral-800/60"
+                >
+                  <TableCell>
+                    <span className="text-neutral-900 dark:text-neutral-100 font-medium">
+                      {formatDate(p.start_date)}
+                    </span>
+                  </TableCell>
+                  <TableCell>{formatPercentLabel(p.percent)}</TableCell>
+                  <TableCell className="max-w-xs truncate">{p.note || '—'}</TableCell>
+                  {canManage && (
+                    <TableCell className="text-right space-x-1">
+                      {p.id === latestId ? (
+                        <button
+                          type="button"
+                          className="p-1 text-red-600"
+                          title="Xóa"
+                          onClick={() => {
+                            if (
+                              !window.confirm(
+                                'Xóa kỳ sẽ gỡ mọi bảng giá sinh từ kỳ này và mở lại kỳ trước. Tiếp tục?',
+                              )
+                            ) {
+                              return;
+                            }
+                            mutations.deletePeriod.mutate(p.id, {
+                              onSuccess: () => toast('Đã xóa kỳ điều chỉnh'),
+                              onError: (e) => toast(apiError(e, 'Không xóa được'), true),
+                            });
+                          }}
+                        >
+                          <Trash2 className="w-4 h-4 inline" />
+                        </button>
+                      ) : (
+                        <span className="text-xs text-neutral-400">—</span>
+                      )}
+                    </TableCell>
+                  )}
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+      )}
+
+      {formOpen && <PeriodFormModal onClose={() => setFormOpen(false)} />}
+    </div>
+  );
+}
+
+function PeriodFormModal({ onClose }: { onClose: () => void }) {
+  const mutations = useRoutePricingMutations();
+  const [startDate, setStartDate] = useState(new Date().toISOString().slice(0, 10));
+  const [percent, setPercent] = useState('8');
+  const [note, setNote] = useState('');
+
+  return (
+    <Modal isOpen onClose={onClose} title="Thêm kỳ điều chỉnh" size="md">
       <div className="space-y-4">
         <p className="text-sm text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-900/20 p-3 rounded-md">
-          Thao tác này áp dụng cho tất cả nhà cung cấp đang có bảng giá hiệu lực (không chỉ nhà cung cấp đang xem).
+          Thêm kỳ sẽ áp dụng % cho mọi NCC đang có bảng giá hiệu lực.
         </p>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <Input
-            label="Phần trăm (%) *"
-            type="number"
-            value={percent}
-            onChange={(e) => setPercent(e.target.value)}
-          />
-          <div>
-            <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1.5">
-              Ngày hiệu lực mới *
-            </label>
-            <DateInput value={effectiveFrom} onChange={setEffectiveFrom} />
-          </div>
+        <div>
+          <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1.5">
+            Ngày bắt đầu *
+          </label>
+          <DateInput value={startDate} onChange={setStartDate} />
         </div>
+        <Input
+          label="Phần trăm (%) *"
+          type="number"
+          value={percent}
+          onChange={(e) => setPercent(e.target.value)}
+        />
+        <p className="-mt-2 text-xs text-neutral-500">VD 8 = tăng 8%; -5 = giảm 5%</p>
+        <Input
+          label="Ghi chú"
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+        />
         <div className="flex justify-end gap-2 pt-2 border-t border-neutral-100 dark:border-neutral-800">
           <Button variant="outline" onClick={onClose}>
             Hủy
           </Button>
           <Button
-            disabled={mutations.adjustPrices.isPending}
+            disabled={mutations.createPeriod.isPending}
             onClick={() => {
-              if (!window.confirm('Xác nhận điều chỉnh % cho mọi nhà cung cấp?')) return;
-              mutations.adjustPrices.mutate(
-                { percent: Number(percent), effective_from: effectiveFrom },
+              if (!startDate || Number(percent) === 0 || Number.isNaN(Number(percent))) {
+                toast('Ngày bắt đầu và % (khác 0) là bắt buộc', true);
+                return;
+              }
+              if (!window.confirm('Xác nhận thêm kỳ và áp dụng toàn hệ thống?')) {
+                return;
+              }
+              mutations.createPeriod.mutate(
+                {
+                  start_date: startDate,
+                  percent: Number(percent),
+                  note: note.trim() || null,
+                },
                 {
                   onSuccess: (data) => {
-                    toast(`Đã điều chỉnh giá cho ${data.adjusted} bảng giá`);
+                    toast(
+                      data.adjusted > 0
+                        ? `Đã tạo kỳ và điều chỉnh ${data.adjusted} bảng giá`
+                        : 'Đã tạo kỳ điều chỉnh',
+                    );
                     onClose();
                   },
-                  onError: (e) => toast(apiError(e, 'Không điều chỉnh được'), true),
+                  onError: (e) => toast(apiError(e, 'Không tạo được kỳ'), true),
                 },
               );
             }}
           >
-            Áp dụng cho mọi nhà cung cấp
+            Lưu
           </Button>
         </div>
       </div>

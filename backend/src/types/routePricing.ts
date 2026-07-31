@@ -64,16 +64,29 @@ export interface RoutePriceTier {
   sort_order?: number;
 }
 
+export interface AdjustmentPeriod {
+  id: number;
+  start_date: string;
+  end_date: string | null;
+  percent: number;
+  note: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface RoutePriceVersion {
   id: number;
   price_config_id: number;
+  /** Derived from adjustment period.start_date */
   effective_from: string;
+  /** Derived from adjustment period.end_date */
   effective_to: string | null;
   pricing_mode: PricingMode;
   pallet_trip_price: number;
+  /** Derived: period.percent when base_version_id set; else null */
   adjustment_percent: number | null;
-  adjustment_batch_id: string | null;
   base_version_id: number | null;
+  adjustment_period_id: number;
   note: string | null;
   tiers: RoutePriceTier[];
   created_at: string;

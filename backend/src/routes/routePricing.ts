@@ -6,8 +6,10 @@ import {
   groupUpdateSchema,
   groupsListSchema,
   lookupSchema,
-  priceAdjustSchema,
+  periodCreateSchema,
+  periodDeleteSchema,
   priceCreateSchema,
+  priceUpdateAbsoluteSchema,
   pricesListSchema,
   routeCreateSchema,
   routeDeleteSchema,
@@ -29,6 +31,24 @@ router.get(
   requirePermission('route_pricing.view'),
   ...validate(geoWardsSchema),
   routePricingController.listWards,
+);
+
+router.get(
+  '/adjustment-periods',
+  requirePermission('route_pricing.view'),
+  routePricingController.listPeriods,
+);
+router.post(
+  '/adjustment-periods',
+  requirePermission('route_pricing.manage'),
+  ...validate(periodCreateSchema),
+  routePricingController.createPeriod,
+);
+router.delete(
+  '/adjustment-periods/:id',
+  requirePermission('route_pricing.manage'),
+  ...validate(periodDeleteSchema),
+  routePricingController.deletePeriod,
 );
 
 router.get(
@@ -99,11 +119,11 @@ router.post(
   ...validate(priceCreateSchema),
   routePricingController.createPrice,
 );
-router.post(
-  '/prices/adjust',
+router.put(
+  '/prices/groups/:routeGroupId/absolute',
   requirePermission('route_pricing.manage'),
-  ...validate(priceAdjustSchema),
-  routePricingController.adjustPrices,
+  ...validate(priceUpdateAbsoluteSchema),
+  routePricingController.updateAbsolutePrice,
 );
 
 router.get(

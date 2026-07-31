@@ -55,6 +55,13 @@ export function usePriceVersions(configId?: number) {
   });
 }
 
+export function useAdjustmentPeriods() {
+  return useQuery({
+    queryKey: ['route-pricing', 'adjustment-periods'],
+    queryFn: () => routePricingApi.listAdjustmentPeriods(),
+  });
+}
+
 export function useRoutePricingMutations(supplierId?: number) {
   const qc = useQueryClient();
   const invalidate = () => {
@@ -98,7 +105,7 @@ export function useRoutePricingMutations(supplierId?: number) {
     createPrice: useMutation({
       mutationFn: (body: {
         route_group_id: number;
-        effective_from: string;
+        adjustment_period_id: number;
         pricing_mode: 'by_weight' | 'by_trips';
         pallet_trip_price: number;
         note?: string | null;
@@ -106,8 +113,25 @@ export function useRoutePricingMutations(supplierId?: number) {
       }) => routePricingApi.createPrice(body),
       onSuccess: invalidate,
     }),
-    adjustPrices: useMutation({
-      mutationFn: routePricingApi.adjustPrices,
+    updateAbsolutePrice: useMutation({
+      mutationFn: ({
+        routeGroupId,
+        ...body
+      }: {
+        routeGroupId: number;
+        pricing_mode: 'by_weight' | 'by_trips';
+        pallet_trip_price: number;
+        note?: string | null;
+        tiers: PriceTierInput[];
+      }) => routePricingApi.updateAbsolutePrice(routeGroupId, body),
+      onSuccess: invalidate,
+    }),
+    createPeriod: useMutation({
+      mutationFn: routePricingApi.createAdjustmentPeriod,
+      onSuccess: invalidate,
+    }),
+    deletePeriod: useMutation({
+      mutationFn: (id: number) => routePricingApi.deleteAdjustmentPeriod(id),
       onSuccess: invalidate,
     }),
     supplierId,

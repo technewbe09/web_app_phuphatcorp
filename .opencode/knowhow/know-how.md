@@ -265,30 +265,26 @@ Base URL: `/api`
 
 | Method | Path | Auth | Notes |
 |--------|------|------|-------|
+| GET/POST/DELETE | /route-pricing/adjustment-periods | view/manage | Kỳ điều chỉnh global; tạo kỳ = apply % mọi version mở; chỉ xóa kỳ gần nhất (= rollback) |
 | GET | /route-pricing/geo/provinces | route_pricing.view | Master tỉnh |
 | GET | /route-pricing/geo/wards | route_pricing.view | `?province_code=` |
 | GET/POST/PUT/DELETE | /route-pricing/routes | view/manage | Scoped `supplier_id`; `ward_code` XOR `location_text`; `note` |
 | GET/POST/PUT/DELETE | /route-pricing/groups | view/manage | `ward_codes[]` XOR `location_text` (1 text) XOR residual; `note` → tên + unique |
-| GET/POST | /route-pricing/prices | view/manage | Absolute lần đầu; `pricing_mode` + `range_from`/`range_to`; `pallet_trip_price ≥ 0` |
-| POST | /route-pricing/prices/adjust | manage | % toàn hệ thống (copy `pricing_mode` + range) |
-| GET | /route-pricing/lookup | view | `weight_mt` (by_weight) / `trips_per_vehicle_day` (by_trips); `location_text`, `note` |
+| GET/POST | /route-pricing/prices | view/manage | Absolute: `adjustment_period_id` + cascade kỳ sau; `pricing_mode` + range |
+| PUT | /route-pricing/prices/groups/:routeGroupId/absolute | manage | Sửa giá gốc + recompute cascade |
+| GET | /route-pricing/lookup | view | `weight_mt` / `trips_per_vehicle_day`; `location_text`, `note` |
 
-**Schema CR (2026-07-12/13):** Migration `037_route_pricing_location_note_trips.sql`
-- `delivery_routes.ward_code` nullable; `location_text`, `note`; unique active `(supplier, province, ward, location, note_key)`
-- Residual unique theo `(supplier, province, note_key)`
+**Schema CR periods (2026-07-31):** Migration `042_route_pricing_adjustment_periods.sql`
+- Table `route_pricing_adjustment_periods` (`start_date`, `end_date` nullable do BE, `percent≠0`, `note`)
+- `route_price_versions.adjustment_period_id` NOT NULL FK
+- Version không lưu `effective_from` / `effective_to` / `adjustment_percent` / `adjustment_batch_id` — API derive từ kỳ
 
-**Schema CR modes (2026-07-13):** Migration `038_route_pricing_modes_range.sql`
-- `route_price_versions.pricing_mode` ∈ {`by_weight`, `by_trips`}
-- `route_price_tiers.range_from` / `range_to` (gom ton/trips); drop `from_ton`/`to_ton`/`from|to_trips_*`
-- Backfill: trips ≠ null → range từ trips + mode `by_trips`; else ton + `by_weight`
-- `by_weight`: khoảng tấn `(from, to]`; `by_trips`: `[from, to]` mọi trọng lượng, ≥2 bậc, chain từ 1 → ∞
+**Schema (merged in `040`):** location/note/modes/race guards như trước.
 
-**FE hiển thị Tab Bảng giá:** Badge chế độ; cột Trọng lượng hoặc Chuyến/xe/ngày | Đơn vị | Đơn giá; ẩn pallet nếu = 0.
+**FE:** Tab Kỳ điều chỉnh / Nhóm tuyến / Bảng giá. Bỏ nút Điều chỉnh % riêng. Không sửa kỳ — muốn đổi thì xóa rồi tạo lại.
 
-**Race guards (2026-07-12):** `route_price_versions` — partial UNIQUE một open version / config; UNIQUE `(price_config_id, effective_from)`. Create/adjust chạy trong TX + `FOR UPDATE`. Migration `036_route_price_versions_race_guards.sql`.
-
-BA: `docs/ba/20260711_route-pricing-analysis.md` + CR `docs/ba/20260712_route-pricing-change-request.md`  
-UI: `docs/ui/20260711_route-pricing-ui-spec.md` + CR modes `docs/ui/20260713_route-pricing-modes-cr-ui-spec.md`
+BA: `docs/ba/20260711_route-pricing-analysis.md`  
+UI: `docs/ui/20260731_route-pricing-adjustment-periods-cr-ui-spec.md`
 
 ### System
 

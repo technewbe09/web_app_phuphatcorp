@@ -1,13 +1,17 @@
-import { randomUUID } from 'node:crypto';
+import type { PoolClient } from 'pg';
 import { pool } from '../config/database';
 import {
-  DeliveryRoute, LookupResult, PricingMode, Province, RouteGroup, RouteGroupMember,
+  AdjustmentPeriod, DeliveryRoute, LookupResult, PricingMode, Province, RouteGroup, RouteGroupMember,
   RoutePriceConfigSummary, RoutePriceTier, RoutePriceVersion, Ward,
   noteKey, normalizeLocation, roundToThousands,
 } from '../types/routePricing';
 
 type ServiceError = { code: string; message?: string };
 type Destination = { ward_code: string | null; location_text: string | null; phuong: string };
+
+const VERSION_SELECT = `SELECT v.*, p.start_date AS period_start_date, p.end_date AS period_end_date, p.percent AS period_percent`;
+const VERSION_JOIN = `FROM route_price_versions v
+  JOIN route_pricing_adjustment_periods p ON p.id = v.adjustment_period_id`;
 
 function err(code: string, message?: string): ServiceError { return { code, message }; }
 function num(value: unknown): number { return typeof value === 'number' ? value : Number(value); }
@@ -163,20 +167,145 @@ function khungLabel(mode: PricingMode, tier: RoutePriceTier): string {
 }
 
 function mapVersionRow(row: Record<string, unknown>, tiers: RoutePriceTier[]): RoutePriceVersion {
+  const baseVersionId = row.base_version_id == null ? null : num(row.base_version_id);
   return {
     id: num(row.id),
     price_config_id: num(row.price_config_id),
-    effective_from: toDateOnly(row.effective_from),
-    effective_to: toDateOnlyOrNull(row.effective_to),
+    effective_from: toDateOnly(row.period_start_date),
+    effective_to: toDateOnlyOrNull(row.period_end_date),
     pricing_mode: parsePricingMode(row.pricing_mode ?? 'by_weight'),
     pallet_trip_price: num(row.pallet_trip_price),
-    adjustment_percent: nullableNumber(row.adjustment_percent),
-    adjustment_batch_id: (row.adjustment_batch_id as string | null) ?? null,
-    base_version_id: row.base_version_id == null ? null : num(row.base_version_id),
+    adjustment_percent: baseVersionId == null ? null : num(row.period_percent),
+    base_version_id: baseVersionId,
+    adjustment_period_id: num(row.adjustment_period_id),
     note: (row.note as string | null) ?? null,
     tiers,
     created_at: String(row.created_at),
   };
+}
+
+function mapPeriodRow(row: Record<string, unknown>): AdjustmentPeriod {
+  return {
+    id: num(row.id),
+    start_date: toDateOnly(row.start_date),
+    end_date: toDateOnlyOrNull(row.end_date),
+    percent: num(row.percent),
+    note: (row.note as string | null) ?? null,
+    created_at: String(row.created_at),
+    updated_at: String(row.updated_at),
+  };
+}
+
+async function insertTiers(
+  client: PoolClient,
+  versionId: number,
+  mode: PricingMode,
+  tiers: RoutePriceTier[],
+): Promise<void> {
+  for (const [sort, tier] of tiers.entries()) {
+    await client.query(
+      `INSERT INTO route_price_tiers (price_version_id,range_from,range_to,pricing_unit,price,min_billable_ton,sort_order)
+       VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+      [
+        versionId,
+        tier.range_from,
+        tier.range_to ?? null,
+        mode === 'by_trips' ? 'chuyen' : tier.pricing_unit,
+        tier.price,
+        mode === 'by_weight' && tier.pricing_unit === 'tan' && num(tier.min_billable_ton ?? 0) > 0
+          ? tier.min_billable_ton
+          : null,
+        sort,
+      ],
+    );
+  }
+}
+
+function scaleTiers(tiers: RoutePriceTier[], percent: number): RoutePriceTier[] {
+  const factor = 1 + percent / 100;
+  return tiers.map((tier) => ({
+    ...tier,
+    price: roundToThousands(num(tier.price) * factor),
+  }));
+}
+
+async function insertScaledVersionsFromBases(
+  client: PoolClient,
+  bases: Record<string, unknown>[],
+  data: {
+    percent: number;
+    adjustment_period_id: number;
+    note?: string | null;
+  },
+  userId: number,
+): Promise<number> {
+  if (data.percent === 0 || Number.isNaN(data.percent)) throw err('INVALID_TIERS', 'Phần trăm không hợp lệ');
+  for (const old of bases) {
+    if (
+      (
+        await client.query(
+          `SELECT id FROM route_price_versions WHERE price_config_id=$1 AND adjustment_period_id=$2`,
+          [old.price_config_id, data.adjustment_period_id],
+        )
+      ).rows[0]
+    ) {
+      throw err('OVERLAPPING_VERSION');
+    }
+    const mode = parsePricingMode(old.pricing_mode ?? 'by_weight');
+    const version = await client.query(
+      `INSERT INTO route_price_versions
+        (price_config_id,pricing_mode,pallet_trip_price,base_version_id,adjustment_period_id,note,created_by)
+       VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id`,
+      [
+        old.price_config_id,
+        mode,
+        roundToThousands(num(old.pallet_trip_price) * (1 + data.percent / 100)),
+        old.id,
+        data.adjustment_period_id,
+        data.note ?? null,
+        userId,
+      ],
+    );
+    const tiers = await client.query(
+      `SELECT * FROM route_price_tiers WHERE price_version_id=$1 ORDER BY sort_order`,
+      [old.id],
+    );
+    await insertTiers(
+      client,
+      version.rows[0].id,
+      mode,
+      scaleTiers(
+        tiers.rows.map((tier) => ({
+          range_from: num(tier.range_from),
+          range_to: nullableNumber(tier.range_to),
+          pricing_unit: tier.pricing_unit,
+          price: num(tier.price),
+          min_billable_ton: nullableNumber(tier.min_billable_ton),
+        })),
+        data.percent,
+      ),
+    );
+  }
+  return bases.length;
+}
+
+async function deleteVersionsByIds(client: PoolClient, ids: number[]): Promise<void> {
+  if (!ids.length) return;
+  await client.query(
+    `UPDATE route_price_versions SET base_version_id=NULL WHERE base_version_id = ANY($1::int[])`,
+    [ids],
+  );
+  await client.query(`DELETE FROM route_price_tiers WHERE price_version_id = ANY($1::int[])`, [ids]);
+  await client.query(`DELETE FROM route_price_versions WHERE id = ANY($1::int[])`, [ids]);
+}
+
+async function loadVersionRow(versionId: number): Promise<Record<string, unknown>> {
+  const result = await pool.query(
+    `${VERSION_SELECT} ${VERSION_JOIN} WHERE v.id=$1`,
+    [versionId],
+  );
+  if (!result.rows[0]) throw err('NOT_FOUND');
+  return result.rows[0];
 }
 
 async function getProvince(code: string): Promise<Province | null> {
@@ -257,6 +386,120 @@ export const routePricingService = {
     if (!provinceCode) throw err('MISSING_PROVINCE', 'Thiếu province_code');
     return (await pool.query<Ward>('SELECT code, name, full_name, province_code FROM wards WHERE province_code = $1 ORDER BY name', [provinceCode])).rows;
   },
+
+  async listAdjustmentPeriods(): Promise<AdjustmentPeriod[]> {
+    const result = await pool.query(
+      `SELECT * FROM route_pricing_adjustment_periods ORDER BY start_date DESC`,
+    );
+    return result.rows.map(mapPeriodRow);
+  },
+
+  async createAdjustmentPeriod(
+    data: { start_date: string; percent: number; note?: string | null },
+    userId: number,
+  ): Promise<{ period: AdjustmentPeriod; adjusted: number }> {
+    const start = toDateOnly(data.start_date);
+    if (data.percent === 0 || Number.isNaN(data.percent)) throw err('INVALID_TIERS', 'Phần trăm phải khác 0');
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      const openPeriod = await client.query(
+        `SELECT * FROM route_pricing_adjustment_periods WHERE end_date IS NULL ORDER BY start_date DESC FOR UPDATE`,
+      );
+      let sourceVersions: Record<string, unknown>[] = [];
+      if (openPeriod.rows[0]) {
+        const prevStart = toDateOnly(openPeriod.rows[0].start_date);
+        if (!(start > prevStart)) {
+          throw err('INVALID_PERIOD', 'Ngày bắt đầu phải sau kỳ gần nhất');
+        }
+        sourceVersions = (
+          await client.query(
+            `SELECT v.* FROM route_price_versions v
+             JOIN route_price_configs c ON c.id=v.price_config_id AND c.status='active'
+             WHERE v.adjustment_period_id=$1
+             ORDER BY v.id
+             FOR UPDATE OF v`,
+            [openPeriod.rows[0].id],
+          )
+        ).rows;
+        await client.query(
+          `UPDATE route_pricing_adjustment_periods SET end_date=$1, updated_by=$2 WHERE id=$3 AND end_date IS NULL`,
+          [start, userId, openPeriod.rows[0].id],
+        );
+      }
+      let inserted;
+      try {
+        inserted = await client.query(
+          `INSERT INTO route_pricing_adjustment_periods (start_date,end_date,percent,note,created_by,updated_by)
+           VALUES ($1,NULL,$2,$3,$4,$4) RETURNING *`,
+          [start, data.percent, cleanNote(data.note), userId],
+        );
+      } catch (error) {
+        if (isPgUniqueViolation(error)) throw err('DUPLICATE_PERIOD', 'Kỳ với ngày bắt đầu này đã tồn tại');
+        throw error;
+      }
+      const adjusted = await insertScaledVersionsFromBases(
+        client,
+        sourceVersions,
+        {
+          percent: data.percent,
+          adjustment_period_id: inserted.rows[0].id,
+          note: cleanNote(data.note),
+        },
+        userId,
+      );
+      await client.query('COMMIT');
+      return {
+        period: mapPeriodRow(inserted.rows[0]),
+        adjusted,
+      };
+    } catch (error) {
+      await client.query('ROLLBACK');
+      if (isPgUniqueViolation(error)) {
+        throw err('OVERLAPPING_VERSION');
+      }
+      throw error;
+    } finally {
+      client.release();
+    }
+  },
+
+  async deleteAdjustmentPeriod(id: number): Promise<{ deleted_versions: number }> {
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      const latest = await client.query(
+        `SELECT * FROM route_pricing_adjustment_periods ORDER BY start_date DESC LIMIT 1 FOR UPDATE`,
+      );
+      if (!latest.rows[0] || num(latest.rows[0].id) !== id) {
+        throw err('PERIOD_NOT_LATEST', 'Chỉ được xóa kỳ gần nhất');
+      }
+      const linked = await client.query(
+        `SELECT id FROM route_price_versions WHERE adjustment_period_id=$1 ORDER BY id DESC FOR UPDATE`,
+        [id],
+      );
+      const versionIds = linked.rows.map((row) => num(row.id));
+      await deleteVersionsByIds(client, versionIds);
+      await client.query(`DELETE FROM route_pricing_adjustment_periods WHERE id=$1`, [id]);
+      const prev = await client.query(
+        `SELECT id FROM route_pricing_adjustment_periods ORDER BY start_date DESC LIMIT 1 FOR UPDATE`,
+      );
+      if (prev.rows[0]) {
+        await client.query(
+          `UPDATE route_pricing_adjustment_periods SET end_date=NULL, updated_by=NULL WHERE id=$1`,
+          [prev.rows[0].id],
+        );
+      }
+      await client.query('COMMIT');
+      return { deleted_versions: versionIds.length };
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  },
+
   async listRoutes(supplierId: number, filters: { search?: string; province_code?: string; status?: string } = {}): Promise<DeliveryRoute[]> {
     if (!supplierId) throw err('MISSING_SUPPLIER');
     const params: unknown[] = [supplierId, filters.status || 'active'];
@@ -488,8 +731,13 @@ export const routePricingService = {
     if (routeGroupId) { params.push(routeGroupId); where += ` AND g.id=$${params.length}`; }
     const groups = await pool.query(`SELECT g.id,g.name,g.is_residual,g.province_code,g.tinh,c.id AS config_id FROM route_groups g LEFT JOIN route_price_configs c ON c.route_group_id=g.id AND c.status='active' ${where} ORDER BY g.tinh,g.name`, params);
     return Promise.all(groups.rows.map(async (group) => {
-      const versions = group.config_id ? await pool.query(`SELECT * FROM route_price_versions WHERE price_config_id=$1 ORDER BY effective_from DESC`, [group.config_id]) : { rows: [] as Record<string, unknown>[] };
-      const open = versions.rows.find((version) => version.effective_to == null) ?? versions.rows[0];
+      const versions = group.config_id
+        ? await pool.query(
+          `${VERSION_SELECT} ${VERSION_JOIN} WHERE v.price_config_id=$1 ORDER BY p.start_date DESC`,
+          [group.config_id],
+        )
+        : { rows: [] as Record<string, unknown>[] };
+      const open = versions.rows.find((version) => version.period_end_date == null) ?? versions.rows[0];
       const current: RoutePriceVersion | null = open
         ? mapVersionRow(open, await loadTiers(num(open.id)))
         : null;
@@ -497,12 +745,15 @@ export const routePricingService = {
     }));
   },
   async listVersions(configId: number): Promise<RoutePriceVersion[]> {
-    const versions = await pool.query(`SELECT * FROM route_price_versions WHERE price_config_id=$1 ORDER BY effective_from DESC`, [configId]);
+    const versions = await pool.query(
+      `${VERSION_SELECT} ${VERSION_JOIN} WHERE v.price_config_id=$1 ORDER BY p.start_date DESC`,
+      [configId],
+    );
     return Promise.all(versions.rows.map(async (version) => mapVersionRow(version, await loadTiers(version.id))));
   },
   async createAbsolutePrice(data: {
     route_group_id: number;
-    effective_from: string;
+    adjustment_period_id: number;
     pricing_mode: PricingMode;
     pallet_trip_price: number;
     note?: string | null;
@@ -516,6 +767,18 @@ export const routePricingService = {
     const client = await pool.connect();
     try {
       await client.query('BEGIN');
+      const basePeriod = await client.query(
+        `SELECT * FROM route_pricing_adjustment_periods WHERE id=$1 FOR UPDATE`,
+        [data.adjustment_period_id],
+      );
+      if (!basePeriod.rows[0]) throw err('PERIOD_REQUIRED', 'Không tìm thấy kỳ điều chỉnh');
+      const baseStart = toDateOnly(basePeriod.rows[0].start_date);
+
+      const laterPeriods = await client.query(
+        `SELECT * FROM route_pricing_adjustment_periods WHERE start_date > $1::date ORDER BY start_date ASC`,
+        [baseStart],
+      );
+
       const group = await client.query(`SELECT id FROM route_groups WHERE id=$1 AND status='active' FOR UPDATE`, [data.route_group_id]);
       if (!group.rows[0]) throw err('NOT_FOUND');
       let config = await client.query(`SELECT id FROM route_price_configs WHERE route_group_id=$1 FOR UPDATE`, [data.route_group_id]);
@@ -530,84 +793,149 @@ export const routePricingService = {
       const configId = config.rows[0].id;
       const existing = await client.query(`SELECT id FROM route_price_versions WHERE price_config_id=$1 LIMIT 1 FOR UPDATE`, [configId]);
       if (existing.rows[0]) throw err('ABSOLUTE_UPDATE_FORBIDDEN');
-      const version = await client.query(
-        `INSERT INTO route_price_versions (price_config_id,effective_from,pricing_mode,pallet_trip_price,note,created_by)
+
+      const absolute = await client.query(
+        `INSERT INTO route_price_versions
+          (price_config_id,pricing_mode,pallet_trip_price,note,adjustment_period_id,created_by)
          VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,
-        [configId, data.effective_from, mode, data.pallet_trip_price, data.note ?? null, userId],
+        [configId, mode, data.pallet_trip_price, data.note ?? null, data.adjustment_period_id, userId],
       );
-      for (const [sort, tier] of data.tiers.entries()) {
-        await client.query(
-          `INSERT INTO route_price_tiers (price_version_id,range_from,range_to,pricing_unit,price,min_billable_ton,sort_order)
-           VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+      await insertTiers(client, absolute.rows[0].id, mode, data.tiers);
+
+      let prevId = absolute.rows[0].id;
+      let prevPallet = data.pallet_trip_price;
+      let prevTiers = data.tiers.map((t) => ({ ...t }));
+
+      for (const period of laterPeriods.rows) {
+        const percent = num(period.percent);
+        const scaledTiers = scaleTiers(prevTiers, percent);
+        const scaledPallet = roundToThousands(num(prevPallet) * (1 + percent / 100));
+        const version = await client.query(
+          `INSERT INTO route_price_versions
+            (price_config_id,pricing_mode,pallet_trip_price,base_version_id,adjustment_period_id,note,created_by)
+           VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
           [
-            version.rows[0].id,
-            tier.range_from,
-            tier.range_to ?? null,
-            mode === 'by_trips' ? 'chuyen' : tier.pricing_unit,
-            tier.price,
-            mode === 'by_weight' && tier.pricing_unit === 'tan' && num(tier.min_billable_ton ?? 0) > 0
-              ? tier.min_billable_ton
-              : null,
-            sort,
+            configId,
+            mode,
+            scaledPallet,
+            prevId,
+            period.id,
+            cleanNote(period.note),
+            userId,
           ],
         );
+        await insertTiers(client, version.rows[0].id, mode, scaledTiers);
+        prevId = version.rows[0].id;
+        prevPallet = scaledPallet;
+        prevTiers = scaledTiers;
       }
+
       await client.query('COMMIT');
-      return mapVersionRow(version.rows[0], await loadTiers(version.rows[0].id));
+      return mapVersionRow(await loadVersionRow(absolute.rows[0].id), await loadTiers(absolute.rows[0].id));
     } catch (error) {
       await client.query('ROLLBACK');
       if (isPgUniqueViolation(error)) throw err('ABSOLUTE_UPDATE_FORBIDDEN');
       throw error;
     } finally { client.release(); }
   },
-  async adjustPercentGlobal(data: { percent: number; effective_from: string; note?: string | null }, userId: number): Promise<{ adjusted: number; batch_id: string }> {
-    if (data.percent === 0 || Number.isNaN(data.percent)) throw err('INVALID_TIERS', 'Phần trăm không hợp lệ');
+
+  async updateAbsolutePrice(
+    routeGroupId: number,
+    data: {
+      pricing_mode: PricingMode;
+      pallet_trip_price: number;
+      note?: string | null;
+      tiers: RoutePriceTier[];
+    },
+    userId: number,
+  ): Promise<RoutePriceVersion> {
+    const mode = parsePricingMode(data.pricing_mode);
+    validateTiers(mode, data.tiers);
+    if (!(data.pallet_trip_price >= 0) || Number.isNaN(data.pallet_trip_price)) {
+      throw err('INVALID_TIERS', 'Giá Pallet phải ≥ 0');
+    }
     const client = await pool.connect();
-    const batchId = randomUUID();
     try {
       await client.query('BEGIN');
-      const open = await client.query(`SELECT v.*,c.id AS config_id FROM route_price_versions v JOIN route_price_configs c ON c.id=v.price_config_id AND c.status='active' WHERE v.effective_to IS NULL ORDER BY v.id FOR UPDATE OF v`);
-      if (!open.rows.length) throw err('NOTHING_TO_ADJUST');
-      for (const old of open.rows) {
-        if ((await client.query(`SELECT id FROM route_price_versions WHERE price_config_id=$1 AND effective_from=$2`, [old.price_config_id, data.effective_from])).rows[0]) throw err('OVERLAPPING_VERSION');
-        if ((await client.query(`UPDATE route_price_versions SET effective_to=$1 WHERE id=$2 AND effective_to IS NULL`, [data.effective_from, old.id])).rowCount !== 1) throw err('OVERLAPPING_VERSION', 'Phiên bản đã bị đóng bởi thao tác khác');
-        const mode = parsePricingMode(old.pricing_mode ?? 'by_weight');
-        const version = await client.query(
-          `INSERT INTO route_price_versions (price_config_id,effective_from,pricing_mode,pallet_trip_price,adjustment_percent,adjustment_batch_id,base_version_id,note,created_by)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id`,
-          [
-            old.price_config_id,
-            data.effective_from,
-            mode,
-            roundToThousands(num(old.pallet_trip_price) * (1 + data.percent / 100)),
-            data.percent,
-            batchId,
-            old.id,
-            data.note ?? null,
-            userId,
-          ],
+      const config = await client.query(
+        `SELECT id FROM route_price_configs WHERE route_group_id=$1 AND status='active' FOR UPDATE`,
+        [routeGroupId],
+      );
+      if (!config.rows[0]) throw err('NOT_FOUND');
+      const absolute = await client.query(
+        `${VERSION_SELECT} ${VERSION_JOIN}
+         WHERE v.price_config_id=$1 AND v.base_version_id IS NULL
+         ORDER BY p.start_date ASC LIMIT 1 FOR UPDATE OF v`,
+        [config.rows[0].id],
+      );
+      if (!absolute.rows[0]) throw err('NOT_FOUND', 'Không tìm thấy bảng giá gốc');
+      const absoluteId = absolute.rows[0].id;
+      const basePeriodId = absolute.rows[0].adjustment_period_id;
+      const baseStart = toDateOnly(absolute.rows[0].period_start_date);
+
+      await client.query(
+        `UPDATE route_price_versions
+         SET pricing_mode=$1, pallet_trip_price=$2, note=$3
+         WHERE id=$4`,
+        [mode, data.pallet_trip_price, data.note ?? null, absoluteId],
+      );
+      await client.query(`DELETE FROM route_price_tiers WHERE price_version_id=$1`, [absoluteId]);
+      await insertTiers(client, absoluteId, mode, data.tiers);
+
+      const later = await client.query(
+        `SELECT v.id FROM route_price_versions v
+         JOIN route_pricing_adjustment_periods p ON p.id = v.adjustment_period_id
+         WHERE v.price_config_id=$1 AND v.id<>$2 AND p.start_date > $3::date
+         ORDER BY p.start_date DESC`,
+        [config.rows[0].id, absoluteId, baseStart],
+      );
+      await deleteVersionsByIds(client, later.rows.map((row) => num(row.id)));
+
+      if (basePeriodId != null) {
+        const laterPeriods = await client.query(
+          `SELECT p.* FROM route_pricing_adjustment_periods p
+           WHERE p.start_date > $1::date
+           ORDER BY p.start_date ASC`,
+          [baseStart],
         );
-        const tiers = await client.query(`SELECT * FROM route_price_tiers WHERE price_version_id=$1 ORDER BY sort_order`, [old.id]);
-        for (const [sort, tier] of tiers.rows.entries()) {
-          await client.query(
-            `INSERT INTO route_price_tiers (price_version_id,range_from,range_to,pricing_unit,price,min_billable_ton,sort_order)
-             VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+        let prevId = absoluteId;
+        let prevPallet = data.pallet_trip_price;
+        let prevTiers = data.tiers.map((t) => ({ ...t }));
+        for (const period of laterPeriods.rows) {
+          const percent = num(period.percent);
+          const scaledTiers = scaleTiers(prevTiers, percent);
+          const scaledPallet = roundToThousands(num(prevPallet) * (1 + percent / 100));
+          const version = await client.query(
+            `INSERT INTO route_price_versions
+              (price_config_id,pricing_mode,pallet_trip_price,base_version_id,adjustment_period_id,note,created_by)
+             VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id`,
             [
-              version.rows[0].id,
-              tier.range_from,
-              tier.range_to,
-              tier.pricing_unit,
-              roundToThousands(num(tier.price) * (1 + data.percent / 100)),
-              tier.min_billable_ton,
-              sort,
+              config.rows[0].id,
+              mode,
+              scaledPallet,
+              prevId,
+              period.id,
+              cleanNote(period.note),
+              userId,
             ],
           );
+          await insertTiers(client, version.rows[0].id, mode, scaledTiers);
+          prevId = version.rows[0].id;
+          prevPallet = scaledPallet;
+          prevTiers = scaledTiers;
         }
       }
+
       await client.query('COMMIT');
-      return { adjusted: open.rows.length, batch_id: batchId };
-    } catch (error) { await client.query('ROLLBACK'); if (isPgUniqueViolation(error)) throw err('OVERLAPPING_VERSION'); throw error; } finally { client.release(); }
+      return mapVersionRow(await loadVersionRow(absoluteId), await loadTiers(absoluteId));
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
   },
+
   async lookup(params: { supplier_id: number; province_code?: string; ward_code?: string; location_text?: string; note?: string; tinh?: string; phuong?: string; weight_mt?: number; trips_per_vehicle_day?: number | null; is_pallet?: boolean; as_of?: string }): Promise<LookupResult> {
     if (!params.supplier_id) throw err('MISSING_SUPPLIER');
     let provinceCode = params.province_code;
@@ -634,18 +962,24 @@ export const routePricingService = {
     const config = await pool.query(`SELECT id FROM route_price_configs WHERE route_group_id=$1 AND status='active'`, [group.id]);
     if (!config.rows[0]) throw err('NOT_FOUND', 'Nhóm chưa có bảng giá');
     const asOf = params.as_of || new Date().toISOString().slice(0, 10);
-    const version = await pool.query(`SELECT * FROM route_price_versions WHERE price_config_id=$1 AND effective_from <= $2::date AND (effective_to IS NULL OR effective_to > $2::date) ORDER BY effective_from DESC LIMIT 1`, [config.rows[0].id, asOf]);
+    const version = await pool.query(
+      `${VERSION_SELECT} ${VERSION_JOIN}
+       WHERE v.price_config_id=$1 AND p.start_date <= $2::date AND (p.end_date IS NULL OR p.end_date > $2::date)
+       ORDER BY p.start_date DESC LIMIT 1`,
+      [config.rows[0].id, asOf],
+    );
     if (!version.rows[0]) throw err('NOT_FOUND', 'Không có phiên bản giá hiệu lực');
     const value = version.rows[0];
     const mode = parsePricingMode(value.pricing_mode ?? 'by_weight');
     const pallet = num(value.pallet_trip_price);
-    if (params.is_pallet) return { route_group_id: group.id, group_name: group.name, is_residual: group.is_residual, price_version_id: value.id, effective_from: toDateOnly(value.effective_from), is_pallet: true, khung_label: 'Pallet', don_vi: 'Chuyến', pricing_unit: 'chuyen', price: pallet, billable_ton: null, pallet_trip_price: pallet };
+    const effectiveFrom = toDateOnly(value.period_start_date);
+    if (params.is_pallet) return { route_group_id: group.id, group_name: group.name, is_residual: group.is_residual, price_version_id: value.id, effective_from: effectiveFrom, is_pallet: true, khung_label: 'Pallet', don_vi: 'Chuyến', pricing_unit: 'chuyen', price: pallet, billable_ton: null, pallet_trip_price: pallet };
     if (mode === 'by_weight' && (params.weight_mt == null || Number.isNaN(params.weight_mt))) {
       throw err('INVALID_TIERS', 'Thiếu weight_mt');
     }
     const weight = params.weight_mt ?? 0;
     const tier = matchTier(mode, await loadTiers(value.id), weight, params.trips_per_vehicle_day);
     const billable = tier.pricing_unit === 'tan' ? Math.max(weight, num(tier.min_billable_ton ?? weight)) : null;
-    return { route_group_id: group.id, group_name: group.name, is_residual: group.is_residual, price_version_id: value.id, effective_from: toDateOnly(value.effective_from), is_pallet: false, khung_label: khungLabel(mode, tier), don_vi: tier.pricing_unit === 'chuyen' ? 'Chuyến' : 'Tấn', pricing_unit: tier.pricing_unit, price: num(tier.price), billable_ton: billable, pallet_trip_price: pallet };
+    return { route_group_id: group.id, group_name: group.name, is_residual: group.is_residual, price_version_id: value.id, effective_from: effectiveFrom, is_pallet: false, khung_label: khungLabel(mode, tier), don_vi: tier.pricing_unit === 'chuyen' ? 'Chuyến' : 'Tấn', pricing_unit: tier.pricing_unit, price: num(tier.price), billable_ton: billable, pallet_trip_price: pallet };
   },
 };

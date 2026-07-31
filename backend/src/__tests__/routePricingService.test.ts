@@ -71,7 +71,7 @@ describe('CR: pricing modes', () => {
       routePricingService.createAbsolutePrice(
         {
           route_group_id: 10,
-          effective_from: '2026-07-12',
+          adjustment_period_id: 1,
           pricing_mode: 'by_weight',
           pallet_trip_price: 800000,
           tiers: [
@@ -89,7 +89,7 @@ describe('CR: pricing modes', () => {
       routePricingService.createAbsolutePrice(
         {
           route_group_id: 10,
-          effective_from: '2026-07-12',
+          adjustment_period_id: 1,
           pricing_mode: 'by_trips',
           pallet_trip_price: 800000,
           tiers: [
@@ -107,7 +107,7 @@ describe('CR: pricing modes', () => {
       routePricingService.createAbsolutePrice(
         {
           route_group_id: 10,
-          effective_from: '2026-07-12',
+          adjustment_period_id: 1,
           pricing_mode: 'by_trips',
           pallet_trip_price: 800000,
           tiers: [{ range_from: 1, range_to: null, pricing_unit: 'chuyen', price: 1500000 }],
@@ -122,6 +122,8 @@ describe('Regression: price version race guards (2026-07-12)', () => {
   it('createAbsolutePrice throws ABSOLUTE_UPDATE_FORBIDDEN when version already exists (in-TX check)', async () => {
     mockClient.query
       .mockResolvedValueOnce({ rows: [] } as never) // BEGIN
+      .mockResolvedValueOnce({ rows: [{ id: 1, start_date: '2026-07-12' }] } as never) // period
+      .mockResolvedValueOnce({ rows: [] } as never) // later periods
       .mockResolvedValueOnce({ rows: [{ id: 10 }] } as never) // group FOR UPDATE
       .mockResolvedValueOnce({ rows: [{ id: 20 }] } as never) // config FOR UPDATE
       .mockResolvedValueOnce({ rows: [{ id: 1 }] } as never) // existing version
@@ -131,7 +133,7 @@ describe('Regression: price version race guards (2026-07-12)', () => {
       routePricingService.createAbsolutePrice(
         {
           route_group_id: 10,
-          effective_from: '2026-07-12',
+          adjustment_period_id: 1,
           pricing_mode: 'by_weight',
           pallet_trip_price: 800000,
           tiers: sampleWeightTiers,
@@ -147,11 +149,13 @@ describe('Regression: price version race guards (2026-07-12)', () => {
   it('createAbsolutePrice maps unique violation to ABSOLUTE_UPDATE_FORBIDDEN', async () => {
     const uniqueErr = Object.assign(new Error('duplicate key'), {
       code: '23505',
-      constraint: 'idx_rpv_one_open_per_config',
+      constraint: 'idx_rpv_config_period',
     });
 
     mockClient.query
       .mockResolvedValueOnce({ rows: [] } as never) // BEGIN
+      .mockResolvedValueOnce({ rows: [{ id: 1, start_date: '2026-07-12' }] } as never) // period
+      .mockResolvedValueOnce({ rows: [] } as never) // later periods
       .mockResolvedValueOnce({ rows: [{ id: 10 }] } as never) // group
       .mockResolvedValueOnce({ rows: [{ id: 20 }] } as never) // config
       .mockResolvedValueOnce({ rows: [] } as never) // no existing version
@@ -162,7 +166,7 @@ describe('Regression: price version race guards (2026-07-12)', () => {
       routePricingService.createAbsolutePrice(
         {
           route_group_id: 10,
-          effective_from: '2026-07-12',
+          adjustment_period_id: 1,
           pricing_mode: 'by_trips',
           pallet_trip_price: 800000,
           tiers: sampleTripsTiers,
@@ -172,48 +176,52 @@ describe('Regression: price version race guards (2026-07-12)', () => {
     ).rejects.toMatchObject({ code: 'ABSOLUTE_UPDATE_FORBIDDEN' });
   });
 
-  it('adjustPercentGlobal throws OVERLAPPING_VERSION when open version already closed', async () => {
+  it('createAdjustmentPeriod rejects start not after latest', async () => {
     mockClient.query
       .mockResolvedValueOnce({ rows: [] } as never) // BEGIN
       .mockResolvedValueOnce({
-        rows: [
-          {
-            id: 5,
-            price_config_id: 20,
-            pricing_mode: 'by_weight',
-            pallet_trip_price: 800000,
-            effective_to: null,
-          },
-        ],
-      } as never) // open FOR UPDATE
-      .mockResolvedValueOnce({ rows: [] } as never) // no overlap on effective_from
-      .mockResolvedValueOnce({ rows: [], rowCount: 0 } as never) // UPDATE closed 0 rows
+        rows: [{ id: 1, start_date: '2026-07-01', end_date: null }],
+      } as never) // open period
       .mockResolvedValueOnce({ rows: [] } as never); // ROLLBACK
 
     await expect(
-      routePricingService.adjustPercentGlobal(
-        { percent: 8, effective_from: '2026-07-12' },
+      routePricingService.createAdjustmentPeriod(
+        { start_date: '2026-06-01', percent: 8 },
         1,
       ),
-    ).rejects.toMatchObject({ code: 'OVERLAPPING_VERSION' });
-
-    const updateCall = mockClient.query.mock.calls.find((c) =>
-      String(c[0]).includes('SET effective_to') && String(c[0]).includes('effective_to IS NULL'),
-    );
-    expect(updateCall).toBeTruthy();
+    ).rejects.toMatchObject({ code: 'INVALID_PERIOD' });
   });
 
-  it('adjustPercentGlobal throws NOTHING_TO_ADJUST when no open versions', async () => {
+  it('deleteAdjustmentPeriod rejects non-latest period', async () => {
     mockClient.query
       .mockResolvedValueOnce({ rows: [] } as never) // BEGIN
-      .mockResolvedValueOnce({ rows: [] } as never) // open empty
+      .mockResolvedValueOnce({
+        rows: [{ id: 2, start_date: '2026-08-01' }],
+      } as never) // latest
       .mockResolvedValueOnce({ rows: [] } as never); // ROLLBACK
 
     await expect(
-      routePricingService.adjustPercentGlobal(
-        { percent: 8, effective_from: '2026-07-12' },
-        1,
-      ),
-    ).rejects.toMatchObject({ code: 'NOTHING_TO_ADJUST' });
+      routePricingService.deleteAdjustmentPeriod(1),
+    ).rejects.toMatchObject({ code: 'PERIOD_NOT_LATEST' });
+  });
+
+  it('deleteAdjustmentPeriod rollbacks versions of latest period', async () => {
+    mockClient.query
+      .mockResolvedValueOnce({ rows: [] } as never) // BEGIN
+      .mockResolvedValueOnce({
+        rows: [{ id: 3, start_date: '2026-03-01' }],
+      } as never) // latest
+      .mockResolvedValueOnce({ rows: [{ id: 30 }, { id: 31 }] } as never) // linked versions
+      .mockResolvedValueOnce({ rows: [], rowCount: 2 } as never) // null base_version_id
+      .mockResolvedValueOnce({ rows: [], rowCount: 2 } as never) // delete tiers
+      .mockResolvedValueOnce({ rows: [], rowCount: 2 } as never) // delete versions
+      .mockResolvedValueOnce({ rows: [], rowCount: 1 } as never) // delete period
+      .mockResolvedValueOnce({ rows: [{ id: 2 }] } as never) // prev period
+      .mockResolvedValueOnce({ rows: [], rowCount: 1 } as never) // reopen prev
+      .mockResolvedValueOnce({ rows: [] } as never); // COMMIT
+
+    await expect(routePricingService.deleteAdjustmentPeriod(3)).resolves.toEqual({
+      deleted_versions: 2,
+    });
   });
 });
