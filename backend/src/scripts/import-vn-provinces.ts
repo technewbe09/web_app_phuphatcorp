@@ -1,6 +1,6 @@
 /**
  * Import VN provinces + wards from vietnamese-provinces-database JSON.
- * Run after migration 033: npx tsx src/scripts/import-vn-provinces.ts
+ * Run after migration 039: npx tsx src/scripts/import-vn-provinces.ts
  * Source: https://github.com/thanglequoc/vietnamese-provinces-database
  */
 import 'dotenv/config';

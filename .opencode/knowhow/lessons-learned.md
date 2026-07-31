@@ -4,17 +4,6 @@ description: Ghi lại các bài học kinh nghiệm, bug đã fix, và pitfalls
 
 # Lessons Learned — PhuPhatCorp
 
-## Bug: Route pricing — race tạo chồng phiên bản giá (check-then-write)
-- **Ngày:** 2026-07-12
-- **Severity:** High
-- **Feature liên quan:** Giá theo tuyến (`createAbsolutePrice`, `adjustPercentGlobal`)
-- **Triệu chứng:** Hai request đồng thời (double-click / 2 admin) có thể tạo 2 phiên bản mở hoặc trùng `effective_from` → lookup/cước sai.
-- **Root cause:** Check “đã có version?” / “open versions?” chạy **ngoài** transaction; schema không có UNIQUE một open version / unique `(config, effective_from)`; `UPDATE` đóng version không kèm `WHERE effective_to IS NULL`.
-- **Fix:** Migration `036_route_price_versions_race_guards.sql` (partial unique open + unique effective_from). Service: toàn bộ check+write trong TX + `FOR UPDATE`; close chỉ khi `effective_to IS NULL` (assert rowCount); map PG `23505` → `ABSOLUTE_UPDATE_FORBIDDEN` / `OVERLAPPING_VERSION`.
-- **File sửa:** `backend/src/migrations/036_*.sql`, `backend/src/services/routePricingService.ts`, `apply-route-pricing-migrations.ts`
-- **Regression test:** `backend/src/__tests__/routePricingService.test.ts` — in-TX forbidden, unique map, adjust close race
-- **Cần chú ý:** Mọi check-then-write trên bảng giá/version phải khóa row trong TX **và** có UNIQUE DB làm hàng rào cuối. Không tin chỉ service-layer check.
-
 ---
 ## Bug: Delivery Data Processing — Vehicle sort wrong because sort key ≠ display key (.slice(-9))
 - **Ngày:** 2026-04-26
