@@ -6,7 +6,9 @@
     ".opencode/skills/test-qa/SKILL.md",
     ".opencode/skills/business-analyst/SKILL.md",
     ".opencode/skills/tech-lead/SKILL.md",
-    ".opencode/skills/ui-ux-design/SKILL.md"
+    ".opencode/skills/ui-ux-design/SKILL.md",
+    ".opencode/skills/perf-review/SKILL.md",
+    ".opencode/skills/business-analyst/SKILL.md"
   ],
   "permission": {
     "skill": {

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Upload, Plus, Pencil, AlertTriangle, RefreshCw, ToggleLeft, ToggleRight } from 'lucide-react';
 import { Pagination } from '../../../components/ui/Pagination';
 import { Card, CardContent } from '../../../components/ui/Card';
@@ -24,6 +25,7 @@ interface Toast {
 }
 
 export function VehicleCatalogPage() {
+  const navigate = useNavigate();
   const [modal, setModal] = useState<{ type: 'upload' } | { type: 'create' } | { type: 'edit'; vehicle: Vehicle } | null>(null);
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
@@ -176,7 +178,12 @@ export function VehicleCatalogPage() {
                         {(page - 1) * PAGE_SIZE + idx + 1}
                       </TableCell>
                       <TableCell className="font-mono font-medium text-neutral-900 dark:text-neutral-100">
-                        {vehicle.plate_number}
+                        <button
+                          onClick={() => navigate(`/catalog/vehicles/${vehicle.id}`)}
+                          className="text-blue-600 dark:text-blue-400 hover:underline cursor-pointer text-left"
+                        >
+                          {vehicle.plate_number}
+                        </button>
                       </TableCell>
                       <TableCell className="text-neutral-700 dark:text-neutral-300">
                         {vehicle.driver_name}

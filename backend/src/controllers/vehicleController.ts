@@ -236,6 +236,24 @@ export const vehicleController = {
     }
   },
 
+  async summary(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      const id = parseInt(req.params.id, 10);
+      const data = await vehicleService.getSummary(id);
+      sendSuccess(res, data, 'Thông tin tổng hợp xe');
+    } catch (err: unknown) {
+      if (err && typeof err === 'object' && 'code' in err) {
+        const e = err as { code: string };
+        if (e.code === 'NOT_FOUND') {
+          sendError(res, 'Không tìm thấy xe', 404);
+          return;
+        }
+      }
+      const error = err instanceof Error ? err.message : 'Unknown error';
+      sendError(res, 'Không thể tải thông tin tổng hợp', 500, error);
+    }
+  },
+
   async update(req: AuthRequest, res: Response): Promise<void> {
     try {
       const errors = validationResult(req);

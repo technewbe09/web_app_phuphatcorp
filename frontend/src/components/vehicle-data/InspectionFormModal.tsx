@@ -44,7 +44,7 @@ export function InspectionFormModal({ isOpen, onClose, onSuccess, onError, inspe
   const [uploadingFiles, setUploadingFiles] = useState(false);
 
 
-  const { data: vehiclesData } = useGetVehicles('', 'active', 1, 200);
+  const { data: vehiclesData } = useGetVehicles('', 'active', undefined, 1, 200);
   const vehicles = vehiclesData?.vehicles ?? [];
 
   useEffect(() => {

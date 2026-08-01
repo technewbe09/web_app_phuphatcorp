@@ -23,6 +23,7 @@ const upload = multer({
 router.use(authenticateToken);
 
 router.get('/', requirePermission('catalog.view'), vehicleController.getAll);
+router.get('/:id/summary', vehicleController.summary);
 router.post('/upload', requirePermission('catalog.manage'), upload.single('file'), vehicleController.upload);
 router.post('/', requirePermission('catalog.manage'), ...validate(vehicleCreateSchema), vehicleController.create);
 router.delete('/:id', requirePermission('catalog.manage'), ...validate(vehicleDeleteSchema), vehicleController.remove);

@@ -18,6 +18,7 @@ import { RiceDeliveryDataPage } from './pages/admin/RiceDeliveryDataPage';
 import { DeliveryImportPage } from './pages/admin/accounting-data/DeliveryImportPage';
 import { InvoiceMatchingPage } from './pages/admin/accounting-data/InvoiceMatchingPage';
 import { VehicleCatalogPage } from './pages/admin/catalog/VehicleCatalogPage';
+import { VehicleDetailPage } from './pages/admin/catalog/VehicleDetailPage';
 import { InnerCityCustomerPage } from './pages/admin/catalog/InnerCityCustomerPage';
 import { SupplierCatalogPage } from './pages/admin/catalog/SupplierCatalogPage';
 import { ReconcileJobPage } from './pages/admin/jobs/ReconcileJobPage';
@@ -26,6 +27,8 @@ import { FuelDataPage } from './pages/admin/fuel-data/FuelDataPage';
 import { FuelStatisticsPage } from './pages/admin/fuel-data/FuelStatisticsPage';
 import { InspectionPage } from './pages/admin/vehicle-data/InspectionPage';
 import { OilChangePage } from './pages/admin/vehicle-data/OilChangePage';
+import { InsurancePage } from './pages/admin/vehicle-data/InsurancePage';
+import { RepairPage } from './pages/admin/vehicle-data/RepairPage';
 import { RoutePricingPage } from './pages/route-pricing/RoutePricingPage';
 
 function PlaceholderPage({ title }: { title: string }) {
@@ -66,6 +69,8 @@ export function Router() {
             <Route path="/vehicle-data/driver-invoices" element={<DriverInvoicesPage />} />
             <Route path="/vehicle-data/inspections" element={<InspectionPage />} />
             <Route path="/vehicle-data/oil-changes" element={<OilChangePage />} />
+            <Route path="/vehicle-data/insurances" element={<InsurancePage />} />
+            <Route path="/vehicle-data/repairs" element={<RepairPage />} />
             {/* Dispatch */}
             <Route path="/dispatch/schedule" element={<SchedulePage />} />
             {/* Accounting Data */}
@@ -81,6 +86,7 @@ export function Router() {
             <Route path="/fuel-data/statistics" element={<FuelStatisticsPage />} />
             {/* Catalog */}
             <Route path="/catalog/vehicles" element={<VehicleCatalogPage />} />
+            <Route path="/catalog/vehicles/:id" element={<VehicleDetailPage />} />
             <Route path="/catalog/inner-city-customers" element={<InnerCityCustomerPage />} />
             <Route path="/catalog/suppliers" element={<SupplierCatalogPage />} />
             <Route path="/route-pricing" element={<RoutePricingPage />} />
