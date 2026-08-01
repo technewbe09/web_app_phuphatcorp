@@ -271,15 +271,9 @@ Base URL: `/api`
 | GET/POST/PUT/DELETE | /route-pricing/routes | view/manage | Scoped `supplier_id`; `ward_code` XOR `location_text`; `note` |
 | GET/POST/PUT/DELETE | /route-pricing/groups | view/manage | `ward_codes[]` XOR `location_text` (1 text) XOR residual; `note` → tên + unique |
 | GET/POST | /route-pricing/prices | view/manage | Absolute: `adjustment_period_id` + cascade kỳ sau; `pricing_mode` + range |
+| GET | /route-pricing/prices/matrix | view | Ma tran NCC: weight_tables[] + trips.rows |
 | PUT | /route-pricing/prices/groups/:routeGroupId/absolute | manage | Sửa giá gốc + recompute cascade |
 | GET | /route-pricing/lookup | view | `weight_mt` / `trips_per_vehicle_day`; `location_text`, `note` |
-
-**Schema CR periods (2026-07-31):** Migration `042_route_pricing_adjustment_periods.sql`
-- Table `route_pricing_adjustment_periods` (`start_date`, `end_date` nullable do BE, `percent≠0`, `note`)
-- `route_price_versions.adjustment_period_id` NOT NULL FK
-- Version không lưu `effective_from` / `effective_to` / `adjustment_percent` / `adjustment_batch_id` — API derive từ kỳ
-
-**Schema (merged in `040`):** location/note/modes/race guards như trước.
 
 **FE:** Tab Kỳ điều chỉnh / Nhóm tuyến / Bảng giá. Bỏ nút Điều chỉnh % riêng. Không sửa kỳ — muốn đổi thì xóa rồi tạo lại.
 

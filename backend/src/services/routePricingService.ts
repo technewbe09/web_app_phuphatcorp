@@ -3,6 +3,7 @@ import { pool } from '../config/database';
 import {
   AdjustmentPeriod, DeliveryRoute, LookupResult, PricingMode, Province, RouteGroup, RouteGroupMember,
   RoutePriceConfigSummary, RoutePriceTier, RoutePriceVersion, Ward,
+  PriceMatrixResponse, PriceMatrixTripsRow, PriceMatrixWeightColumn, PriceMatrixWeightTable,
   noteKey, normalizeLocation, roundToThousands,
 } from '../types/routePricing';
 
@@ -53,7 +54,7 @@ function closedRangesOverlap(aFrom: number, aTo: number | null, bFrom: number, b
 
 function validateTiers(mode: PricingMode, tiers: RoutePriceTier[]): void {
   if (mode === 'by_trips') {
-    if (tiers.length < 2) throw err('INVALID_TIERS', 'Chế độ chuyến/xe/ngày cần ít nhất 2 bậc');
+    if (tiers.length < 1) throw err('INVALID_TIERS', 'Chế độ chuyến/xe/ngày cần ít nhất 1 bậc');
   } else if (!tiers.length) {
     throw err('INVALID_TIERS', 'Cần ít nhất 1 bậc');
   }
@@ -178,7 +179,6 @@ function mapVersionRow(row: Record<string, unknown>, tiers: RoutePriceTier[]): R
     adjustment_percent: baseVersionId == null ? null : num(row.period_percent),
     base_version_id: baseVersionId,
     adjustment_period_id: num(row.adjustment_period_id),
-    note: (row.note as string | null) ?? null,
     tiers,
     created_at: String(row.created_at),
   };
@@ -229,13 +229,167 @@ function scaleTiers(tiers: RoutePriceTier[], percent: number): RoutePriceTier[] 
   }));
 }
 
+function formatTonNumber(n: number): string {
+  return Number.isInteger(n) ? String(n) : String(n);
+}
+
+/** Exported for unit tests — stable column/schema fingerprint for weight tiers. */
+export function weightTierColumnKey(tier: {
+  range_from: number;
+  range_to: number | null;
+  pricing_unit: string;
+  min_billable_ton?: number | null;
+}): string {
+  const min =
+    tier.min_billable_ton != null && Number(tier.min_billable_ton) > 0
+      ? `:min${Number(tier.min_billable_ton)}`
+      : '';
+  const to = tier.range_to == null ? 'inf' : String(Number(tier.range_to));
+  return `w:${Number(tier.range_from)}-${to}:${tier.pricing_unit}${min}`;
+}
+
+export function tierSchemaKey(tiers: RoutePriceTier[]): string {
+  return [...tiers]
+    .sort((a, b) => num(a.range_from) - num(b.range_from))
+    .map((t) =>
+      weightTierColumnKey({
+        range_from: num(t.range_from),
+        range_to: nullableNumber(t.range_to),
+        pricing_unit: t.pricing_unit,
+        min_billable_ton: nullableNumber(t.min_billable_ton),
+      }),
+    )
+    .join('|');
+}
+
+export function tierColumnKeys(tiers: RoutePriceTier[]): string[] {
+  const key = tierSchemaKey(tiers);
+  return key ? key.split('|') : [];
+}
+
+/** True when every key in `subset` appears in `superset` (order ignored). */
+export function isTierKeySubset(subset: string[], superset: string[]): boolean {
+  if (subset.length === 0) return true;
+  const set = new Set(superset);
+  return subset.every((k) => set.has(k));
+}
+
+/**
+ * Merge exact-match weight buckets when one schema's column keys are a subset of another's
+ * (e.g. missing ≤2.5 still shares a table with the full 2.5–8–16–23 set).
+ * Unrelated schemas (neither ⊆ the other) stay separate.
+ */
+export function mergeCompatibleWeightBuckets<T extends { columnKeys: string[]; groups: unknown[] }>(
+  buckets: T[],
+): T[][] {
+  const n = buckets.length;
+  if (n === 0) return [];
+  const parent = Array.from({ length: n }, (_, i) => i);
+  const find = (i: number): number => (parent[i] === i ? i : (parent[i] = find(parent[i])));
+  const unite = (a: number, b: number) => {
+    const ra = find(a);
+    const rb = find(b);
+    if (ra !== rb) parent[rb] = ra;
+  };
+  for (let i = 0; i < n; i++) {
+    for (let j = i + 1; j < n; j++) {
+      const a = buckets[i].columnKeys;
+      const b = buckets[j].columnKeys;
+      if (isTierKeySubset(a, b) || isTierKeySubset(b, a)) unite(i, j);
+    }
+  }
+  const clusters = new Map<number, T[]>();
+  for (let i = 0; i < n; i++) {
+    const root = find(i);
+    const list = clusters.get(root) ?? [];
+    list.push(buckets[i]);
+    clusters.set(root, list);
+  }
+  return [...clusters.values()];
+}
+
+function buildWeightColumnsFromTierLists(tierLists: RoutePriceTier[][]): PriceMatrixWeightColumn[] {
+  const byKey = new Map<string, RoutePriceTier>();
+  for (const tiers of tierLists) {
+    for (const tier of tiers) {
+      const key = weightTierColumnKey({
+        range_from: num(tier.range_from),
+        range_to: nullableNumber(tier.range_to),
+        pricing_unit: tier.pricing_unit,
+        min_billable_ton: nullableNumber(tier.min_billable_ton),
+      });
+      if (!byKey.has(key)) byKey.set(key, tier);
+    }
+  }
+  return buildWeightColumns([...byKey.values()]);
+}
+
+function formatWeightTierLabel(tier: RoutePriceTier): { label: string; hint: string | null; unit_label: string } {
+  const from = num(tier.range_from);
+  const to = nullableNumber(tier.range_to);
+  let label: string;
+  if (to == null) label = from <= 0 ? 'Mọi trọng lượng' : `>${formatTonNumber(from)}`;
+  else if (from <= 0) label = `≤ ${formatTonNumber(to)} tấn`;
+  else label = `>${formatTonNumber(from)}-${formatTonNumber(to)}`;
+  const hint =
+    tier.pricing_unit === 'tan' &&
+    tier.min_billable_ton != null &&
+    num(tier.min_billable_ton) > 0
+      ? `Cước tính min ${formatTonNumber(num(tier.min_billable_ton))} tấn`
+      : null;
+  const unit_label = tier.pricing_unit === 'chuyen' ? 'vnđ/chuyến' : 'vnđ/tấn';
+  return { label, hint, unit_label };
+}
+
+function formatTripsTierLabel(tier: RoutePriceTier): string {
+  const from = num(tier.range_from);
+  const to = nullableNumber(tier.range_to);
+  if (to == null) return `từ ${formatTonNumber(from)} chuyến/xe/ngày trở lên`;
+  if (from === to) return `${formatTonNumber(from)} chuyến/xe/ngày`;
+  return `${formatTonNumber(from)}–${formatTonNumber(to)} chuyến/xe/ngày`;
+}
+
+function buildWeightColumns(tiers: RoutePriceTier[]): PriceMatrixWeightColumn[] {
+  const sorted = [...tiers].sort((a, b) => num(a.range_from) - num(b.range_from));
+  const columns: PriceMatrixWeightColumn[] = sorted.map((tier) => {
+    const meta = formatWeightTierLabel(tier);
+    return {
+      key: weightTierColumnKey({
+        range_from: num(tier.range_from),
+        range_to: nullableNumber(tier.range_to),
+        pricing_unit: tier.pricing_unit,
+        min_billable_ton: nullableNumber(tier.min_billable_ton),
+      }),
+      kind: 'weight',
+      label: meta.label,
+      unit_label: meta.unit_label,
+      hint: meta.hint,
+      range_from: num(tier.range_from),
+      range_to: nullableNumber(tier.range_to),
+      pricing_unit: tier.pricing_unit,
+      min_billable_ton: nullableNumber(tier.min_billable_ton),
+    };
+  });
+  columns.push({
+    key: 'pallet',
+    kind: 'pallet',
+    label: 'Pallet',
+    unit_label: 'vnđ/pallet',
+    hint: null,
+  });
+  return columns;
+}
+
+function schemaLabelFromColumns(columns: PriceMatrixWeightColumn[]): string {
+  return columns.map((c) => c.label).join(' · ');
+}
+
 async function insertScaledVersionsFromBases(
   client: PoolClient,
   bases: Record<string, unknown>[],
   data: {
     percent: number;
     adjustment_period_id: number;
-    note?: string | null;
   },
   userId: number,
 ): Promise<number> {
@@ -254,15 +408,14 @@ async function insertScaledVersionsFromBases(
     const mode = parsePricingMode(old.pricing_mode ?? 'by_weight');
     const version = await client.query(
       `INSERT INTO route_price_versions
-        (price_config_id,pricing_mode,pallet_trip_price,base_version_id,adjustment_period_id,note,created_by)
-       VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id`,
+        (price_config_id,pricing_mode,pallet_trip_price,base_version_id,adjustment_period_id,created_by)
+       VALUES ($1,$2,$3,$4,$5,$6) RETURNING id`,
       [
         old.price_config_id,
         mode,
         roundToThousands(num(old.pallet_trip_price) * (1 + data.percent / 100)),
         old.id,
         data.adjustment_period_id,
-        data.note ?? null,
         userId,
       ],
     );
@@ -444,7 +597,6 @@ export const routePricingService = {
         {
           percent: data.percent,
           adjustment_period_id: inserted.rows[0].id,
-          note: cleanNote(data.note),
         },
         userId,
       );
@@ -751,12 +903,212 @@ export const routePricingService = {
     );
     return Promise.all(versions.rows.map(async (version) => mapVersionRow(version, await loadTiers(version.id))));
   },
+
+  async getPriceMatrix(supplierId: number): Promise<PriceMatrixResponse> {
+    if (!supplierId) throw err('MISSING_SUPPLIER');
+
+    const periodsResult = await pool.query(
+      `SELECT id, start_date, end_date, percent, note
+       FROM route_pricing_adjustment_periods
+       ORDER BY start_date ASC`,
+    );
+    const periods = periodsResult.rows.map((row) => ({
+      id: num(row.id),
+      start_date: toDateOnly(row.start_date),
+      end_date: toDateOnlyOrNull(row.end_date),
+      percent: num(row.percent),
+      note: (row.note as string | null) ?? null,
+    }));
+
+    const groups = await pool.query(
+      `SELECT g.id, g.name, g.is_residual, g.province_code, g.tinh, c.id AS config_id
+       FROM route_groups g
+       LEFT JOIN route_price_configs c ON c.route_group_id = g.id AND c.status = 'active'
+       WHERE g.supplier_id = $1 AND g.status = 'active'
+       ORDER BY g.tinh, g.name`,
+      [supplierId],
+    );
+
+    type GroupBundle = {
+      id: number;
+      name: string;
+      is_residual: boolean;
+      province_code: string;
+      tinh: string;
+      absolute: { id: number; pricing_mode: PricingMode; pallet_trip_price: number; tiers: RoutePriceTier[] } | null;
+      byPeriod: Map<number, { pallet_trip_price: number; tiers: RoutePriceTier[] }>;
+    };
+
+    const bundles: GroupBundle[] = [];
+    for (const group of groups.rows) {
+      const configId = group.config_id == null ? null : num(group.config_id);
+      const bundle: GroupBundle = {
+        id: num(group.id),
+        name: String(group.name),
+        is_residual: Boolean(group.is_residual),
+        province_code: String(group.province_code),
+        tinh: String(group.tinh),
+        absolute: null,
+        byPeriod: new Map(),
+      };
+      if (configId != null) {
+        const versions = await pool.query(
+          `${VERSION_SELECT} ${VERSION_JOIN} WHERE v.price_config_id=$1 ORDER BY p.start_date ASC`,
+          [configId],
+        );
+        for (const version of versions.rows) {
+          const tiers = await loadTiers(num(version.id));
+          const periodId = num(version.adjustment_period_id);
+          const pallet = num(version.pallet_trip_price);
+          bundle.byPeriod.set(periodId, { pallet_trip_price: pallet, tiers });
+          if (version.base_version_id == null) {
+            bundle.absolute = {
+              id: num(version.id),
+              pricing_mode: parsePricingMode(version.pricing_mode ?? 'by_weight'),
+              pallet_trip_price: pallet,
+              tiers,
+            };
+          }
+        }
+      }
+      bundles.push(bundle);
+    }
+
+    type ExactWeightBucket = {
+      schema_key: string;
+      columnKeys: string[];
+      groups: GroupBundle[];
+    };
+
+    const exactBuckets = new Map<string, ExactWeightBucket>();
+    for (const bundle of bundles) {
+      if (!bundle.absolute || bundle.absolute.pricing_mode !== 'by_weight') continue;
+      const key = tierSchemaKey(bundle.absolute.tiers);
+      let bucket = exactBuckets.get(key);
+      if (!bucket) {
+        bucket = { schema_key: key, columnKeys: tierColumnKeys(bundle.absolute.tiers), groups: [] };
+        exactBuckets.set(key, bucket);
+      }
+      bucket.groups.push(bundle);
+    }
+
+    const weight_tables: PriceMatrixWeightTable[] = mergeCompatibleWeightBuckets([...exactBuckets.values()])
+      .map((cluster) => {
+        const groups = cluster.flatMap((b) => b.groups);
+        const columns = buildWeightColumnsFromTierLists(
+          groups.map((g) => g.absolute!.tiers),
+        );
+        const schema_key = columns
+          .filter((c) => c.kind === 'weight')
+          .map((c) => c.key)
+          .join('|');
+        const sortedGroups = [...groups].sort((a, b) =>
+          a.tinh === b.tinh ? a.name.localeCompare(b.name, 'vi') : a.tinh.localeCompare(b.tinh, 'vi'),
+        );
+        const rows = sortedGroups.map((bundle, index) => {
+          const cells: Record<string, Record<string, number | null>> = {};
+          for (const period of periods) {
+            const version = bundle.byPeriod.get(period.id);
+            const periodCells: Record<string, number | null> = {};
+            for (const col of columns) {
+              if (col.kind === 'pallet') {
+                periodCells[col.key] = version ? version.pallet_trip_price : null;
+                continue;
+              }
+              if (!version) {
+                periodCells[col.key] = null;
+                continue;
+              }
+              const tier = version.tiers.find(
+                (t) =>
+                  weightTierColumnKey({
+                    range_from: num(t.range_from),
+                    range_to: nullableNumber(t.range_to),
+                    pricing_unit: t.pricing_unit,
+                    min_billable_ton: nullableNumber(t.min_billable_ton),
+                  }) === col.key,
+              );
+              periodCells[col.key] = tier ? num(tier.price) : null;
+            }
+            cells[String(period.id)] = periodCells;
+          }
+          return {
+            stt: index + 1,
+            route_group_id: bundle.id,
+            group_name: bundle.name,
+            is_residual: bundle.is_residual,
+            province_code: bundle.province_code,
+            tinh: bundle.tinh,
+            cells,
+          };
+        });
+        return {
+          schema_key,
+          schema_label: schemaLabelFromColumns(columns),
+          columns,
+          rows,
+        };
+      })
+      .sort((a, b) => {
+        if (b.rows.length !== a.rows.length) return b.rows.length - a.rows.length;
+        return a.schema_key.localeCompare(b.schema_key);
+      });
+
+    const tripBundles = bundles
+      .filter((b) => b.absolute?.pricing_mode === 'by_trips')
+      .sort((a, b) =>
+        a.tinh === b.tinh ? a.name.localeCompare(b.name, 'vi') : a.tinh.localeCompare(b.tinh, 'vi'),
+      );
+
+    const tripsRows: PriceMatrixTripsRow[] = [];
+    let tripsStt = 0;
+    for (const bundle of tripBundles) {
+      const abs = bundle.absolute!;
+      const tierRows = [...abs.tiers].sort((a, b) => num(a.range_from) - num(b.range_from));
+      for (const tier of tierRows) {
+        tripsStt += 1;
+        const cells: Record<string, number | null> = {};
+        for (const period of periods) {
+          const version = bundle.byPeriod.get(period.id);
+          if (!version) {
+            cells[String(period.id)] = null;
+            continue;
+          }
+          const matched = version.tiers.find(
+            (t) =>
+              num(t.range_from) === num(tier.range_from) &&
+              nullableNumber(t.range_to) === nullableNumber(tier.range_to),
+          );
+          cells[String(period.id)] = matched ? num(matched.price) : null;
+        }
+        tripsRows.push({
+          stt: tripsStt,
+          route_group_id: bundle.id,
+          group_name: bundle.name,
+          is_residual: bundle.is_residual,
+          province_code: bundle.province_code,
+          tinh: bundle.tinh,
+          row_kind: 'trips',
+          trips_label: formatTripsTierLabel(tier),
+          range_from: num(tier.range_from),
+          range_to: nullableNumber(tier.range_to),
+          cells,
+        });
+      }
+    }
+
+    return {
+      periods,
+      weight_tables,
+      trips: { rows: tripsRows },
+    };
+  },
+
   async createAbsolutePrice(data: {
     route_group_id: number;
     adjustment_period_id: number;
     pricing_mode: PricingMode;
     pallet_trip_price: number;
-    note?: string | null;
     tiers: RoutePriceTier[];
   }, userId: number): Promise<RoutePriceVersion> {
     const mode = parsePricingMode(data.pricing_mode);
@@ -796,9 +1148,9 @@ export const routePricingService = {
 
       const absolute = await client.query(
         `INSERT INTO route_price_versions
-          (price_config_id,pricing_mode,pallet_trip_price,note,adjustment_period_id,created_by)
-         VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,
-        [configId, mode, data.pallet_trip_price, data.note ?? null, data.adjustment_period_id, userId],
+          (price_config_id,pricing_mode,pallet_trip_price,adjustment_period_id,created_by)
+         VALUES ($1,$2,$3,$4,$5) RETURNING *`,
+        [configId, mode, data.pallet_trip_price, data.adjustment_period_id, userId],
       );
       await insertTiers(client, absolute.rows[0].id, mode, data.tiers);
 
@@ -812,15 +1164,14 @@ export const routePricingService = {
         const scaledPallet = roundToThousands(num(prevPallet) * (1 + percent / 100));
         const version = await client.query(
           `INSERT INTO route_price_versions
-            (price_config_id,pricing_mode,pallet_trip_price,base_version_id,adjustment_period_id,note,created_by)
-           VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
+            (price_config_id,pricing_mode,pallet_trip_price,base_version_id,adjustment_period_id,created_by)
+           VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,
           [
             configId,
             mode,
             scaledPallet,
             prevId,
             period.id,
-            cleanNote(period.note),
             userId,
           ],
         );
@@ -844,7 +1195,6 @@ export const routePricingService = {
     data: {
       pricing_mode: PricingMode;
       pallet_trip_price: number;
-      note?: string | null;
       tiers: RoutePriceTier[];
     },
     userId: number,
@@ -875,9 +1225,9 @@ export const routePricingService = {
 
       await client.query(
         `UPDATE route_price_versions
-         SET pricing_mode=$1, pallet_trip_price=$2, note=$3
-         WHERE id=$4`,
-        [mode, data.pallet_trip_price, data.note ?? null, absoluteId],
+         SET pricing_mode=$1, pallet_trip_price=$2
+         WHERE id=$3`,
+        [mode, data.pallet_trip_price, absoluteId],
       );
       await client.query(`DELETE FROM route_price_tiers WHERE price_version_id=$1`, [absoluteId]);
       await insertTiers(client, absoluteId, mode, data.tiers);
@@ -907,15 +1257,14 @@ export const routePricingService = {
           const scaledPallet = roundToThousands(num(prevPallet) * (1 + percent / 100));
           const version = await client.query(
             `INSERT INTO route_price_versions
-              (price_config_id,pricing_mode,pallet_trip_price,base_version_id,adjustment_period_id,note,created_by)
-             VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id`,
+              (price_config_id,pricing_mode,pallet_trip_price,base_version_id,adjustment_period_id,created_by)
+             VALUES ($1,$2,$3,$4,$5,$6) RETURNING id`,
             [
               config.rows[0].id,
               mode,
               scaledPallet,
               prevId,
               period.id,
-              cleanNote(period.note),
               userId,
             ],
           );

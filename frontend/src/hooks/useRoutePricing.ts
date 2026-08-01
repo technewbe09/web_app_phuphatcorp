@@ -55,6 +55,14 @@ export function usePriceVersions(configId?: number) {
   });
 }
 
+export function usePriceMatrix(supplierId?: number) {
+  return useQuery({
+    queryKey: ['route-pricing', 'prices-matrix', supplierId],
+    queryFn: () => routePricingApi.getPriceMatrix(supplierId!),
+    enabled: Boolean(supplierId),
+  });
+}
+
 export function useAdjustmentPeriods() {
   return useQuery({
     queryKey: ['route-pricing', 'adjustment-periods'],
@@ -108,7 +116,6 @@ export function useRoutePricingMutations(supplierId?: number) {
         adjustment_period_id: number;
         pricing_mode: 'by_weight' | 'by_trips';
         pallet_trip_price: number;
-        note?: string | null;
         tiers: PriceTierInput[];
       }) => routePricingApi.createPrice(body),
       onSuccess: invalidate,
@@ -121,7 +128,6 @@ export function useRoutePricingMutations(supplierId?: number) {
         routeGroupId: number;
         pricing_mode: 'by_weight' | 'by_trips';
         pallet_trip_price: number;
-        note?: string | null;
         tiers: PriceTierInput[];
       }) => routePricingApi.updateAbsolutePrice(routeGroupId, body),
       onSuccess: invalidate,

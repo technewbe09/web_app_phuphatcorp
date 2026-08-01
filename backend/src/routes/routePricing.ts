@@ -11,6 +11,7 @@ import {
   priceCreateSchema,
   priceUpdateAbsoluteSchema,
   pricesListSchema,
+  pricesMatrixSchema,
   routeCreateSchema,
   routeDeleteSchema,
   routePricingController,
@@ -106,6 +107,12 @@ router.get(
   requirePermission('route_pricing.view'),
   ...validate(pricesListSchema),
   routePricingController.listPrices,
+);
+router.get(
+  '/prices/matrix',
+  requirePermission('route_pricing.view'),
+  ...validate(pricesMatrixSchema),
+  routePricingController.getPriceMatrix,
 );
 router.get(
   '/prices/:configId/versions',

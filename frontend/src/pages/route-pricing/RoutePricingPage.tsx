@@ -12,6 +12,7 @@ import {
   useRoutePricingMutations,
   useWards,
 } from '../../hooks/useRoutePricing';
+import { PriceMatrixTab } from './PriceMatrixTab';
 import { useAuth } from '../../hooks/useAuth';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
@@ -37,7 +38,7 @@ import type {
 } from '../../api/routePricingApi';
 import { formatDate } from '../../utils/format';
 
-type TabKey = 'periods' | 'groups' | 'prices';
+type TabKey = 'periods' | 'groups' | 'prices' | 'manage';
 
 function formatPercentLabel(percent: number): string {
   const abs = Math.abs(percent);
@@ -88,7 +89,10 @@ export function RoutePricingPage() {
     : undefined;
   const tabParam = params.get('tab');
   const tab: TabKey =
-    tabParam === 'prices' || tabParam === 'groups' || tabParam === 'periods'
+    tabParam === 'prices' ||
+    tabParam === 'groups' ||
+    tabParam === 'periods' ||
+    tabParam === 'manage'
       ? tabParam
       : 'groups';
 
@@ -158,6 +162,7 @@ export function RoutePricingPage() {
           [
             ['periods', 'Kỳ điều chỉnh'],
             ['groups', 'Nhóm tuyến'],
+            ['manage', 'Quản lý giá'],
             ['prices', 'Bảng giá'],
           ] as const
         ).map(([k, label]) => (
@@ -187,7 +192,8 @@ export function RoutePricingPage() {
       {tab === 'groups' && supplierId && (
         <GroupsTab supplierId={supplierId} canManage={canManage} />
       )}
-      {tab === 'prices' && supplierId && (
+      {tab === 'prices' && supplierId && <PriceMatrixTab supplierId={supplierId} />}
+      {tab === 'manage' && supplierId && (
         <PricesTab supplierId={supplierId} canManage={canManage} />
       )}
     </div>
@@ -213,7 +219,7 @@ function GroupsTab({
   const openPrices = (groupId: number) => {
     setParams((prev) => {
       const next = new URLSearchParams(prev);
-      next.set('tab', 'prices');
+      next.set('tab', 'manage');
       next.set('groupId', String(groupId));
       return next;
     });
@@ -782,10 +788,6 @@ function PriceVersionCard({
         </p>
       )}
 
-      {version.note && (
-        <p className="text-xs text-neutral-500">Ghi chú: {version.note}</p>
-      )}
-
       <table className="w-full text-sm">
         <thead>
           <tr className="text-left text-neutral-500 border-b border-neutral-200 dark:border-neutral-700">
@@ -895,11 +897,7 @@ function PriceFormModal({
   const { data: periods = [], isLoading: periodsLoading } = useAdjustmentPeriods();
   const isEdit = Boolean(editVersion);
   const [periodId, setPeriodId] = useState(
-    editVersion?.adjustment_period_id
-      ? String(editVersion.adjustment_period_id)
-      : periods[periods.length - 1]
-        ? String([...periods].sort((a, b) => a.start_date.localeCompare(b.start_date))[0]?.id ?? '')
-        : '',
+    editVersion?.adjustment_period_id ? String(editVersion.adjustment_period_id) : '',
   );
   const [pallet, setPallet] = useState(String(editVersion?.pallet_trip_price ?? '0'));
   const [pricingMode, setPricingMode] = useState<PricingMode>(
@@ -911,13 +909,15 @@ function PriceFormModal({
       : WEIGHT_TEMPLATE.map((t) => ({ ...t })),
   );
 
-  useEffect(() => {
-    if (isEdit || periodId || periods.length === 0) return;
+  const earliestPeriodId = useMemo(() => {
+    if (periods.length === 0) return '';
     const earliest = [...periods].sort((a, b) => a.start_date.localeCompare(b.start_date))[0];
-    if (earliest) setPeriodId(String(earliest.id));
-  }, [periods, periodId, isEdit]);
+    return earliest ? String(earliest.id) : '';
+  }, [periods]);
 
-  const selectedPeriod = periods.find((p) => String(p.id) === periodId);
+  // Derive default kỳ gốc when periods load — avoid setState-in-effect.
+  const effectivePeriodId = isEdit ? periodId : periodId || earliestPeriodId;
+  const selectedPeriod = periods.find((p) => String(p.id) === effectivePeriodId);
 
   const switchMode = (mode: PricingMode) => {
     if (mode === pricingMode) return;
@@ -943,7 +943,14 @@ function PriceFormModal({
 
   const addTripsTier = () => {
     setTiers((prev) => {
-      if (prev.length < 2) return tripsTemplate();
+      if (prev.length === 0) return tripsTemplate();
+      if (prev.length === 1) {
+        const price = prev[0].price;
+        return rechainTrips([
+          { range_from: 1, range_to: 1, pricing_unit: 'chuyen', price },
+          { range_from: 2, range_to: null, pricing_unit: 'chuyen', price: 0 },
+        ]);
+      }
       const copy = prev.map((t) => ({ ...t }));
       const lastIdx = copy.length - 1;
       const prevIdx = lastIdx - 1;
@@ -980,7 +987,7 @@ function PriceFormModal({
           <div>
             <Select
               label="Kỳ gốc *"
-              value={periodId}
+              value={effectivePeriodId}
               onChange={(e) => setPeriodId(e.target.value)}
               options={[
                 {
@@ -1150,7 +1157,6 @@ function PriceFormModal({
           {pricingMode === 'by_trips' &&
             tiers.map((t, idx) => {
               const isLast = idx === tiers.length - 1;
-              const isFirst = idx === 0;
               return (
                 <div
                   key={idx}
@@ -1190,7 +1196,7 @@ function PriceFormModal({
                     type="button"
                     className="p-2 text-red-600 disabled:cursor-not-allowed disabled:opacity-40"
                     title="Xóa bậc"
-                    disabled={tiers.length <= 2 || isFirst || isLast}
+                    disabled={tiers.length <= 1}
                     onClick={() =>
                       setTiers((previous) => rechainTrips(previous.filter((_, i) => i !== idx)))
                     }
@@ -1217,11 +1223,6 @@ function PriceFormModal({
           >
             + Thêm bậc
           </Button>
-          {pricingMode === 'by_trips' && (
-            <p className="text-xs text-neutral-500">
-              Bậc đầu từ 1; đổi Đến sẽ tự cập nhật bậc sau (liền mạch đến ∞)
-            </p>
-          )}
         </div>
         <div className="flex justify-end gap-2">
           <Button variant="outline" onClick={onClose}>
@@ -1231,7 +1232,7 @@ function PriceFormModal({
             disabled={
               mutations.createPrice.isPending ||
               mutations.updateAbsolutePrice.isPending ||
-              (!isEdit && !periodId)
+              (!isEdit && !effectivePeriodId)
             }
             onClick={() => {
               const normalizedTiers =
@@ -1267,7 +1268,7 @@ function PriceFormModal({
               mutations.createPrice.mutate(
                 {
                   route_group_id: routeGroupId,
-                  adjustment_period_id: Number(periodId),
+                  adjustment_period_id: Number(effectivePeriodId),
                   pricing_mode: pricingMode,
                   pallet_trip_price: Number(pallet),
                   tiers: normalizedTiers,

@@ -122,7 +122,6 @@ CREATE TABLE IF NOT EXISTS route_price_versions (
   adjustment_percent  NUMERIC(8,4),
   adjustment_batch_id UUID,
   base_version_id     INTEGER REFERENCES route_price_versions(id),
-  note                TEXT,
   created_by          INTEGER REFERENCES users(id),
   created_at          TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 );

@@ -283,7 +283,6 @@ CREATE TABLE IF NOT EXISTS route_price_versions (
   adjustment_percent  NUMERIC(8,4),                  -- NULL nếu phiên bản gốc (tuyệt đối)
   adjustment_batch_id UUID,                          -- cùng UUID cho mọi NCC trong 1 lần adjust %
   base_version_id     INTEGER REFERENCES route_price_versions(id),
-  note                TEXT,
   created_by          INTEGER REFERENCES users(id),
   created_at          TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
@@ -400,7 +399,6 @@ POST   /api/route-pricing/prices
     route_group_id,
     effective_from,
     pallet_trip_price,
-    note?,
     tiers: [{ from_ton, to_ton?, pricing_unit, price, min_billable_ton? }]
   }
   → 201 tạo config + phiên bản GỐC (số tuyệt đối)
@@ -410,7 +408,6 @@ POST   /api/route-pricing/prices/adjust   (toàn hệ thống — mọi NCC)
   Body: {
     percent,                  -- e.g. 8 = +8%; -5 = giảm 5%
     effective_from,
-    note?
   }
   → 201 {
       adjustment_batch_id,

@@ -101,6 +101,10 @@ export const pricesListSchema: ValidationChain[] = [
   query('supplier_id').isInt({ min: 1 }).withMessage('supplier_id là bắt buộc'),
 ];
 
+export const pricesMatrixSchema: ValidationChain[] = [
+  query('supplier_id').isInt({ min: 1 }).withMessage('supplier_id là bắt buộc'),
+];
+
 export const priceCreateSchema: ValidationChain[] = [
   body('route_group_id').isInt({ min: 1 }),
   body('adjustment_period_id').isInt({ min: 1 }).withMessage('adjustment_period_id là bắt buộc'),
@@ -123,7 +127,6 @@ export const priceCreateSchema: ValidationChain[] = [
     })
     .custom((v) => v == null || (typeof v === 'number' ? v > 0 : parseFloat(String(v)) > 0))
     .withMessage('min_billable_ton phải > 0 hoặc để trống'),
-  body('note').optional({ nullable: true }),
 ];
 
 export const priceUpdateAbsoluteSchema: ValidationChain[] = [
@@ -147,7 +150,6 @@ export const priceUpdateAbsoluteSchema: ValidationChain[] = [
     })
     .custom((v) => v == null || (typeof v === 'number' ? v > 0 : parseFloat(String(v)) > 0))
     .withMessage('min_billable_ton phải > 0 hoặc để trống'),
-  body('note').optional({ nullable: true }),
 ];
 
 export const periodCreateSchema: ValidationChain[] = [
@@ -302,6 +304,16 @@ export const routePricingController = {
     }
   },
 
+  async getPriceMatrix(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      const supplierId = parseInt(String(req.query.supplier_id), 10);
+      const data = await routePricingService.getPriceMatrix(supplierId);
+      sendSuccess(res, data, 'Bảng giá ma trận');
+    } catch (err) {
+      handleServiceError(res, err, 'Không tải được bảng giá ma trận');
+    }
+  },
+
   async listVersions(req: AuthRequest, res: Response): Promise<void> {
     try {
       const configId = parseInt(req.params.configId, 10);
@@ -320,7 +332,6 @@ export const routePricingController = {
           adjustment_period_id: Number(req.body.adjustment_period_id),
           pricing_mode: req.body.pricing_mode,
           pallet_trip_price: Number(req.body.pallet_trip_price),
-          note: req.body.note,
           tiers: req.body.tiers,
         },
         req.user!.userId,
@@ -339,7 +350,6 @@ export const routePricingController = {
         {
           pricing_mode: req.body.pricing_mode,
           pallet_trip_price: Number(req.body.pallet_trip_price),
-          note: req.body.note,
           tiers: req.body.tiers,
         },
         req.user!.userId,

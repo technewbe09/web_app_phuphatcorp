@@ -78,7 +78,6 @@ export interface RoutePriceVersion {
   adjustment_percent: number | null;
   base_version_id?: number | null;
   adjustment_period_id: number;
-  note: string | null;
   tiers: PriceTierInput[];
   created_at?: string;
 }
@@ -99,6 +98,59 @@ export interface LookupResult {
   don_vi: 'Chuyến' | 'Tấn';
   price: number;
   group_name: string;
+}
+
+export interface PriceMatrixPeriod {
+  id: number;
+  start_date: string;
+  end_date: string | null;
+  percent: number;
+  note: string | null;
+}
+
+export interface PriceMatrixWeightColumn {
+  key: string;
+  kind: 'pallet' | 'weight';
+  label: string;
+  unit_label: string;
+  hint?: string | null;
+}
+
+export interface PriceMatrixWeightRow {
+  stt: number;
+  route_group_id: number;
+  group_name: string;
+  is_residual: boolean;
+  province_code: string;
+  tinh: string;
+  cells: Record<string, Record<string, number | null>>;
+}
+
+export interface PriceMatrixWeightTable {
+  schema_key: string;
+  schema_label: string;
+  columns: PriceMatrixWeightColumn[];
+  rows: PriceMatrixWeightRow[];
+}
+
+export interface PriceMatrixTripsRow {
+  stt: number;
+  route_group_id: number;
+  group_name: string;
+  is_residual: boolean;
+  province_code: string;
+  tinh: string;
+  row_kind: 'pallet' | 'trips';
+  trips_label: string;
+  range_from: number | null;
+  range_to: number | null;
+  cells: Record<string, number | null>;
+}
+
+export interface PriceMatrixResponse {
+  periods: PriceMatrixPeriod[];
+  weight_tables: PriceMatrixWeightTable[];
+  trips: { rows: PriceMatrixTripsRow[] };
 }
 
 export const routePricingApi = {
@@ -197,6 +249,13 @@ export const routePricingApi = {
     return res.data.data;
   },
 
+  getPriceMatrix: async (supplier_id: number): Promise<PriceMatrixResponse> => {
+    const res = await axiosClient.get<{ data: PriceMatrixResponse }>('/route-pricing/prices/matrix', {
+      params: { supplier_id },
+    });
+    return res.data.data;
+  },
+
   listVersions: async (configId: number): Promise<RoutePriceVersion[]> => {
     const res = await axiosClient.get<{ data: RoutePriceVersion[] }>(
       `/route-pricing/prices/${configId}/versions`,
@@ -209,7 +268,6 @@ export const routePricingApi = {
     adjustment_period_id: number;
     pricing_mode: PricingMode;
     pallet_trip_price: number;
-    note?: string | null;
     tiers: PriceTierInput[];
   }): Promise<RoutePriceVersion> => {
     const res = await axiosClient.post<{ data: RoutePriceVersion }>('/route-pricing/prices', body);
@@ -221,7 +279,6 @@ export const routePricingApi = {
     body: {
       pricing_mode: PricingMode;
       pallet_trip_price: number;
-      note?: string | null;
       tiers: PriceTierInput[];
     },
   ): Promise<RoutePriceVersion> => {

@@ -87,7 +87,6 @@ export interface RoutePriceVersion {
   adjustment_percent: number | null;
   base_version_id: number | null;
   adjustment_period_id: number;
-  note: string | null;
   tiers: RoutePriceTier[];
   created_at: string;
 }
@@ -116,6 +115,63 @@ export interface LookupResult {
   price: number;
   billable_ton: number | null;
   pallet_trip_price: number;
+}
+
+export interface PriceMatrixPeriod {
+  id: number;
+  start_date: string;
+  end_date: string | null;
+  percent: number;
+  note: string | null;
+}
+
+export interface PriceMatrixWeightColumn {
+  key: string;
+  kind: 'pallet' | 'weight';
+  label: string;
+  unit_label: string;
+  hint?: string | null;
+  range_from?: number;
+  range_to?: number | null;
+  pricing_unit?: PricingUnit;
+  min_billable_ton?: number | null;
+}
+
+export interface PriceMatrixWeightRow {
+  stt: number;
+  route_group_id: number;
+  group_name: string;
+  is_residual: boolean;
+  province_code: string;
+  tinh: string;
+  cells: Record<string, Record<string, number | null>>;
+}
+
+export interface PriceMatrixWeightTable {
+  schema_key: string;
+  schema_label: string;
+  columns: PriceMatrixWeightColumn[];
+  rows: PriceMatrixWeightRow[];
+}
+
+export interface PriceMatrixTripsRow {
+  stt: number;
+  route_group_id: number;
+  group_name: string;
+  is_residual: boolean;
+  province_code: string;
+  tinh: string;
+  row_kind: 'pallet' | 'trips';
+  trips_label: string;
+  range_from: number | null;
+  range_to: number | null;
+  cells: Record<string, number | null>;
+}
+
+export interface PriceMatrixResponse {
+  periods: PriceMatrixPeriod[];
+  weight_tables: PriceMatrixWeightTable[];
+  trips: { rows: PriceMatrixTripsRow[] };
 }
 
 export function roundToThousands(value: number): number {

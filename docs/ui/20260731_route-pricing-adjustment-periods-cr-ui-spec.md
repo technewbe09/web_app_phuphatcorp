@@ -16,7 +16,6 @@
 7. **Không cho sửa kỳ.** Chỉ **Thêm** và **Xóa kỳ gần nhất**. Muốn đổi %/ngày → xóa kỳ gần nhất rồi tạo lại.
 8. **Xóa kỳ gần nhất = rollback:** vì Thêm kỳ đã tạo/gắn version ngay. Xóa = xóa mọi `route_price_versions` gắn kỳ đó + xóa kỳ + mở lại kỳ trước (`end_date=NULL`). Nếu kỳ đó là kỳ gốc của một nhóm (version absolute), cascade absolute cũng bị xóa theo.
 9. **Version giá gắn kỳ (`adjustment_period_id` bắt buộc).** Ngày hiệu lực / ngày kết thúc / % điều chỉnh của version **suy từ kỳ** (không lưu trùng trên `route_price_versions`). API/UI vẫn hiển thị các field derived đó như hiện tại.
-10. **Note kỳ ≠ note bảng giá.** Không đồng bộ giữa hai loại ghi chú.
 
 ---
 
@@ -193,7 +192,6 @@ Endpoint `POST /prices/adjust` (nếu còn) cũng gỡ — không còn `effectiv
 
 Prefill tiers/mode/pallet; kỳ gốc readonly.  
 Lưu → cập nhật absolute + recompute cascade kỳ tiếp theo.  
-**Note trên form này là note bảng giá** — không đụng note kỳ.
 
 ---
 

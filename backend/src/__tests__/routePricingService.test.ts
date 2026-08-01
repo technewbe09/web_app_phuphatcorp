@@ -1,5 +1,5 @@
 import { noteKey, normalizeLocation, roundToThousands } from '../types/routePricing';
-import { routePricingService } from '../services/routePricingService';
+import { routePricingService, tierSchemaKey, weightTierColumnKey, isTierKeySubset, mergeCompatibleWeightBuckets, tierColumnKeys } from '../services/routePricingService';
 import { pool } from './__mocks__/database';
 
 const mockPool = pool as jest.Mocked<typeof pool>;
@@ -23,6 +23,65 @@ const sampleTripsTiers = [
   { range_from: 1, range_to: 2, pricing_unit: 'chuyen' as const, price: 1_500_000 },
   { range_from: 3, range_to: null, pricing_unit: 'chuyen' as const, price: 1_200_000 },
 ];
+
+describe('Price matrix schema helpers', () => {
+  const schemaA = [
+    { range_from: 0, range_to: 2.5, pricing_unit: 'chuyen' as const, price: 1 },
+    { range_from: 2.5, range_to: 8, pricing_unit: 'tan' as const, price: 1, min_billable_ton: 5 },
+    { range_from: 8, range_to: null, pricing_unit: 'tan' as const, price: 1 },
+  ];
+  const schemaB = [
+    { range_from: 0, range_to: 3, pricing_unit: 'chuyen' as const, price: 1 },
+    { range_from: 3, range_to: 7, pricing_unit: 'tan' as const, price: 1 },
+    { range_from: 7, range_to: 10, pricing_unit: 'tan' as const, price: 1 },
+    { range_from: 10, range_to: null, pricing_unit: 'tan' as const, price: 1 },
+  ];
+
+  it('weightTierColumnKey is stable and includes min billable', () => {
+    expect(weightTierColumnKey(schemaA[1])).toBe('w:2.5-8:tan:min5');
+    expect(weightTierColumnKey(schemaA[2])).toBe('w:8-inf:tan');
+  });
+
+  it('tierSchemaKey groups identical schemas and separates different ones', () => {
+    const shuffled = [schemaA[2], schemaA[0], schemaA[1]];
+    expect(tierSchemaKey(shuffled)).toBe(tierSchemaKey(schemaA));
+    expect(tierSchemaKey(schemaA)).not.toBe(tierSchemaKey(schemaB));
+  });
+
+  it('pallet is not part of schema key', () => {
+    expect(tierSchemaKey(schemaA).includes('pallet')).toBe(false);
+  });
+
+  it('subset schemas merge; unrelated schemas stay separate', () => {
+    const full251623 = [
+      { range_from: 0, range_to: 2.5, pricing_unit: 'chuyen' as const, price: 1 },
+      { range_from: 8, range_to: 16, pricing_unit: 'tan' as const, price: 1 },
+      { range_from: 16, range_to: 23, pricing_unit: 'tan' as const, price: 1 },
+      { range_from: 23, range_to: null, pricing_unit: 'tan' as const, price: 1 },
+    ];
+    const withoutLow = [
+      { range_from: 8, range_to: 16, pricing_unit: 'tan' as const, price: 1 },
+      { range_from: 16, range_to: 23, pricing_unit: 'tan' as const, price: 1 },
+      { range_from: 23, range_to: null, pricing_unit: 'tan' as const, price: 1 },
+    ];
+    const fullKeys = tierColumnKeys(full251623);
+    const withoutKeys = tierColumnKeys(withoutLow);
+    expect(isTierKeySubset(withoutKeys, fullKeys)).toBe(true);
+    expect(isTierKeySubset(fullKeys, withoutKeys)).toBe(false);
+    expect(isTierKeySubset(tierColumnKeys(schemaA), tierColumnKeys(schemaB))).toBe(false);
+
+    const clusters = mergeCompatibleWeightBuckets([
+      { columnKeys: withoutKeys, groups: [1] },
+      { columnKeys: fullKeys, groups: [2] },
+      { columnKeys: tierColumnKeys(schemaB), groups: [3] },
+    ]);
+    expect(clusters).toHaveLength(2);
+    const merged = clusters.find((c) => c.length === 2);
+    const alone = clusters.find((c) => c.length === 1);
+    expect(merged?.flatMap((b) => b.groups).sort()).toEqual([1, 2]);
+    expect(alone?.[0].groups).toEqual([3]);
+  });
+});
 
 describe('roundToThousands', () => {
   it('rounds to nearest thousand', () => {
@@ -102,19 +161,20 @@ describe('CR: pricing modes', () => {
     ).rejects.toMatchObject({ code: 'INVALID_TIERS' });
   });
 
-  it('createAbsolutePrice rejects trips mode with single tier', async () => {
+  it('createAbsolutePrice allows trips mode with single open tier from 1', async () => {
+    // Passes validateTiers; without DB mocks fails later — must not be INVALID_TIERS
     await expect(
       routePricingService.createAbsolutePrice(
         {
           route_group_id: 10,
           adjustment_period_id: 1,
           pricing_mode: 'by_trips',
-          pallet_trip_price: 800000,
+          pallet_trip_price: 0,
           tiers: [{ range_from: 1, range_to: null, pricing_unit: 'chuyen', price: 1500000 }],
         },
         1,
       ),
-    ).rejects.toMatchObject({ code: 'INVALID_TIERS' });
+    ).rejects.not.toMatchObject({ code: 'INVALID_TIERS' });
   });
 });
 
