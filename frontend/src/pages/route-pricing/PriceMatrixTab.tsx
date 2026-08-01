@@ -1,5 +1,6 @@
-import { useCallback, useLayoutEffect, useRef, useState } from 'react';
+import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { formatDate } from '../../utils/format';
+import { Select } from '../../components/ui/Select';
 import { usePriceMatrix } from '../../hooks/useRoutePricing';
 import type {
   PriceMatrixPeriod,
@@ -31,6 +32,25 @@ function periodTone(index: number): string {
 function formatMoney(value: number | null | undefined): string {
   if (value == null) return '';
   return Number(value).toLocaleString('vi-VN');
+}
+
+/** Kỳ đang mở (end_date null); fallback = start_date lớn nhất. */
+function resolveCurrentPeriod(periods: PriceMatrixPeriod[]): PriceMatrixPeriod | null {
+  if (periods.length === 0) return null;
+  const open = periods.find((p) => p.end_date == null);
+  if (open) return open;
+  return [...periods].sort((a, b) => b.start_date.localeCompare(a.start_date))[0] ?? null;
+}
+
+/** Các kỳ từ kỳ chọn (inclusive) đến hiện tại — so sánh theo start_date. */
+function visiblePeriodsFrom(
+  periods: PriceMatrixPeriod[],
+  fromPeriodId: string,
+): PriceMatrixPeriod[] {
+  if (!fromPeriodId || periods.length === 0) return periods;
+  const from = periods.find((p) => String(p.id) === fromPeriodId);
+  if (!from) return periods;
+  return periods.filter((p) => p.start_date >= from.start_date);
 }
 
 function stickyCellClass(extra = ''): string {
@@ -89,6 +109,7 @@ function useStickyLeftOffsets(columnCount: number) {
 
 export function PriceMatrixTab({ supplierId }: { supplierId: number }) {
   const { data, isLoading, isError, refetch } = usePriceMatrix(supplierId);
+  const [fromPeriodId, setFromPeriodId] = useState('');
 
   if (isLoading) {
     return <p className="text-sm text-neutral-500">Đang tải bảng giá…</p>;
@@ -125,14 +146,71 @@ export function PriceMatrixTab({ supplierId }: { supplierId: number }) {
   }
 
   return (
+    <PriceMatrixContent
+      periods={periods}
+      weightTables={weightTables}
+      tripsRows={tripsRows}
+      fromPeriodId={fromPeriodId}
+      onFromPeriodChange={setFromPeriodId}
+    />
+  );
+}
+
+function PriceMatrixContent({
+  periods,
+  weightTables,
+  tripsRows,
+  fromPeriodId,
+  onFromPeriodChange,
+}: {
+  periods: PriceMatrixPeriod[];
+  weightTables: PriceMatrixWeightTable[];
+  tripsRows: PriceMatrixTripsRow[];
+  fromPeriodId: string;
+  onFromPeriodChange: (id: string) => void;
+}) {
+  const currentPeriod = useMemo(() => resolveCurrentPeriod(periods), [periods]);
+  const currentPeriodId = currentPeriod ? String(currentPeriod.id) : '';
+  const effectiveFromId = fromPeriodId || currentPeriodId;
+  const visiblePeriods = useMemo(
+    () => visiblePeriodsFrom(periods, effectiveFromId),
+    [periods, effectiveFromId],
+  );
+
+  const periodOptions = useMemo(
+    () =>
+      [...periods]
+        .sort((a, b) => b.start_date.localeCompare(a.start_date))
+        .map((p) => ({ value: String(p.id), label: periodHeader(p) })),
+    [periods],
+  );
+
+  return (
     <div className="space-y-8">
+      <div className="max-w-md">
+        <Select
+          id="matrix-from-period"
+          label="Từ kỳ"
+          value={effectiveFromId}
+          onChange={(e) => onFromPeriodChange(e.target.value)}
+          options={periodOptions}
+        />
+        <p className="mt-1 text-xs text-neutral-500">
+          Hiện giá từ kỳ đã chọn đến kỳ hiện tại. Mặc định chỉ kỳ hiện tại.
+        </p>
+      </div>
+
       {weightTables.length > 0 && (
         <section className="space-y-6">
           <h2 className="text-sm font-medium text-neutral-800 dark:text-neutral-200">
             Theo trọng lượng
           </h2>
           {weightTables.map((table) => (
-            <PriceMatrixWeightTableView key={table.schema_key} periods={periods} table={table} />
+            <PriceMatrixWeightTableView
+              key={table.schema_key}
+              periods={visiblePeriods}
+              table={table}
+            />
           ))}
         </section>
       )}
@@ -142,7 +220,7 @@ export function PriceMatrixTab({ supplierId }: { supplierId: number }) {
           <h2 className="text-sm font-medium text-neutral-800 dark:text-neutral-200">
             Theo chuyến / xe / ngày
           </h2>
-          <PriceMatrixTripsTableView periods={periods} rows={tripsRows} />
+          <PriceMatrixTripsTableView periods={visiblePeriods} rows={tripsRows} />
         </section>
       )}
     </div>

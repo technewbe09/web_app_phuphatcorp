@@ -13,6 +13,7 @@
 ```
 Chọn NCC → tab "Bảng giá"
   → GET /prices/matrix
+  → Select «Từ kỳ» (mặc định = kỳ hiện tại) → cột kỳ từ kỳ chọn đến hiện tại
   → Lặp weight_tables[]: mỗi schema = một bảng (header 3 tầng)
   → Cuối: bảng Theo chuyến (nếu có)
 ```
@@ -32,6 +33,7 @@ Alternative: chưa NCC / empty / chỉ trips / API fail — như trước.
 ```
 ┌──────────────────────────────────────────────────────────────┐
 │ Bảng giá                                                      │
+│ Từ kỳ [Select: kỳ hiện tại ▼]                                 │
 │                                                               │
 │ ## Theo trọng lượng                                           │
 │ schema: ≤2,5 · >2,5–8 · >8–16 · >16–23 · >23 · Pallet       │
