@@ -7,8 +7,11 @@ export interface AccountantInvoice {
   so_xe: string;
   so_hoa_don: string;
   trang_thai: string;
-  ghi_chu: string | null;
+  ghi_chu: string;
   created_at: string;
+  ten_kh: string;
+  dia_chi: string;
+  nha_cung_cap: string;
 }
 
 export interface AccountantInvoiceFilters {
@@ -40,10 +43,13 @@ function rowToInvoice(row: Record<string, unknown>): AccountantInvoice {
     so_xe: row.so_xe as string,
     so_hoa_don: row.so_hoa_don as string,
     trang_thai: row.trang_thai as string,
-    ghi_chu: row.ghi_chu as string | null,
+    ghi_chu: row.ghi_chu as string,
     created_at: row.created_at instanceof Date
       ? (row.created_at as Date).toISOString()
       : (row.created_at as string),
+    ten_kh: row.ten_kh as string,
+    dia_chi: row.dia_chi as string,
+    nha_cung_cap: row.nha_cung_cap as string,
   };
 }
 
@@ -111,10 +117,29 @@ export const accountantInvoiceService = {
     const totalPages = Math.ceil(total / limit);
 
     const dataResult = await pool.query(
-      `SELECT id, batch_id, ngay::text as ngay, so_xe, so_hoa_don, trang_thai, ghi_chu, created_at
-       FROM accountant_invoices
+      `SELECT ai.id, ai.batch_id, ai.ngay::text as ngay, ai.so_xe, ai.so_hoa_don,
+              ai.trang_thai, ai.ghi_chu, ai.created_at,
+              COALESCE(MIN(dd.ten_kh), '') AS ten_kh,
+              COALESCE(MIN(dd.dia_chi), '') AS dia_chi,
+              COALESCE(
+                MIN(s.name),
+                (SELECT name FROM suppliers WHERE supplier_code = 'default' AND status = 'active')
+              ) AS nha_cung_cap
+       FROM accountant_invoices ai
+       LEFT JOIN delivery_data dd ON
+         dd.ngay_hd = ai.ngay
+         AND regexp_replace(
+               regexp_replace(
+                 regexp_replace(dd.so_tau_xe, '^[^0-9]*', ''),
+                 '[-,\\s]', '', 'g'
+               ),
+               '/.*$', ''
+             ) = ai.so_xe
+         AND trim(dd.so_hd) = ai.so_hoa_don
+       LEFT JOIN suppliers s ON s.supplier_code = dd.ma_ncc AND s.status = 'active'
        ${whereClause}
-       ORDER BY ngay DESC, so_xe ASC, so_hoa_don ASC
+       GROUP BY ai.id
+       ORDER BY ai.ngay DESC, ai.so_xe ASC, ai.so_hoa_don ASC
        LIMIT $${paramIndex++} OFFSET $${paramIndex++}`,
       [...params, limit, offset],
     );
