@@ -27,11 +27,15 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(
             ref={ref}
             id={id}
             className={cn(
-              'w-full px-3 py-2 border rounded-lg text-neutral-900 dark:text-neutral-100 appearance-none bg-white dark:bg-neutral-800',
-              'focus:outline-none focus:ring-2 focus:ring-neutral-500 focus:border-transparent',
+              'w-full px-3 py-2 pr-9 border rounded-lg text-neutral-900 dark:text-neutral-100 appearance-none',
+              'bg-white dark:bg-neutral-800',
+              'focus:outline-none focus:ring-1 focus:ring-neutral-400/60 focus:border-neutral-400',
+              'dark:focus:ring-neutral-500 dark:focus:border-neutral-500',
               'disabled:bg-neutral-100 dark:disabled:bg-neutral-700 disabled:cursor-not-allowed',
-              error ? 'border-red-500 focus:ring-red-500' : 'border-neutral-300 dark:border-neutral-600',
-              className
+              error
+                ? 'border-red-500 focus:ring-red-400 focus:border-red-500'
+                : 'border-neutral-300 dark:border-neutral-600',
+              className,
             )}
             {...props}
           >
@@ -46,7 +50,7 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(
         {error && <p className="mt-1 text-sm text-red-600">{error}</p>}
       </div>
     );
-  }
+  },
 );
 
 Select.displayName = 'Select';

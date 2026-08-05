@@ -4,6 +4,7 @@ description: Ghi lại các bài học kinh nghiệm, bug đã fix, và pitfalls
 
 # Lessons Learned — PhuPhatCorp
 
+---
 ## Bug: Delivery Data Processing — Vehicle sort wrong because sort key ≠ display key (.slice(-9))
 - **Ngày:** 2026-04-26
 - **Severity:** High

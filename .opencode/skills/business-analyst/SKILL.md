@@ -1,5 +1,5 @@
 ---
-name: dev-backend
+name: business-analyst
 description: Implement backend cho Web App - migration, service layer, Zod validation, controller, route. Invoke khi cần tạo API endpoint, xử lý business logic, tạo migration, viết service. Dùng khi user nói "viết service", "tạo API", "migration", "backend".
 ---
 

@@ -35,3 +35,17 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
+
+# Temporary files
+~$*.xlsx
+~$*.xls
+~$*.csv
+~$*.docx
+~$*.doc
+
+# Local docker migrate artifacts
+.docker-migrate/
+*.remote.bak
+
+.cursor/
+graphify-out/
