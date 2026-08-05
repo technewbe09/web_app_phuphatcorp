@@ -35,6 +35,8 @@ Hệ thống dùng **RBAC** (Role-Based Access Control) — mỗi user gắn 1 r
 | transport.manage | Quản lý dữ liệu vận tải (CRUD trip codes, xe, tài xế) |
 | dispatch.view | Xem bảng điều phối xe |
 | dispatch.manage | Tạo/xóa lịch điều phối xe |
+| route_pricing.view | Xem giá theo tuyến |
+| route_pricing.manage | Quản lý giá theo tuyến |
 
 **Cơ chế enforcement:**
 - JWT payload chứa `roleId` và `permissions: string[]`
@@ -927,6 +929,101 @@ frontend/src/components/admin/CreateRoleModal.tsx
 frontend/src/components/admin/EditRoleModal.tsx
 frontend/src/components/admin/DeactivateRoleDialog.tsx
 ```
+
+---
+
+## 11. Giá theo tuyến (`route_pricing`)
+
+Menu sidebar top-level **Giá theo tuyến** — không nằm trong accordion.
+
+### 11.1 Giá theo tuyến (/route-pricing)
+
+**Mục đích:** Quản lý kỳ điều chỉnh giá, nhóm tuyến theo NCC, bảng giá gốc / điều chỉnh theo kỳ, xem ma trận giá, và lookup phục vụ Delivery Import.
+
+**Data model — bảng chính:**
+```sql
+route_pricing_adjustment_periods (
+  id, start_date DATE, end_date DATE nullable,  -- end_date do BE tự quản
+  percent NUMERIC ≠ 0, note TEXT, created_by, updated_by, created_at, updated_at
+)
+route_groups (
+  id, supplier_id, name, province_code, tinh, is_residual,
+  note TEXT, status, created_by, updated_by, ...
+)
+delivery_routes (… ward_code XOR location_text, note …) + route_group_members
+route_price_configs (id, route_group_id, status, …)
+route_price_versions (
+  id, price_config_id, pricing_mode ('by_weight'|'by_trips'),
+  pallet_trip_price, base_version_id nullable,
+  adjustment_period_id NOT NULL FK → periods,
+  created_by, created_at
+)
+route_price_tiers (
+  id, price_version_id, range_from, range_to, pricing_unit, price, min_billable_ton, sort_order
+)
+```
+
+**Business Rules:**
+- BR-001: Kỳ điều chỉnh là master **global**; UI không nhập `end_date` (BE đóng kỳ trước khi tạo kỳ mới).
+- BR-002: Thêm kỳ = apply `%` mọi version đang mở toàn hệ thống; không sửa kỳ — muốn đổi thì xóa kỳ gần nhất rồi tạo lại.
+- BR-003: Xóa kỳ gần nhất = rollback (xóa versions gắn kỳ + mở lại kỳ trước).
+- BR-004: Nhóm tuyến scoped theo NCC; đích = Phường/Xã **XOR** Địa điểm text **XOR** Còn lại tỉnh; `note` optional (ảnh hưởng tên + unique).
+- BR-005: Mỗi nhóm chỉ nhập **bảng giá gốc** 1 lần; bắt buộc chọn `adjustment_period_id` (kỳ gốc); BE cascade tạo version cho mọi kỳ `start > kỳ gốc`.
+- BR-006: Version gắn `adjustment_period_id`; ngày hiệu lực / `%` derive từ kỳ (không lưu trùng trên version). Không có cột `note` trên `route_price_versions` — ghi chú chỉ ở kỳ / nhóm / tuyến.
+- BR-007: Sửa giá gốc → recompute cascade các kỳ sau.
+- BR-008: Tab **Bảng giá** = ma trận (`GET /prices/matrix`): weight gom schema exact hoặc tập con (cột = union, ô thiếu trống) + Pallet cuối; trips = hàng tuyến×bậc (không Pallet), cột = kỳ.
+- BR-009: Tab **Quản lý giá** = CRUD/lịch sử version (badge mode + gốc/điều chỉnh ±%).
+- BR-010: Delivery Import lookup qua `GET /route-pricing/lookup` (`weight_mt` / `trips_per_vehicle_day`, `note` nhóm/tuyến).
+
+**Flow — sử dụng chính:**
+```
+Tab Kỳ điều chỉnh (global, không cần chọn NCC)
+  → Thêm kỳ (start_date, %, note?) → BE đóng kỳ trước + apply % mọi version mở
+  → Chỉ xóa được kỳ gần nhất (= rollback)
+
+Chọn NCC
+  → Tab Nhóm tuyến: tạo/sửa nhóm (phường XOR location XOR residual + note)
+  → Tab Quản lý giá: Thêm bảng giá gốc (kỳ gốc + by_weight|by_trips + tiers + pallet)
+        → BE cascade versions kỳ sau
+      → Sửa giá gốc → recompute cascade
+  → Tab Bảng giá: xem ma trận weight_tables[] + trips.rows
+
+Delivery Import
+  → GET /api/route-pricing/lookup
+```
+
+**API Endpoints:**
+```
+GET/POST/DELETE /api/route-pricing/adjustment-periods
+GET             /api/route-pricing/geo/provinces
+GET             /api/route-pricing/geo/wards?province_code=
+GET/POST/PUT/DELETE /api/route-pricing/routes
+GET/POST/PUT/DELETE /api/route-pricing/groups
+GET/POST        /api/route-pricing/prices
+GET             /api/route-pricing/prices/matrix?supplier_id=
+PUT             /api/route-pricing/prices/groups/:routeGroupId/absolute
+GET             /api/route-pricing/prices/:configId/versions
+GET             /api/route-pricing/lookup
+```
+
+**Files:**
+```
+backend/src/migrations/040_create_route_pricing.sql
+backend/src/migrations/041_seed_route_pricing_permissions.sql
+backend/src/migrations/042_route_pricing_adjustment_periods.sql
+backend/src/services/routePricingService.ts
+backend/src/controllers/routePricingController.ts
+backend/src/routes/routePricing.ts
+backend/src/types/routePricing.ts
+backend/src/__tests__/routePricingService.test.ts
+frontend/src/api/routePricingApi.ts
+frontend/src/hooks/useRoutePricing.ts
+frontend/src/pages/route-pricing/RoutePricingPage.tsx
+frontend/src/pages/route-pricing/PriceMatrixTab.tsx
+```
+
+**Access:** `route_pricing.view` (xem) / `route_pricing.manage` (CRUD). Route: `/route-pricing`  
+**BA / UI:** `docs/ba/20260711_route-pricing-analysis.md`, `docs/ba/20260731_route-pricing-price-matrix-view-analysis.md`, `docs/ui/20260731_route-pricing-adjustment-periods-cr-ui-spec.md`, `docs/ui/20260731_route-pricing-price-matrix-view-ui-spec.md`
 
 ---
 

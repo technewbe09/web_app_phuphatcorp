@@ -20,6 +20,7 @@ import vehicleInspectionRoutes from './vehicleInspections';
 import vehicleOilChangeRoutes from './vehicleOilChanges';
 import vehicleInsuranceRoutes from './vehicleInsurances';
 import vehicleRepairRoutes from './vehicleRepairs';
+import routePricingRoutes from './routePricing';
 
 const router = Router();
 
@@ -44,5 +45,6 @@ router.use('/vehicle-inspections', vehicleInspectionRoutes);
 router.use('/vehicle-oil-changes', vehicleOilChangeRoutes);
 router.use('/vehicle-insurances', vehicleInsuranceRoutes);
 router.use('/vehicle-repairs', vehicleRepairRoutes);
+router.use('/route-pricing', routePricingRoutes);
 
 export default router;
