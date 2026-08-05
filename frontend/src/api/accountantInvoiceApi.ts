@@ -8,8 +8,11 @@ export interface AccountantInvoice {
   so_xe: string;
   so_hoa_don: string;
   trang_thai: string;
-  ghi_chu: string | null;
+  ghi_chu: string;
   created_at: string;
+  ten_kh: string;
+  dia_chi: string;
+  nha_cung_cap: string;
 }
 
 export interface AccountantInvoiceFilters {

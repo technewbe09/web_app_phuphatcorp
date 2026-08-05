@@ -16,97 +16,19 @@ import {
   type ProcessResult,
   type ParsedFileData,
   type RawRow,
-  COL,
-  cell,
+  buildAdjustments,
+  filterExcludedRows,
+  applyAdjustments,
+  type AdjustmentRow,
 } from '../../utils/processDeliveryData';
-import { weightAdjustmentApi, type WeightAdjustment } from '../../api/weightAdjustmentApi';
+import { weightAdjustmentApi } from '../../api/weightAdjustmentApi';
 import { customersApi, type Customer } from '../../api/customersApi';
 import { innerCityCustomerApi } from '../../api/innerCityCustomerApi';
 import {
   WeightAdjustmentConfirmDialog,
-  type AdjustmentRow,
 } from '../../components/delivery-data/WeightAdjustmentConfirmDialog';
 
 type PageState = 'idle' | 'verifying' | 'awaiting_confirmation' | 'processing' | 'success' | 'error';
-
-function buildAdjustments(
-  rawRows: RawRow[],
-  sourceRowNums: number[],
-  masterMap: Map<string, WeightAdjustment>
-): AdjustmentRow[] {
-  const result: AdjustmentRow[] = [];
-  rawRows.forEach((row, idx) => {
-    const maHang = cell(row, COL.MA_HANG);
-    const master = masterMap.get(maHang);
-    if (!master) return;
-
-    const tenHangFile = cell(row, COL.TEN_HANG_HOA);
-    const spTrongLuongGoc = Number(row[COL.SP_TRONG_LUONG]) || 0;
-
-    const nameMatches = tenHangFile.trim() === master.ten_hang.trim();
-    if (nameMatches) {
-      // Use gia_tri_cu — only if it's not null
-      if (master.gia_tri_cu === null || master.gia_tri_cu === undefined) return;
-      result.push({
-        rawRowIndex: idx,
-        sourceRowNum: sourceRowNums[idx],
-        maHang,
-        tenHangFile,
-        tenHangMaster: master.ten_hang,
-        spTrongLuongGoc,
-        giaTriApDung: master.gia_tri_cu,
-        lyDo: 'gia_tri_cu',
-      });
-    } else {
-      result.push({
-        rawRowIndex: idx,
-        sourceRowNum: sourceRowNums[idx],
-        maHang,
-        tenHangFile,
-        tenHangMaster: master.ten_hang,
-        spTrongLuongGoc,
-        giaTriApDung: master.gia_tri_dieu_chinh,
-        lyDo: 'gia_tri_dieu_chinh',
-      });
-    }
-  });
-  return result;
-}
-
-const DIEN_GIAI_EXCLUDE_KEYWORDS = ['thay thế', 'điều chỉnh'];
-
-function filterExcludedRows(rawRows: RawRow[], sourceRowNums: number[]): {
-  filteredRows: RawRow[];
-  filteredSourceRowNums: number[];
-  excludedCount: number;
-} {
-  const filteredRows: RawRow[] = [];
-  const filteredSourceRowNums: number[] = [];
-  let excludedCount = 0;
-
-  rawRows.forEach((row, idx) => {
-    const dienGiai = cell(row, COL.DIEN_GIAI).toLowerCase();
-    const shouldExclude = DIEN_GIAI_EXCLUDE_KEYWORDS.some((kw) => dienGiai.includes(kw));
-    if (shouldExclude) {
-      excludedCount++;
-    } else {
-      filteredRows.push(row);
-      filteredSourceRowNums.push(sourceRowNums[idx]);
-    }
-  });
-
-  return { filteredRows, filteredSourceRowNums, excludedCount };
-}
-
-function applyAdjustments(rawRows: RawRow[], adjustments: AdjustmentRow[]): RawRow[] {
-  const modified = rawRows.map((row) => [...row] as RawRow);
-  for (const adj of adjustments) {
-    modified[adj.rawRowIndex][COL.SP_TRONG_LUONG] = adj.giaTriApDung;
-    const soLuong = Number(modified[adj.rawRowIndex][COL.SO_LUONG]) || 0;
-    modified[adj.rawRowIndex][COL.HD_TRONG_LUONG] = soLuong * adj.giaTriApDung;
-  }
-  return modified;
-}
 
 export function DeliveryDataPage() {
   const [pageState, setPageState] = useState<PageState>('idle');

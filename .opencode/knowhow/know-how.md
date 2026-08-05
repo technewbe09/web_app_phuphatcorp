@@ -261,11 +261,32 @@ Base URL: `/api`
 | DELETE | /users/:id | JWT + ADMIN | — | `{ success, message }` |
 | PATCH | /users/:id/password | JWT + ADMIN | `{ new_password }` | `{ success, message }` |
 
+### Route Pricing — /route-pricing
+
+| Method | Path | Auth | Notes |
+|--------|------|------|-------|
+| GET/POST/DELETE | /route-pricing/adjustment-periods | view/manage | Kỳ điều chỉnh global; tạo kỳ = apply % mọi version mở; chỉ xóa kỳ gần nhất (= rollback) |
+| GET | /route-pricing/geo/provinces | route_pricing.view | Master tỉnh |
+| GET | /route-pricing/geo/wards | route_pricing.view | `?province_code=` |
+| GET/POST/PUT/DELETE | /route-pricing/routes | view/manage | Scoped `supplier_id`; `ward_code` XOR `location_text`; `note` |
+| GET/POST/PUT/DELETE | /route-pricing/groups | view/manage | `ward_codes[]` XOR `location_text` (1 text) XOR residual; `note` → tên + unique |
+| GET/POST | /route-pricing/prices | view/manage | Absolute: `adjustment_period_id` + cascade kỳ sau; `pricing_mode` + range |
+| GET | /route-pricing/prices/matrix | view | Ma tran NCC: weight_tables[] + trips.rows |
+| PUT | /route-pricing/prices/groups/:routeGroupId/absolute | manage | Sửa giá gốc + recompute cascade |
+| GET | /route-pricing/lookup | view | `weight_mt` / `trips_per_vehicle_day`; `location_text`, `note` |
+
+**FE:** Tab Kỳ điều chỉnh / Nhóm tuyến / Bảng giá. Bỏ nút Điều chỉnh % riêng. Không sửa kỳ — muốn đổi thì xóa rồi tạo lại.
+
+BA: `docs/ba/20260711_route-pricing-analysis.md`  
+UI: `docs/ui/20260731_route-pricing-adjustment-periods-cr-ui-spec.md`
+
 ### System
 
 | Method | Path | Auth | Response |
 |--------|------|------|----------|
 | GET | /health | No | `{ status: 'ok', timestamp }` |
+
+Frontend route: `/route-pricing` (sidebar top-level **Giá theo tuyến**)
 
 ### Dispatch Schedules — /dispatch-schedules
 

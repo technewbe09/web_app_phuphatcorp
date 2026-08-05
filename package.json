@@ -1,5 +1,12 @@
 {
+  "scripts": {
+    "dev": "concurrently \"cd backend && npm run dev\" \"cd frontend && npm run dev\"",
+    "docker:up": "docker compose up -d",
+    "docker:down": "docker compose down",
+    "docker:migrate": "powershell -ExecutionPolicy Bypass -File ./scripts/migrate-from-remote.ps1 -UpdateEnv"
+  },
   "devDependencies": {
+    "concurrently": "^10.0.3",
     "serve": "^14.2.6"
   }
 }

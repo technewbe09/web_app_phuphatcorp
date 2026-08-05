@@ -19,16 +19,17 @@ import { useNavigate } from 'react-router-dom';
 import type { ImportResult } from '../../../api/deliveryDataApi';
 import {
   processDeliveryDataFromRows,
+  buildAdjustments,
+  filterExcludedRows,
+  applyAdjustments,
   type ProcessResult,
   type RawRow,
-  COL,
-  cell,
+  type AdjustmentRow,
 } from '../../../utils/processDeliveryData';
-import { weightAdjustmentApi, type WeightAdjustment } from '../../../api/weightAdjustmentApi';
+import { weightAdjustmentApi } from '../../../api/weightAdjustmentApi';
 import { customersApi, type Customer } from '../../../api/customersApi';
 import {
   WeightAdjustmentConfirmDialog,
-  type AdjustmentRow,
 } from '../../../components/delivery-data/WeightAdjustmentConfirmDialog';
 
 type UploadState = 'idle' | 'uploading' | 'success' | 'error';
@@ -38,84 +39,6 @@ interface Toast {
   id: number;
   message: string;
   variant: 'success' | 'error';
-}
-
-const DIEN_GIAI_EXCLUDE_KEYWORDS = ['thay thế', 'điều chỉnh'];
-
-function buildAdjustments(
-  rawRows: RawRow[],
-  sourceRowNums: number[],
-  masterMap: Map<string, WeightAdjustment>
-): AdjustmentRow[] {
-  const result: AdjustmentRow[] = [];
-  rawRows.forEach((row, idx) => {
-    const maHang = cell(row, COL.MA_HANG);
-    const master = masterMap.get(maHang);
-    if (!master) return;
-
-    const tenHangFile = cell(row, COL.TEN_HANG_HOA);
-    const spTrongLuongGoc = Number(row[COL.SP_TRONG_LUONG]) || 0;
-
-    const nameMatches = tenHangFile.trim() === master.ten_hang.trim();
-    if (nameMatches) {
-      if (master.gia_tri_cu === null || master.gia_tri_cu === undefined) return;
-      result.push({
-        rawRowIndex: idx,
-        sourceRowNum: sourceRowNums[idx],
-        maHang,
-        tenHangFile,
-        tenHangMaster: master.ten_hang,
-        spTrongLuongGoc,
-        giaTriApDung: master.gia_tri_cu,
-        lyDo: 'gia_tri_cu',
-      });
-    } else {
-      result.push({
-        rawRowIndex: idx,
-        sourceRowNum: sourceRowNums[idx],
-        maHang,
-        tenHangFile,
-        tenHangMaster: master.ten_hang,
-        spTrongLuongGoc,
-        giaTriApDung: master.gia_tri_dieu_chinh,
-        lyDo: 'gia_tri_dieu_chinh',
-      });
-    }
-  });
-  return result;
-}
-
-function filterExcludedRows(rawRows: RawRow[], sourceRowNums: number[]): {
-  filteredRows: RawRow[];
-  filteredSourceRowNums: number[];
-  excludedCount: number;
-} {
-  const filteredRows: RawRow[] = [];
-  const filteredSourceRowNums: number[] = [];
-  let excludedCount = 0;
-
-  rawRows.forEach((row, idx) => {
-    const dienGiai = cell(row, COL.DIEN_GIAI).toLowerCase();
-    const shouldExclude = DIEN_GIAI_EXCLUDE_KEYWORDS.some((kw) => dienGiai.includes(kw));
-    if (shouldExclude) {
-      excludedCount++;
-    } else {
-      filteredRows.push(row);
-      filteredSourceRowNums.push(sourceRowNums[idx]);
-    }
-  });
-
-  return { filteredRows, filteredSourceRowNums, excludedCount };
-}
-
-function applyAdjustments(rawRows: RawRow[], adjustments: AdjustmentRow[]): RawRow[] {
-  const modified = rawRows.map((row) => [...row] as RawRow);
-  for (const adj of adjustments) {
-    modified[adj.rawRowIndex][COL.SP_TRONG_LUONG] = adj.giaTriApDung;
-    const soLuong = Number(modified[adj.rawRowIndex][COL.SO_LUONG]) || 0;
-    modified[adj.rawRowIndex][COL.HD_TRONG_LUONG] = soLuong * adj.giaTriApDung;
-  }
-  return modified;
 }
 
 export function DeliveryImportPage() {
@@ -288,20 +211,18 @@ export function DeliveryImportPage() {
       customersRef.current = customers;
 
       const masterMap = new Map(masterdata.map((m) => [m.ma_hang, m]));
-      const found = buildAdjustments(rawRows, sourceRowNums, masterMap);
 
-      // Filter excluded rows before checking adjustments
       const { filteredRows, filteredSourceRowNums, excludedCount } = filterExcludedRows(rawRows, sourceRowNums);
       setExcludedRowCount(excludedCount);
+
+      const found = buildAdjustments(filteredRows, filteredSourceRowNums, masterMap);
 
       if (found.length === 0) {
         parsedRowsRef.current = filteredRows;
         parsedSourceRowNumsRef.current = filteredSourceRowNums;
         await runProcess(filteredRows, filteredSourceRowNums);
       } else {
-        // Recompute adjustments on filtered rows
-        const foundFiltered = buildAdjustments(filteredRows, filteredSourceRowNums, masterMap);
-        setAdjustments(foundFiltered);
+        setAdjustments(found);
         parsedRowsRef.current = filteredRows;
         parsedSourceRowNumsRef.current = filteredSourceRowNums;
         setProcessState('awaiting_confirmation');

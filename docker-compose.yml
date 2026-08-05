@@ -1,0 +1,58 @@
+# Local development infrastructure — Postgres + MinIO
+# Usage:
+#   docker compose up -d
+#   .\scripts\migrate-from-remote.ps1   # one-time copy from remote (.env)
+#   Point backend/.env at localhost (see .env.docker.example)
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: phuphatcorp-postgres
+    restart: unless-stopped
+    ports:
+      # Host 5433 avoids conflict with a local Windows PostgreSQL on 5432
+      - "5433:5432"
+    environment:
+      POSTGRES_USER: phuphat
+      POSTGRES_PASSWORD: phuphat_dev
+      POSTGRES_DB: phuphatcorp_dev
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U phuphat -d phuphatcorp_dev"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  minio:
+    image: minio/minio:latest
+    container_name: phuphatcorp-minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    volumes:
+      - minio_data:/data
+  # Creates the inspections bucket on first start (idempotent)
+  minio-init:
+    image: minio/mc:latest
+    depends_on:
+      - minio
+    restart: "no"
+    entrypoint: >
+      /bin/sh -c "
+      echo 'Waiting for MinIO...';
+      until mc alias set local http://minio:9000 minioadmin minioadmin; do
+        sleep 2;
+      done;
+      mc mb --ignore-existing local/phuphatcorp-inspections-staging;
+      echo 'MinIO bucket ready.';
+      "
+
+volumes:
+  postgres_data:
+  minio_data:

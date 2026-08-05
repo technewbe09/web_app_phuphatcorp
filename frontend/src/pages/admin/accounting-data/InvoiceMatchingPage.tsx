@@ -173,6 +173,9 @@ export function InvoiceMatchingPage() {
                           <th className="text-left py-3 px-2 font-medium text-neutral-500">Ngày</th>
                           <th className="text-left py-3 px-2 font-medium text-neutral-500">Số xe</th>
                           <th className="text-left py-3 px-2 font-medium text-neutral-500">Số HĐ</th>
+                          <th className="text-left py-3 px-2 font-medium text-neutral-500">Khách hàng</th>
+                          <th className="text-left py-3 px-2 font-medium text-neutral-500">Địa chỉ giao hàng</th>
+                          <th className="text-left py-3 px-2 font-medium text-neutral-500">Nhà cung cấp</th>
                           <th className="text-left py-3 px-2 font-medium text-neutral-500">Trạng thái</th>
                           <th className="text-left py-3 px-2 font-medium text-neutral-500">Ghi chú</th>
                           <th className="text-left py-3 px-2 font-medium text-neutral-500 w-16"></th>
@@ -184,6 +187,21 @@ export function InvoiceMatchingPage() {
                             <td className="py-2.5 px-2 text-neutral-900 dark:text-neutral-100 font-mono text-xs">{invoice.ngay}</td>
                             <td className="py-2.5 px-2 text-neutral-700 dark:text-neutral-300 font-mono">{invoice.so_xe}</td>
                             <td className="py-2.5 px-2 text-neutral-900 dark:text-neutral-100 font-mono">{invoice.so_hoa_don}</td>
+                            <td className="py-2.5 px-2 text-neutral-600 dark:text-neutral-400 text-xs max-w-48 truncate" title={invoice.ten_kh || ''}>
+                              {invoice.ten_kh || '—'}
+                            </td>
+                            <td className="py-2.5 px-2 text-neutral-600 dark:text-neutral-400 text-xs max-w-48 truncate" title={invoice.dia_chi || ''}>
+                              {invoice.dia_chi || '—'}
+                            </td>
+                            <td className="py-2.5 px-2">
+                              {invoice.nha_cung_cap ? (
+                                <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400">
+                                  {invoice.nha_cung_cap}
+                                </span>
+                              ) : (
+                                <span className="text-neutral-400 dark:text-neutral-500 text-xs">—</span>
+                              )}
+                            </td>
                             <td className="py-2.5 px-2">
                               {invoice.trang_thai === 'đã có' && (
                                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400">
