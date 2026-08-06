@@ -27,7 +27,7 @@
     },
     "roles": {
       "ADMIN": "Quản trị",
-      "ACCOUNTANT": "Kế toán",
+      "ACCOUNTANT": "Kế toán trưởng",
       "VIEWER": "Xem"
     },
     "status": {

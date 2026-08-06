@@ -27,7 +27,7 @@
     },
     "roles": {
       "ADMIN": "Admin",
-      "ACCOUNTANT": "Accountant",
+      "ACCOUNTANT": "Accountant Supervisor",
       "VIEWER": "Viewer"
     },
     "status": {
