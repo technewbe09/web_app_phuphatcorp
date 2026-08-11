@@ -1027,6 +1027,53 @@ frontend/src/pages/route-pricing/PriceMatrixTab.tsx
 
 ---
 
+## 12. Dashboard (/)
+
+**Mục đích:** Trang tổng quan hệ thống — tabs trong 1 trang, mỗi tab là một dashboard theo module. Tab hiển thị theo permission của user (pattern giống MainLayout filter sidebar).
+
+### 12.1 Tabs & Permissions
+
+| Tab | Permission | Nội dung chính |
+|-----|-----------|----------------|
+| Tổng quan (`overview`) | dashboard.view | KPI tháng/quý (tấn giao, số HĐ, số chuyến, chi phí dầu), chart tấn 6 tháng, cảnh báo hết hạn, dispatch hôm nay, job reconcile gần nhất |
+| Bảo trì xe (`vehicles`) | vehicle_data.view | Đăng kiểm/bảo hiểm sắp hết hạn (bucket expired/30/60/90 ngày), xe quá hạn thay nhớt, chi phí sửa chữa 12 tháng theo xe |
+| Kế toán - Đối chiếu (`accounting`) | accounting_data.view | Tổng matched/unmatched, chart theo tháng, batch import gần đây, lịch sử reconcile job |
+| Vận tải (`operations`) | transport.view hoặc dispatch.view | KPI + chart chuyến theo ngày (mặc định 30 ngày, filter date_from/date_to), thống kê theo xe, hóa đơn tài xế |
+| Nhiên liệu (`fuel`) | fuel.view | KPI + chart chi phí 6 tháng, tiêu thụ theo xe (L/100km), chênh lệch đồng hồ vs GPS |
+
+### 12.2 Business Rules
+
+- BR-001: Tab render kèm query `enabled` = permission check → không gọi API nếu không có quyền
+- BR-002: KPI overview tính từ đầu tháng/quý hiện tại (`?period=month|quarter`)
+- BR-003: Cảnh báo hạn dùng bucket: expired (< hôm nay) / d30 / d60 / d90 / ok — tính trên bản ghi active mới nhất mỗi xe (DISTINCT ON theo expiry_date DESC)
+- BR-004: Hạn thay nhớt reuse logic `oilChangeService.getDueVehicles()` — dựa trên km hiện tại (fuel_records.odometer_new) trừ km lần thay nhớt cuối, so interval `vehicles.oil_change_interval_km` (overdue ≥ 100%, due_soon ≥ 80%)
+- BR-005: Tấn giao = `SUM(delivery_data.hd_trong_luong)/1000` theo `ngay_hd`
+- BR-006: Matched/unmatched hóa đơn theo `accountant_invoices.trang_thai` ('đã có' / 'không có')
+- BR-007: Chênh lệch nhiên liệu chỉ tính bản ghi có `gps_distance`, threshold > 0, top 20 theo trị tuyệt đối
+
+### 12.3 Files
+
+```
+backend/src/services/dashboardService.ts
+backend/src/controllers/dashboardController.ts
+backend/src/routes/dashboard.ts
+backend/src/middleware/auth.ts               ← thêm requireAnyPermission()
+
+frontend/src/types/dashboard.ts
+frontend/src/api/dashboardApi.ts
+frontend/src/hooks/useDashboard.ts
+frontend/src/pages/dashboard/DashboardPage.tsx        ← tabs container
+frontend/src/pages/dashboard/tabs/OverviewTab.tsx
+frontend/src/pages/dashboard/tabs/VehicleMaintenanceTab.tsx
+frontend/src/pages/dashboard/tabs/AccountingTab.tsx
+frontend/src/pages/dashboard/tabs/OperationsTab.tsx
+frontend/src/pages/dashboard/tabs/FuelTab.tsx
+```
+
+**Access:** Route `/` (DashboardPage). Sidebar giữ nguyên 1 mục "Dashboard".
+
+---
+
 - Password hash: bcrypt, 10 salt rounds, sync API
 - JWT secret: phải đủ mạnh (recommend 256+ bits), không hardcode
 - httpOnly cookie cho refreshToken: ngăn XSS đọc được
