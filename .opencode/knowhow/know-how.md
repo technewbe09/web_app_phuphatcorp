@@ -280,6 +280,18 @@ Base URL: `/api`
 BA: `docs/ba/20260711_route-pricing-analysis.md`  
 UI: `docs/ui/20260731_route-pricing-adjustment-periods-cr-ui-spec.md`
 
+### Dashboard — /dashboard
+
+| Method | Path | Auth | Response |
+|--------|------|------|----------|
+| GET | /dashboard/overview | JWT + dashboard.view | KPI tháng/quý (`?period=month\|quarter`), tấn theo 6 tháng, cảnh báo hết hạn, dispatch hôm nay, job reconcile gần nhất |
+| GET | /dashboard/vehicle-maintenance | JWT + vehicle_data.view | Đăng kiểm/bảo hiểm theo bucket hạn, xe đến hạn thay nhớt, chi phí sửa chữa 12 tháng |
+| GET | /dashboard/accounting | JWT + accounting_data.view | Tổng matched/unmatched, theo tháng, batch gần đây, lịch sử reconcile job |
+| GET | /dashboard/operations | JWT + transport.view hoặc dispatch.view | Chuyến/tấn theo ngày & theo xe (`?date_from&date_to`, mặc định 30 ngày), hóa đơn tài xế |
+| GET | /dashboard/fuel | JWT + fuel.view | Chi phí/lít 6 tháng, tiêu thụ theo xe, chênh lệch đồng hồ vs GPS |
+
+**FE:** Trang `/` (DashboardPage) — tabs trong 1 trang, filter theo permission. Files: `frontend/src/pages/dashboard/tabs/*.tsx`, `frontend/src/api/dashboardApi.ts`, `frontend/src/hooks/useDashboard.ts`.
+
 ### System
 
 | Method | Path | Auth | Response |
