@@ -13,7 +13,7 @@ interface Props {
   item: PromoItem | null;
 }
 
-export function PromoItemFormModal({ isOpen, onClose, onSuccess, onError, item }: Props) {
+function FormContent({ item, onSuccess, onError, onClose }: Omit<Props, 'isOpen'>) {
   const createMutation = useCreatePromoItem();
   const updateMutation = useUpdatePromoItem();
   const isEdit = !!item;
@@ -24,12 +24,6 @@ export function PromoItemFormModal({ isOpen, onClose, onSuccess, onError, item }
     unit_weight_kg: item?.unit_weight_kg ?? 0,
   });
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
-
-  const handleClose = () => {
-    setForm({ code: '', product_name: '', unit_weight_kg: 0 });
-    setFieldErrors({});
-    onClose();
-  };
 
   const handleSubmit = async () => {
     setFieldErrors({});
@@ -51,7 +45,7 @@ export function PromoItemFormModal({ isOpen, onClose, onSuccess, onError, item }
         await createMutation.mutateAsync(form);
         onSuccess('Thêm hàng khuyến mãi thành công.');
       }
-      handleClose();
+      onClose();
     } catch (err: unknown) {
       if (err && typeof err === 'object' && 'response' in err) {
         const e = err as {
@@ -77,57 +71,71 @@ export function PromoItemFormModal({ isOpen, onClose, onSuccess, onError, item }
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={handleClose} title={isEdit ? 'Sửa hàng khuyến mãi' : 'Thêm hàng khuyến mãi'} size="md">
+    <div className="space-y-4">
+      <div>
+        <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
+          Mã <span className="text-red-500">*</span>
+        </label>
+        <Input
+          value={form.code}
+          onChange={(e) => setForm((f) => ({ ...f, code: e.target.value }))}
+          placeholder="VD: KM001"
+          error={fieldErrors.code}
+        />
+      </div>
+      <div>
+        <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
+          Tên hàng hóa <span className="text-red-500">*</span>
+        </label>
+        <Input
+          value={form.product_name}
+          onChange={(e) => setForm((f) => ({ ...f, product_name: e.target.value }))}
+          placeholder="Nhập tên hàng hóa"
+          error={fieldErrors.product_name}
+        />
+      </div>
+      <div>
+        <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
+          Trọng lượng đơn vị (kg) <span className="text-red-500">*</span>
+        </label>
+        <Input
+          type="number"
+          step="0.001"
+          min="0"
+          value={form.unit_weight_kg}
+          onChange={(e) => setForm((f) => ({ ...f, unit_weight_kg: parseFloat(e.target.value) || 0 }))}
+          error={fieldErrors.unit_weight_kg}
+        />
+      </div>
+      <div className="flex justify-end gap-3 pt-2">
+        <Button variant="outline" type="button" onClick={onClose}>
+          Hủy
+        </Button>
+        <Button
+          type="button"
+          isLoading={createMutation.isPending || updateMutation.isPending}
+          onClick={handleSubmit}
+        >
+          {isEdit ? 'Lưu' : 'Thêm mới'}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+export function PromoItemFormModal({ isOpen, onClose, onSuccess, onError, item }: Props) {
+  const isEdit = !!item;
+
+  return (
+    <Modal isOpen={isOpen} onClose={onClose} title={isEdit ? 'Sửa hàng khuyến mãi' : 'Thêm hàng khuyến mãi'} size="md">
       {isOpen && (
-        <div className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
-              Mã <span className="text-red-500">*</span>
-            </label>
-            <Input
-              value={form.code}
-              onChange={(e) => setForm((f) => ({ ...f, code: e.target.value }))}
-              placeholder="VD: KM001"
-              error={fieldErrors.code}
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
-              Tên hàng hóa <span className="text-red-500">*</span>
-            </label>
-            <Input
-              value={form.product_name}
-              onChange={(e) => setForm((f) => ({ ...f, product_name: e.target.value }))}
-              placeholder="Nhập tên hàng hóa"
-              error={fieldErrors.product_name}
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
-              Trọng lượng đơn vị (kg) <span className="text-red-500">*</span>
-            </label>
-            <Input
-              type="number"
-              step="0.001"
-              min="0"
-              value={form.unit_weight_kg}
-              onChange={(e) => setForm((f) => ({ ...f, unit_weight_kg: parseFloat(e.target.value) || 0 }))}
-              error={fieldErrors.unit_weight_kg}
-            />
-          </div>
-          <div className="flex justify-end gap-3 pt-2">
-            <Button variant="outline" type="button" onClick={handleClose}>
-              Hủy
-            </Button>
-            <Button
-              type="button"
-              isLoading={createMutation.isPending || updateMutation.isPending}
-              onClick={handleSubmit}
-            >
-              {isEdit ? 'Lưu' : 'Thêm mới'}
-            </Button>
-          </div>
-        </div>
+        <FormContent
+          key={item?.id ?? 'new'}
+          item={item}
+          onSuccess={onSuccess}
+          onError={onError}
+          onClose={onClose}
+        />
       )}
     </Modal>
   );
