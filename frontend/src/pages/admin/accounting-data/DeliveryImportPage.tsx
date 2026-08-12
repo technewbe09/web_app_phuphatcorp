@@ -31,6 +31,7 @@ import {
 import { weightAdjustmentApi } from '../../../api/weightAdjustmentApi';
 import { customersApi, type Customer } from '../../../api/customersApi';
 import { innerCityCustomerApi } from '../../../api/innerCityCustomerApi';
+import { promoItemApi, type PromoItem } from '../../../api/promoItemApi';
 import {
   WeightAdjustmentConfirmDialog,
 } from '../../../components/delivery-data/WeightAdjustmentConfirmDialog';
@@ -112,6 +113,7 @@ export function DeliveryImportPage() {
   const parsedSourceRowNumsRef = useRef<number[]>([]);
   const customersRef = useRef<Customer[]>([]);
   const innerCityNamesRef = useRef<Set<string>>(new Set());
+  const promoItemsRef = useRef<PromoItem[]>([]);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -223,7 +225,7 @@ export function DeliveryImportPage() {
   const runProcess = useCallback(async (rows: RawRow[], nums: number[]) => {
     setProcessState('processing');
     try {
-      const result = await processDeliveryDataFromRows(rows, nums, customersRef.current, innerCityNamesRef.current);
+      const result = await processDeliveryDataFromRows(rows, nums, customersRef.current, innerCityNamesRef.current, promoItemsRef.current);
       setProcessResult(result);
       setProcessState('success');
     } catch (err) {
@@ -257,15 +259,17 @@ export function DeliveryImportPage() {
       const rawRows = batchData.rows as RawRow[];
       const sourceRowNums = rawRows.map((_, i) => i + 1);
 
-      const [masterdata, customers, innerCityCustomers] = await Promise.all([
+      const [masterdata, customers, innerCityCustomers, promoItemData] = await Promise.all([
         weightAdjustmentApi.fetchAll(),
         customersApi.fetchAll(),
         innerCityCustomerApi.fetchAll(),
+        promoItemApi.fetchAll(),
       ]);
       customersRef.current = customers;
       innerCityNamesRef.current = new Set(
         innerCityCustomers.customers.map((c) => c.customer_name.trim().toLowerCase())
       );
+      promoItemsRef.current = promoItemData.items;
 
       const masterMap = new Map(masterdata.map((m) => [m.ma_hang, m]));
 
