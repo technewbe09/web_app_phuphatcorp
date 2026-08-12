@@ -467,7 +467,8 @@
     "menuTitle": "Quản lý danh mục",
     "vehicles": "Danh mục xe",
     "innerCityCustomers": "Danh mục KH nội thành",
-    "suppliers": "Danh mục NCC"
+    "suppliers": "Danh mục NCC",
+    "promoItems": "Danh mục hàng KM"
   },
   "jobs": {
     "menuTitle": "Quản lý Job"

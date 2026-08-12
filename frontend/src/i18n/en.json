@@ -465,7 +465,8 @@
     "menuTitle": "Catalog Management",
     "vehicles": "Vehicle Catalog",
     "innerCityCustomers": "Inner City Customers",
-    "suppliers": "Suppliers"
+    "suppliers": "Suppliers",
+    "promoItems": "Promo Items"
   },
   "jobs": {
     "menuTitle": "Job Management"
