@@ -10,6 +10,7 @@ import {
   Download,
   X,
 } from 'lucide-react';
+import * as XLSX from 'xlsx';
 import { Card, CardContent, CardHeader } from '../../../components/ui/Card';
 import { Button } from '../../../components/ui/Button';
 import { Pagination } from '../../../components/ui/Pagination';
@@ -17,6 +18,7 @@ import { useImportDeliveryData, useGetBatches, useDeleteBatch, useGetBatchRows }
 import { useAuth } from '../../../hooks/useAuth';
 import { useNavigate } from 'react-router-dom';
 import type { ImportResult } from '../../../api/deliveryDataApi';
+import { deliveryDataApi } from '../../../api/deliveryDataApi';
 import {
   processDeliveryDataFromRows,
   buildAdjustments,
@@ -41,6 +43,43 @@ interface Toast {
   message: string;
   variant: 'success' | 'error';
 }
+
+const RAW_HEADERS = [
+  'Channel',
+  'Sub-channel',
+  'Diễn giải chi tiết (HĐ)',
+  'Diễn giải',
+  'Slot',
+  'Waybill No',
+  'Slot No',
+  'User tạo Hóa đơn',
+  'Usser tạo PXK',
+  'PO Number',
+  'Warehouse No',
+  'Warehouse Name',
+  'Mã PXK',
+  'Số chứng từ ghi sổ',
+  'Số Seri',
+  'Địa chỉ giao hàng (vn)',
+  'Tên hàng hóa',
+  'Mã ĐVT (Bán hàng)',
+  'SP - Trọng lượng Net',
+  'HĐ - Trọng lượng (Net)',
+  'Mã nhà cung cấp',
+  'Mã khách hàng',
+  'Tên khách hàng',
+  'Mã hàng hóa',
+  'Tên hàng hóa (En)',
+  'Loại hàng',
+  'Mã liên hệ giao hàng',
+  'Số lượng (DVT bán hàng)',
+  'Số tàu/ Số xe',
+  'Tài xế',
+  'Số Cont',
+  'Ngày hóa đơn',
+  'Số hóa đơn',
+  'Thông tin bổ sung 08',
+];
 
 export function DeliveryImportPage() {
   const { hasPermission, user } = useAuth();
@@ -141,6 +180,18 @@ export function DeliveryImportPage() {
       }
     } catch {
       showToast('Không thể xóa batch', 'error');
+    }
+  };
+
+  const handleDownloadBatch = async (batchId: string, filename: string) => {
+    try {
+      const data = await deliveryDataApi.getBatchRows([batchId]);
+      const ws = XLSX.utils.aoa_to_sheet([RAW_HEADERS, ...data.rows]);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Data');
+      XLSX.writeFile(wb, filename);
+    } catch {
+      showToast('Không thể tải dữ liệu batch', 'error');
     }
   };
 
@@ -523,6 +574,13 @@ export function DeliveryImportPage() {
                             }
                           >
                             <Eye className="w-4 h-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleDownloadBatch(batch.batch_id, batch.original_filename)}
+                          >
+                            <Download className="w-4 h-4" />
                           </Button>
                           {canManage && (
                             <Button
