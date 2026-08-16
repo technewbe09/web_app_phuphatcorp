@@ -890,6 +890,8 @@ Parent menu group "Thiết lập người dùng" trong sidebar — collapsible a
 - Xem danh sách users: filter search/role/is_active, pagination
 - CRUD actions (requires `users.manage`): Xem chi tiết, Sửa, Đặt lại mật khẩu, Xóa
 - Role dropdown load từ API (không hardcode enum)
+- Create user: FE gửi `role_id`; BE sync cả `users.role_id` và legacy `users.role` (= `roles.code`)
+- Hiển thị role trên list/detail: dùng `role_name` từ API (`getUserRoleLabel`), không `t(users.roles.*)`
 
 ### 9.2 Quản lý vai trò (/roles)
 
