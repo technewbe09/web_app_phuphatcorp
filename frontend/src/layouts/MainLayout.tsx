@@ -90,7 +90,6 @@ export function MainLayout() {
   ];
 
   const vehicleDataSubItems = [
-    { to: '/vehicle-data/delivery-schedule', icon: FileSpreadsheet, label: t('vehicleData.deliverySchedule' as never) },
     { to: '/vehicle-data/driver-invoices', icon: ReceiptText, label: t('vehicleData.driverInvoices' as never) },
     { to: '/vehicle-data/inspections', icon: ClipboardCheck, label: 'Quản lý đăng kiểm' },
     { to: '/vehicle-data/oil-changes', icon: Beaker, label: 'Quản lý thay nhớt' },
