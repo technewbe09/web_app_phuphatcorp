@@ -551,10 +551,19 @@ export const fuelRecordService = {
         } else {
           const dateStr = String(dateVal ?? '').trim();
           if (dateStr) {
-            const parsed = new Date(dateStr);
-            if (!isNaN(parsed.getTime())) {
-              recordDate = parsed.toISOString().split('T')[0];
-            } else continue;
+            // Try DD/MM/YYYY or DD-MM-YYYY format (common in Vietnamese Excel)
+            const ddmmyyyyMatch = dateStr.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
+            if (ddmmyyyyMatch) {
+              const day = ddmmyyyyMatch[1].padStart(2, '0');
+              const month = ddmmyyyyMatch[2].padStart(2, '0');
+              const year = ddmmyyyyMatch[3];
+              recordDate = `${year}-${month}-${day}`;
+            } else {
+              const parsed = new Date(dateStr);
+              if (!isNaN(parsed.getTime())) {
+                recordDate = parsed.toISOString().split('T')[0];
+              } else continue;
+            }
           } else continue;
         }
 
