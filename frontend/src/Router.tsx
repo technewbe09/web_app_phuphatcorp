@@ -13,7 +13,6 @@ import { SchedulePage } from './pages/dispatch/SchedulePage';
 import { WeightAdjustmentPage } from './pages/admin/accounting-data/WeightAdjustmentPage';
 import { CustomersPage } from './pages/admin/accounting-data/CustomersPage';
 import { DriverInvoicesPage } from './pages/admin/accounting-data/DriverInvoicesPage';
-import { DeliverySchedulePage } from './pages/admin/vehicle-data/DeliverySchedulePage';
 import { RiceDeliveryDataPage } from './pages/admin/RiceDeliveryDataPage';
 import { DeliveryImportPage } from './pages/admin/accounting-data/DeliveryImportPage';
 import { InvoiceMatchingPage } from './pages/admin/accounting-data/InvoiceMatchingPage';
@@ -66,7 +65,6 @@ export function Router() {
             <Route path="/delivery-data/5-houses" element={<DeliveryDataPage />} />
             <Route path="/delivery-data/rice" element={<RiceDeliveryDataPage />} />
             {/* Vehicle Data */}
-            <Route path="/vehicle-data/delivery-schedule" element={<DeliverySchedulePage />} />
             <Route path="/vehicle-data/driver-invoices" element={<DriverInvoicesPage />} />
             <Route path="/vehicle-data/inspections" element={<InspectionPage />} />
             <Route path="/vehicle-data/oil-changes" element={<OilChangePage />} />

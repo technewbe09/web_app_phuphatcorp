@@ -255,6 +255,24 @@ User upload file .xlsx ERP (Delivery Report)
   → User tải file output xuống
 ```
 
+### 5.1b Xử lý Data Gạo (Rice Data Processing)
+
+**Mục đích:** Upload file `data_gao.xlsx` → so khớp biển số + ngày với hóa đơn tài xế (driver_invoices DB) → xuất Excel kết quả lọc.
+
+**Flow:**
+```
+User upload data_gao.xlsx (sheet "Data xuất")
+  → RiceDeliveryDataPage
+    → parseRiceFile(file) — parse ngày (serial), biển số, sản phẩm, đại lý, tấn
+    → normalizePlate(so_xe) — uppercase, strip spaces/dashes/dots/commas
+    → riceDeliveryApi.fetchPlatesForRange(from, to) — GET /api/driver-invoices?ngay_from&ngay_to
+    → buildMasterPlateMap(invoices) — Map<ngay, Set<normalizedPlate>>
+    → filterRiceData(rows, masterMap) — matched/unmatched/unknownPlates
+    → exportRiceResult() — 4 sheets: Khớp lịch, Không khớp, Raw (highlight), Thống kê
+```
+
+**Master data:** Bảng `driver_invoices` (Hóa đơn tài xế) — NOT `delivery_schedules` (Lịch đi hàng).
+
 ### 5.2 Column Mapping (Source → Output)
 
 | Output Column | Source Column Index | Ghi chú |
@@ -1037,10 +1055,10 @@ frontend/src/pages/route-pricing/PriceMatrixTab.tsx
 
 | Tab | Permission | Nội dung chính |
 |-----|-----------|----------------|
-| Tổng quan (`overview`) | dashboard.view | KPI tháng/quý (tấn giao, số HĐ, số chuyến, chi phí dầu), chart tấn 6 tháng, cảnh báo hết hạn, dispatch hôm nay, job reconcile gần nhất |
+| Tổng quan (`overview`) | dashboard.view | KPI tháng/quý (tấn giao, số HĐ, chi phí dầu), chart tấn 6 tháng, cảnh báo hết hạn, dispatch hôm nay, job reconcile gần nhất |
 | Bảo trì xe (`vehicles`) | vehicle_data.view | Đăng kiểm/bảo hiểm sắp hết hạn (bucket expired/30/60/90 ngày), xe quá hạn thay nhớt, chi phí sửa chữa 12 tháng theo xe |
 | Kế toán - Đối chiếu (`accounting`) | accounting_data.view | Tổng matched/unmatched, chart theo tháng, batch import gần đây, lịch sử reconcile job |
-| Vận tải (`operations`) | transport.view hoặc dispatch.view | KPI + chart chuyến theo ngày (mặc định 30 ngày, filter date_from/date_to), thống kê theo xe, hóa đơn tài xế |
+| Hóa đơn tài xế (`operations`) | transport.view hoặc dispatch.view | Thống kê hóa đơn tài xế (số bản ghi, số hóa đơn) theo khoảng ngày |
 | Nhiên liệu (`fuel`) | fuel.view | KPI + chart chi phí 6 tháng, tiêu thụ theo xe (L/100km), chênh lệch đồng hồ vs GPS |
 
 ### 12.2 Business Rules

@@ -563,3 +563,38 @@ Vite không hot-reload `.env` khi dev server đang chạy. Phải restart `npm r
 - **Fix:** Gộp thành 1 query với `COUNT(*) OVER()::int AS total_count`
 - **Pattern:** Paginated list queries nên dùng `COUNT(*) OVER()` để lấy total trong cùng 1 query.
 - **Files:** `backend/src/services/repairService.ts:159-178`
+
+## Change: Xử lý Data Gạo — Đổi master data từ delivery_schedules sang driver_invoices
+- **Ngày:** 2026-08-19
+- **Feature:** Xử lý Data Gạo (RiceDeliveryDataPage)
+- **Thay đổi:** Bước 2 fetch master data từ bảng `driver_invoices` (Hóa đơn tài xế) thay vì `delivery_schedules` (Lịch đi hàng)
+- **Lý do:** Yêu cầu nghiệp vụ mới — so khớp với hóa đơn tài xế thay vì lịch đi hàng
+- **Files sửa:**
+  - `frontend/src/api/riceDeliveryApi.ts` — đổi endpoint `/delivery-schedules` → `/driver-invoices`, params `from_date/to_date` → `ngay_from/ngay_to`, map response format
+  - `frontend/src/pages/admin/RiceDeliveryDataPage.tsx` — đổi text "lịch đi hàng" → "hóa đơn tài xế"
+  - `frontend/src/utils/processRiceData.ts` — update comments
+- **Không cần sửa BE:** `driverInvoiceService.list()` đã hỗ trợ filter `ngay_from/ngay_to` + pagination
+- **Cần chú ý:** 2 API có response format khác nhau — `/delivery-schedules` trả `{ schedules, meta }`, `/driver-invoices` trả `{ data, pagination }`. Khi tái sử dụng API, kiểm tra kỹ response shape.
+
+## Change: Xóa chức năng "Lịch đi hàng" (Delivery Schedules)
+- **Ngày:** 2026-08-19
+- **Feature:** Lịch đi hàng (delivery_schedules)
+- **Thay đổi:** Xóa toàn bộ chức năng "Lịch đi hàng" — BE, FE, routes, sidebar, dashboard KPIs
+- **Lý do:** Chức năng "Xử lý Data Gạo" đã chuyển sang dùng `driver_invoices` làm master data. Không còn use case nào sử dụng `delivery_schedules`.
+- **Files xóa:**
+  - BE: `deliveryScheduleService.ts`, `deliveryScheduleController.ts`, `routes/deliverySchedule.ts`
+  - FE: `DeliverySchedulePage.tsx`, `deliveryScheduleApi.ts`, 9 components trong `delivery-schedule/`
+- **Files sửa:**
+  - `backend/src/routes/index.ts` — remove route mount
+  - `backend/src/services/dashboardService.ts` — Overview: remove `trip_count` KPI; Operations: thay bằng `driver_invoices` stats
+  - `frontend/src/Router.tsx` — remove route
+  - `frontend/src/layouts/MainLayout.tsx` — remove sidebar item
+  - `frontend/src/pages/admin/AuditLogPage.tsx` — remove label
+  - `frontend/src/pages/dashboard/tabs/OverviewTab.tsx` — remove trip_count KPI card
+  - `frontend/src/pages/dashboard/tabs/OperationsTab.tsx` — đơn giản hóa, chỉ hiển thị driver_invoices stats
+  - `frontend/src/types/dashboard.ts` — update types
+- **Migration:** `043_drop_delivery_schedules.sql` — DROP TABLE `delivery_schedules`
+- **Cần chú ý:**
+  - Migration DROP TABLE sẽ mất data vĩnh viễn — backup trước khi chạy
+  - Audit log cũ có `entity_type = 'delivery_schedule'` vẫn hiển thị, fallback về raw value
+  - Dashboard Operations tab đổi tên từ "Vận tải" thành "Hóa đơn tài xế" (chỉ hiển thị driver_invoices stats)
