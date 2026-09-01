@@ -5,6 +5,45 @@ description: Ghi lại các bài học kinh nghiệm, bug đã fix, và pitfalls
 # Lessons Learned — PhuPhatCorp
 
 ---
+## Lesson: Đồng bộ Permission Matrix, Sidebar và API Routes
+- **Ngày:** 2026-08-31
+- **Severity:** Medium
+- **Feature liên quan:** Quản lý quyền, Sidebar, Catalog & Job APIs
+- **Triệu chứng:**
+  - Quyền `logs.view` bị thiếu trong điều kiện mở menu cha "Thiết lập người dùng".
+  - Trang Cấu hình Job (`ReconcileJobPage`) check sai permission `accounting_data.manage` thay vì `jobs.manage`.
+  - Một số API route danh mục (`innerCityCustomers`, `promoItems`, `deliveryPoints`) thiếu middleware `requirePermission`.
+  - Quyền cũ `transport.*` dư thừa trong DB và thiếu key i18n của các permission mới.
+- **Fix:**
+  - Bổ sung `logs.view` vào `showUserSettings` trong `MainLayout.tsx`.
+  - Sửa `ReconcileJobPage.tsx` sang `jobs.manage`.
+  - Thêm `requirePermission('catalog.view')` và `requirePermission('catalog.manage')` vào các routes danh mục.
+  - Tạo migration `050_cleanup_transport_permissions.sql` dọn dẹp `transport.*` và bổ sung đầy đủ i18n `modules` & `permCodes` trong `vi.json` / `en.json`.
+- **Files sửa:** `MainLayout.tsx`, `ReconcileJobPage.tsx`, `DashboardPage.tsx`, `innerCityCustomers.ts`, `promoItems.ts`, `deliveryPoints.ts`, `vi.json`, `en.json`, `050_cleanup_transport_permissions.sql`.
+
+---
+## Bug: `AssignEntityModal` error "Vui lòng chọn tính năng" on submit
+- **Ngày:** 2026-08-31
+- **Severity:** High
+- **Feature liên quan:** Data Scope Management — Modal Gán đối tượng
+- **Triệu chứng:** Người dùng thấy ô Tính năng đã hiển thị giá trị nhưng khi bấm Submit form lại báo lỗi "Vui lòng chọn tính năng".
+- **Root cause:** `useState(selectedFeatureCode)` khởi tạo giá trị rỗng khi modal mount lúc `features` là `[]`. Thẻ `<select>` trong DOM hiển thị option đầu tiên nhưng React state không tự động cập nhật nếu không có event `onChange`.
+- **Fix:** Bổ sung `useEffect` đồng bộ `selectedFeatureCode` và `selectedEntityType` tự động mỗi khi `isOpen = true` và `features` nạp xong dữ liệu.
+- **File sửa:** `frontend/src/components/admin/data-scope/AssignEntityModal.tsx`
+- **Cần chú ý:** Trong modal form, nếu khởi tạo state phụ thuộc vào async props (danh sách options), luôn dùng `useEffect` hoặc controlled default value đồng bộ khi modal mở ra để tránh tình trạng lệch state giữa React và DOM.
+
+---
+## Bug: `vehicles.map is not a function` in AssignEntityModal
+- **Ngày:** 2026-08-31
+- **Severity:** High
+- **Feature liên quan:** Data Scope Management — Modal Gán đối tượng
+- **Triệu chứng:** Mở modal gán đối tượng bị crash với lỗi `TypeError: vehicles.map is not a function`.
+- **Root cause:** API `/vehicles` trả về object phân trang `{ vehicles: [...], total, page, limit }` trong `res.data.data`. Hook React Query đọc trực tiếp `res.data.data` thay vì trích xuất `res.data.data?.vehicles`, khiến biến `vehicles` nhận giá trị Object thay vì Array.
+- **Fix:** Đọc `res.data.data?.vehicles || []` kèm kiểm tra an toàn `Array.isArray()`.
+- **File sửa:** `frontend/src/components/admin/data-scope/AssignEntityModal.tsx`
+- **Cần chú ý:** Luôn kiểm tra cấu trúc response của các API danh mục (một số trả về array trực tiếp, một số bọc trong object phân trang `{ items: [] }` hoặc `{ vehicles: [] }`).
+
+---
 ## Bug: User Management hiện `users.roles.IEU_PHOI_XE` thay vì tên vai trò
 - **Ngày:** 2026-08-06
 - **Severity:** Medium
@@ -565,6 +604,25 @@ Vite không hot-reload `.env` khi dev server đang chạy. Phải restart `npm r
 - **Files:** `backend/src/services/repairService.ts:159-178`
 
 ## Change: Xử lý Data Gạo — Đổi master data từ delivery_schedules sang driver_invoices
+
+## Bug: GET /api/dispatch-schedules 500 — Schema DB thiếu columns bien_so, tai_xe, vehicle_id
+- **Ngày:** 2026-08-30
+- **Severity:** High
+- **Feature liên quan:** Bảng điều phối xe (Dispatch Schedules)
+- **Triệu chứng:** `GET /api/dispatch-schedules?date=2026-08-30` trả về 500 Internal Server Error. Backend log không có stack trace rõ ràng.
+- **Root cause:** Service `dispatchScheduleService.listByDate()` SELECT các columns `bien_so, tai_xe, vehicle_id` nhưng DB thực tế không có các columns này. Migration 006 tạo bảng có các columns này, nhưng migration 044 (xóa diem_tra, thêm tan/can) và 045 (xóa gio_nhan) đã chạy thành công — tuy nhiên các columns bien_so, tai_xe, vehicle_id chưa từng được thêm vào DB staging. Có thể do migration 006 chạy trước khi các columns này được thêm vào file migration, hoặc DB staging được tạo từ snapshot cũ.
+- **Fix:** Tạo migration 047 để thêm các columns bị thiếu:
+  ```sql
+  ALTER TABLE dispatch_schedules ADD COLUMN IF NOT EXISTS bien_so VARCHAR(50);
+  ALTER TABLE dispatch_schedules ADD COLUMN IF NOT EXISTS tai_xe TEXT;
+  ALTER TABLE dispatch_schedules ADD COLUMN IF NOT EXISTS vehicle_id INTEGER;
+  ```
+- **File tạo mới:** `backend/src/migrations/047_add_bien_so_tai_xe_vehicle_id_to_dispatch_schedules.sql`
+- **Cần chú ý:** 
+  - Khi thêm columns mới vào service (SELECT/INSERT), phải đảm bảo migration đã chạy trên target DB.
+  - Dùng `IF NOT EXISTS` trong migration để đảm bảo idempotent.
+  - Sau khi chạy migration, restart backend server để apply schema changes.
+  - Verify bằng cách query `information_schema.columns` để kiểm tra columns tồn tại.
 - **Ngày:** 2026-08-19
 - **Feature:** Xử lý Data Gạo (RiceDeliveryDataPage)
 - **Thay đổi:** Bước 2 fetch master data từ bảng `driver_invoices` (Hóa đơn tài xế) thay vì `delivery_schedules` (Lịch đi hàng)

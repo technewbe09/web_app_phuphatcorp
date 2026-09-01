@@ -25,18 +25,28 @@ Hệ thống dùng **RBAC** (Role-Based Access Control) — mỗi user gắn 1 r
 | dashboard.view | Xem Dashboard |
 | delivery_data.view | Xem Delivery Data |
 | delivery_data.manage | Quản lý Delivery Data |
+| vehicle_data.view | Xem dữ liệu xe (đăng kiểm, thay nhớt, bảo hiểm, sửa chữa) |
+| vehicle_data.manage | Quản lý dữ liệu xe |
+| fuel.view | Xem dữ liệu dầu & thống kê dầu |
+| fuel.manage | Quản lý dữ liệu dầu |
+| dispatch.view | Xem bảng điều phối xe |
+| dispatch.manage | Tạo/xóa lịch điều phối xe |
+| accounting_data.view | Xem dữ liệu kế toán |
+| accounting_data.manage | Quản lý dữ liệu kế toán |
 | users.view | Xem Users |
 | users.manage | Quản lý Users |
-| reports.view | Xem Báo cáo |
 | roles.view | Xem Roles |
 | roles.manage | Quản lý Roles |
 | permissions.manage | Quản lý Permissions |
-| transport.view | Xem dữ liệu vận tải (trip codes, xe, tài xế) |
-| transport.manage | Quản lý dữ liệu vận tải (CRUD trip codes, xe, tài xế) |
-| dispatch.view | Xem bảng điều phối xe |
-| dispatch.manage | Tạo/xóa lịch điều phối xe |
+| catalog.view | Xem danh mục |
+| catalog.manage | Quản lý danh mục |
+| jobs.view | Xem cấu hình Job |
+| jobs.manage | Quản lý Job |
+| logs.view | Xem nhật ký hệ thống |
 | route_pricing.view | Xem giá theo tuyến |
 | route_pricing.manage | Quản lý giá theo tuyến |
+| data_scopes.view | Xem phạm vi dữ liệu |
+| data_scopes.manage | Quản lý phạm vi dữ liệu |
 
 **Cơ chế enforcement:**
 - JWT payload chứa `roleId` và `permissions: string[]`
@@ -836,6 +846,14 @@ Step 1: Chọn loai_tuyen (Tuyến cố định / Tuyến ngoài)
         → Toast success → Modal đóng → Refresh bảng
 ```
 
+**Auto-fill tài xế (BR-008):**
+- Khi chọn xe (vehicle_id), hệ thống fetch danh sách tài xế từ `driver_vehicles` junction
+- Auto-fill tài xế đầu tiên trong danh sách (theo `driver_vehicles.created_at ASC`)
+- Dropdown chỉ hiển thị tài xế được gán cho xe đó
+- User có thể đổi tài xế nếu muốn
+- Lưu `driver_id` (= `driver.user_id`) vào `dispatch_schedules`
+- Fallback: nếu xe chưa có tài xế → nhập tay
+
 **API Endpoints:**
 ```
 GET    /api/dispatch-schedules?date=YYYY-MM-DD  → { xe_nho: [], xe_lon: [], tuyen_ngoai: [] }
@@ -928,26 +946,32 @@ Parent menu group "Thiết lập người dùng" trong sidebar — collapsible a
 - Unsaved changes tracked locally (dirty state với Set objects)
 - Lưu tất cả: loop non-ADMIN roles → PUT /api/permissions/role/:id
 
-### 9.4 Files
+### 9.4 Quản lý phạm vi dữ liệu (/settings/data-scopes)
+
+- Requires: `data_scopes.view` (xem) / `data_scopes.manage` (cấu hình)
+- **Ma trận vai trò:** Cấu hình loại phạm vi dữ liệu (`all`, `owner`, `entity`, `none`) cho từng Role × Feature.
+  - `all`: Xem toàn bộ dữ liệu hệ thống (ADMIN, Kế toán).
+  - `owner`: **Tự động phân quyền dựa trên `user_id` / `driver_id`** của người dùng (Chuyến xe do chính tài xế phụ trách `driver_id = user.userId` hoặc bản ghi do user tạo). Không cần cấu hình gán thủ công!
+  - `entity`: Gán danh sách đối tượng cố định (xe `vehicle` hoặc tài xế `driver`) cho người dùng qua bảng `user_entity_scopes`.
+  - `none`: Khóa xem dữ liệu của tính năng đó.
+- **Thực thi phân quyền dữ liệu:** Tự động lọc ở tầng backend API dựa trên middleware `resolveDataScope(featureCode)` và inject filter vào SQL query. Áp dụng cho Theo dõi hóa đơn (`invoice_tracking`) và mở rộng cho các tính năng trong tương lai.
+
+### 9.5 Files
 
 ```
-backend/src/services/roleService.ts
-backend/src/services/permissionService.ts
-backend/src/controllers/rolesController.ts
-backend/src/controllers/permissionsController.ts
-backend/src/routes/roles.ts
-backend/src/routes/permissions.ts
-backend/src/migrations/004_roles_permissions.sql
+backend/src/services/dataScopeService.ts
+backend/src/controllers/dataScopeController.ts
+backend/src/routes/dataScopes.ts
+backend/src/middleware/dataScope.ts
+backend/src/migrations/049_create_data_scopes.sql
 
-frontend/src/api/rolesApi.ts
-frontend/src/api/permissionsApi.ts
-frontend/src/hooks/useRoles.ts
-frontend/src/hooks/usePermissions.ts
-frontend/src/pages/admin/RoleManagementPage.tsx
-frontend/src/pages/admin/PermissionManagementPage.tsx
-frontend/src/components/admin/CreateRoleModal.tsx
-frontend/src/components/admin/EditRoleModal.tsx
-frontend/src/components/admin/DeactivateRoleDialog.tsx
+frontend/src/api/dataScopeApi.ts
+frontend/src/hooks/useDataScopes.ts
+frontend/src/pages/admin/DataScopeManagementPage.tsx
+frontend/src/components/admin/data-scope/RoleScopeMatrix.tsx
+frontend/src/components/admin/data-scope/UserEntityScopeList.tsx
+frontend/src/components/admin/data-scope/AssignEntityModal.tsx
+frontend/src/components/admin/data-scope/DataScopeBadge.tsx
 ```
 
 ---

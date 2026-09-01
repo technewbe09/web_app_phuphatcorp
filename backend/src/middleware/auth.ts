@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { verifyToken } from '../utils/jwt';
 import { UserRole } from '../types/user';
+import { DataScope } from '../types/dataScope';
 import { pool } from '../config/database';
 
 export interface AuthRequest extends Request {
@@ -11,6 +12,7 @@ export interface AuthRequest extends Request {
     roleId: number | null;
     permissions: string[];
   };
+  dataScope?: DataScope;
 }
 
 export function authenticateToken(

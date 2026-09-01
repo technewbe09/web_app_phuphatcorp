@@ -250,6 +250,16 @@ Base URL: `/api`
 | POST | /auth/logout | No | — | `{ success, message }` + clear cookie |
 | GET | /auth/me | JWT | — | `{ success, message, data: user }` |
 
+### Data Scopes — /data-scopes
+| Method | Path | Auth | Notes |
+|--------|------|------|-------|
+| GET | /data-scopes/me | JWT | Lấy tóm tắt phân quyền dữ liệu của user hiện tại |
+| GET | /data-scopes/features | data_scopes.view | Danh sách tính năng và ma trận scope vai trò |
+| PUT | /data-scopes/features/:code/roles/:roleId | data_scopes.manage | Cập nhật scope_type của vai trò cho tính năng |
+| GET | /data-scopes/user-entities | data_scopes.view | Danh sách gán entity cho user |
+| POST | /data-scopes/user-entities | data_scopes.manage | Gán entity cho user |
+| DELETE | /data-scopes/user-entities/:id | data_scopes.manage | Hủy gán entity cho user |
+
 ### Users — /users (ADMIN only)
 
 | Method | Path | Auth | Body | Response |
@@ -287,7 +297,7 @@ UI: `docs/ui/20260731_route-pricing-adjustment-periods-cr-ui-spec.md`
 | GET | /dashboard/overview | JWT + dashboard.view | KPI tháng/quý (`?period=month\|quarter`), tấn theo 6 tháng, cảnh báo hết hạn, dispatch hôm nay, job reconcile gần nhất |
 | GET | /dashboard/vehicle-maintenance | JWT + vehicle_data.view | Đăng kiểm/bảo hiểm theo bucket hạn, xe đến hạn thay nhớt, chi phí sửa chữa 12 tháng |
 | GET | /dashboard/accounting | JWT + accounting_data.view | Tổng matched/unmatched, theo tháng, batch gần đây, lịch sử reconcile job |
-| GET | /dashboard/operations | JWT + transport.view hoặc dispatch.view | Chuyến/tấn theo ngày & theo xe (`?date_from&date_to`, mặc định 30 ngày), hóa đơn tài xế |
+| GET | /dashboard/operations | JWT + dispatch.view | Chuyến/tấn theo ngày & theo xe (`?date_from&date_to`, mặc định 30 ngày), hóa đơn tài xế |
 | GET | /dashboard/fuel | JWT + fuel.view | Chi phí/lít 6 tháng, tiêu thụ theo xe, chênh lệch đồng hồ vs GPS |
 
 **FE:** Trang `/` (DashboardPage) — tabs trong 1 trang, filter theo permission. Files: `frontend/src/pages/dashboard/tabs/*.tsx`, `frontend/src/api/dashboardApi.ts`, `frontend/src/hooks/useDashboard.ts`.
@@ -306,8 +316,15 @@ Frontend route: `/route-pricing` (sidebar top-level **Giá theo tuyến**)
 |--------|------|------|------------|----------|
 | GET | /dispatch-schedules | JWT | query: `date=YYYY-MM-DD` (required) | `{ success, data: { xe_nho: DispatchSchedule[], xe_lon: DispatchSchedule[], tuyen_ngoai: DispatchSchedule[] } }` |
 | POST | /dispatch-schedules | JWT | `{ ngay, loai_tuyen, loai_xe, xe_type, bien_so, tai_xe?, ma_chuyen?, diem_nhan, diem_tra, gio_nhan, ghi_chu?, vehicle_id?, trip_code_id? }` | `{ success, data: DispatchSchedule }` |
+| POST | /dispatch-schedules/batch | JWT | `{ items: CreateDispatchScheduleBatchItem[] }` — mỗi item có thêm `driver_id?` | `{ success, data: DispatchSchedule[] }` |
 | PUT | /dispatch-schedules/:id | JWT + dispatch.manage | `{ bien_so, tai_xe?, ma_chuyen?, diem_nhan, diem_tra, gio_nhan, ghi_chu?, vehicle_id?, trip_code_id? }` | `{ success, data: DispatchSchedule }` |
 | DELETE | /dispatch-schedules/:id | JWT + dispatch.manage | — | `{ success, message }` |
+
+### Drivers — /drivers
+
+| Method | Path | Auth | Body/Query | Response |
+|--------|------|------|------------|----------|
+| GET | /drivers/by-vehicle/:vehicleId | JWT | — | `{ success, data: VehicleDriver[] }` — Danh sách tài xế được gán cho xe (qua `driver_vehicles`) |
 
 ### Customers — /customers
 

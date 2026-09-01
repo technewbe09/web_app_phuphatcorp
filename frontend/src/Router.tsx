@@ -20,6 +20,8 @@ import { VehicleCatalogPage } from './pages/admin/catalog/VehicleCatalogPage';
 import { VehicleDetailPage } from './pages/admin/catalog/VehicleDetailPage';
 import { InnerCityCustomerPage } from './pages/admin/catalog/InnerCityCustomerPage';
 import { PromoItemCatalogPage } from './pages/admin/catalog/PromoItemCatalogPage';
+import { DeliveryPointCatalogPage } from './pages/admin/catalog/DeliveryPointCatalogPage';
+import { DriverCatalogPage } from './pages/admin/catalog/DriverCatalogPage';
 import { SupplierCatalogPage } from './pages/admin/catalog/SupplierCatalogPage';
 import { ReconcileJobPage } from './pages/admin/jobs/ReconcileJobPage';
 import { AuditLogPage } from './pages/admin/AuditLogPage';
@@ -30,6 +32,8 @@ import { OilChangePage } from './pages/admin/vehicle-data/OilChangePage';
 import { InsurancePage } from './pages/admin/vehicle-data/InsurancePage';
 import { RepairPage } from './pages/admin/vehicle-data/RepairPage';
 import { RoutePricingPage } from './pages/route-pricing/RoutePricingPage';
+import InvoiceTrackingPage from './pages/invoice-tracking/InvoiceTrackingPage';
+import { DataScopeManagementPage } from './pages/admin/DataScopeManagementPage';
 
 function PlaceholderPage({ title }: { title: string }) {
   return (
@@ -60,6 +64,7 @@ export function Router() {
             <Route path="/users" element={<UserManagementPage />} />
             <Route path="/roles" element={<RoleManagementPage />} />
             <Route path="/permissions" element={<PermissionManagementPage />} />
+            <Route path="/settings/data-scopes" element={<DataScopeManagementPage />} />
             <Route path="/logs" element={<AuditLogPage />} />
             {/* Delivery Data */}
             <Route path="/delivery-data/5-houses" element={<DeliveryDataPage />} />
@@ -72,6 +77,7 @@ export function Router() {
             <Route path="/vehicle-data/repairs" element={<RepairPage />} />
             {/* Dispatch */}
             <Route path="/dispatch/schedule" element={<SchedulePage />} />
+            <Route path="/invoice-tracking" element={<InvoiceTrackingPage />} />
             {/* Accounting Data */}
             <Route path="/accounting-data/weight-adjustments" element={<WeightAdjustmentPage />} />
             <Route path="/accounting-data/customers" element={<CustomersPage />} />
@@ -89,6 +95,8 @@ export function Router() {
             <Route path="/catalog/inner-city-customers" element={<InnerCityCustomerPage />} />
             <Route path="/catalog/suppliers" element={<SupplierCatalogPage />} />
             <Route path="/catalog/promo-items" element={<PromoItemCatalogPage />} />
+            <Route path="/catalog/delivery-points" element={<DeliveryPointCatalogPage />} />
+            <Route path="/catalog/drivers" element={<DriverCatalogPage />} />
             <Route path="/route-pricing" element={<RoutePricingPage />} />
           </Route>
         </Route>
