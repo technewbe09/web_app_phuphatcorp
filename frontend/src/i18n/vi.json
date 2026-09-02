@@ -6,7 +6,9 @@
     "userSettings": "Thiết lập người dùng",
     "userManagement": "Quản lý người dùng",
     "roleManagement": "Quản lý vai trò",
-    "permissionManagement": "Quản lý quyền"
+    "permissionManagement": "Quản lý quyền",
+    "dataScopeManagement": "Phạm vi dữ liệu",
+    "workflowManagement": "Cấu hình quy trình"
   },
   "users": {
     "title": "Quản lý người dùng",
@@ -97,23 +99,63 @@
     "saveError": "Không thể lưu quyền. Vui lòng thử lại.",
     "loadError": "Không thể tải ma trận quyền",
     "adminReadonly": "Vai trò ADMIN luôn có toàn bộ quyền",
+    "groups": {
+      "dashboard": "Dashboard",
+      "route_pricing": "Giá theo tuyến",
+      "delivery_data": "Xử lý Data Giao Hàng",
+      "vehicle_data": "Quản lý dữ liệu xe",
+      "dispatch": "Điều hành vận tải",
+      "accounting_data": "Quản lý dữ liệu kế toán",
+      "user_settings": "Thiết lập người dùng",
+      "catalog": "Quản lý danh mục",
+      "jobs": "Quản lý Job"
+    },
+    "subMenus": {
+      "dashboard": "Dashboard",
+      "route_pricing": "Giá theo tuyến",
+      "delivery_5_houses": "Xử lý 5 nhà",
+      "delivery_rice": "Xử lý gạo",
+      "driver_invoices": "Hoá đơn tài xế / Thống kê",
+      "inspections_oil_insurance_repairs": "Đăng kiểm, Thay nhớt, Bảo hiểm, Sửa xe",
+      "fuel": "Dữ liệu dầu & Thống kê",
+      "schedule": "Lịch điều phối xe",
+      "invoice_tracking": "Theo dõi hóa đơn",
+      "accounting": "Điều chỉnh trọng lượng, Khách hàng, Import, Đối chiếu",
+      "users": "Quản lý người dùng",
+      "roles": "Quản lý vai trò",
+      "permissions": "Quản lý quyền",
+      "data_scopes": "Phạm vi dữ liệu",
+      "workflows": "Cấu hình quy trình",
+      "logs": "Nhật ký hệ thống",
+      "catalog": "Phương tiện, Khách hàng nội thành, Nhà cung cấp, Mặt hàng KM, Điểm giao",
+      "jobs": "Cấu hình Job & Lịch sử"
+    },
     "modules": {
       "dashboard": "Dashboard",
       "delivery_data": "Xử lý Data Giao Hàng",
-      "transport": "Quản lý dữ liệu xe",
+      "vehicle_data": "Quản lý dữ liệu xe",
+      "fuel": "Quản lý dữ liệu dầu",
       "dispatch": "Điều hành vận tải",
       "accounting_data": "Quản lý dữ liệu kế toán",
       "users": "Người dùng",
       "roles": "Vai trò",
       "permissions": "Quyền hạn",
-      "catalog": "Quản lý danh mục"
+      "catalog": "Quản lý danh mục",
+      "jobs": "Quản lý Job",
+      "logs": "Nhật ký hệ thống",
+      "route_pricing": "Giá theo tuyến",
+      "data_scopes": "Phạm vi dữ liệu",
+      "workflows": "Cấu hình quy trình",
+      "invoice_tracking": "Theo dõi hóa đơn"
     },
     "permCodes": {
       "dashboard_view": "Xem Dashboard",
       "delivery_data_view": "Xem dữ liệu giao hàng",
       "delivery_data_manage": "Quản lý dữ liệu giao hàng",
-      "transport_view": "Xem dữ liệu vận tải",
-      "transport_manage": "Quản lý dữ liệu vận tải",
+      "vehicle_data_view": "Xem dữ liệu xe",
+      "vehicle_data_manage": "Quản lý dữ liệu xe",
+      "fuel_view": "Xem dữ liệu dầu",
+      "fuel_manage": "Quản lý dữ liệu dầu",
       "dispatch_view": "Xem bảng điều phối",
       "dispatch_manage": "Điều phối xe",
       "accounting_data_view": "Xem dữ liệu kế toán",
@@ -124,7 +166,18 @@
       "roles_manage": "Quản lý vai trò",
       "permissions_manage": "Quản lý quyền",
       "catalog_view": "Xem danh mục",
-      "catalog_manage": "Quản lý danh mục"
+      "catalog_manage": "Quản lý danh mục",
+      "jobs_view": "Xem cấu hình Job",
+      "jobs_manage": "Quản lý cấu hình Job",
+      "logs_view": "Xem nhật ký hệ thống",
+      "route_pricing_view": "Xem giá theo tuyến",
+      "route_pricing_manage": "Quản lý giá theo tuyến",
+      "data_scopes_view": "Xem cấu hình phạm vi dữ liệu",
+      "data_scopes_manage": "Quản lý phạm vi dữ liệu",
+      "workflows_view": "Xem cấu hình quy trình",
+      "workflows_manage": "Quản lý cấu hình quy trình",
+      "invoice_tracking_view": "Xem theo dõi hóa đơn",
+      "invoice_tracking_manage": "Quản lý theo dõi hóa đơn"
     }
   },
   "createUser": {
@@ -412,19 +465,19 @@
       "loadError": "Không tải được dữ liệu",
       "retry": "Thử lại",
       "columns": {
+        "bienSo": "Biển số",
         "diemNhan": "Điểm nhận",
-        "diemTra": "Điểm trả",
+        "tan": "Tấn",
+        "can": "CAN",
         "loaiXe": "Loại xe",
-        "gioNhan": "Giờ nhận",
         "ghiChu": "Ghi chú"
       }
     },
     "createModal": {
       "title": "Tạo chuyến xe",
-      "step1Title": "Bước 1/4 — Loại tuyến",
-      "step2Title": "Bước 2/4 — Loại xe sở hữu",
-      "step3Title": "Bước 3/4 — Cỡ xe",
-      "step4Title": "Bước 4/4 — Thông tin chuyến xe",
+      "step1Title": "Bước 1/3 — Loại tuyến",
+      "step2Title": "Bước 2/3 — Cỡ xe",
+      "step3Title": "Bước 3/3 — Thông tin chuyến xe",
       "tuyenCoDinh": "Tuyến cố định",
       "tuyenNgoai": "Tuyến ngoài",
       "xeNha": "Xe nhà",
@@ -435,8 +488,17 @@
       "submit": "Tạo chuyến",
       "submitting": "Đang tạo...",
       "diemNhan": "Điểm nhận",
-      "diemTra": "Điểm trả",
-      "gioNhan": "Giờ nhận",
+      "diemNhanPlaceholder": "Chọn điểm nhận",
+      "tan": "Tấn",
+      "can": "CAN",
+      "bienSo": "Biển số",
+      "bienSoPlaceholder": "Chọn biển số xe",
+      "bienSoInputPlaceholder": "Nhập biển số xe",
+      "taiXe": "Tài xế",
+      "taiXePlaceholder": "Tự động điền khi chọn xe",
+      "nhapTai": "Nhập tay",
+      "tripNumber": "Chuyến",
+      "addTrip": "Thêm chuyến khác",
       "ghiChu": "Ghi chú",
       "ghiChuPlaceholder": "Ghi chú thêm...",
       "createSuccess": "Tạo chuyến thành công",
@@ -459,16 +521,17 @@
     },
     "validation": {
       "diemNhanRequired": "Điểm nhận là bắt buộc",
-      "diemTraRequired": "Điểm trả là bắt buộc",
-      "gioNhanRequired": "Giờ nhận là bắt buộc"
+      "bienSoRequired": "Biển số là bắt buộc"
     }
   },
   "catalog": {
     "menuTitle": "Quản lý danh mục",
     "vehicles": "Danh mục xe",
+    "drivers": "Danh mục tài xế",
     "innerCityCustomers": "Danh mục KH nội thành",
     "suppliers": "Danh mục NCC",
-    "promoItems": "Danh mục hàng KM"
+    "promoItems": "Danh mục hàng KM",
+    "deliveryPoints": "Danh mục điểm nhận hàng"
   },
   "jobs": {
     "menuTitle": "Quản lý Job"
@@ -642,6 +705,174 @@
       "rate": "L/100km",
       "odometer": "Đồng hồ (km)",
       "diff": "Chênh lệch"
+    }
+  },
+  "invoice_tracking": {
+    "tabs": {
+      "list": "Danh sách ticket",
+      "statistics": "Thống kê"
+    },
+    "stats": {
+      "title": "Thống kê hóa đơn theo tài xế",
+      "kpi": {
+        "total": "Tổng số ticket",
+        "created": "Tạo mới",
+        "pendingReview": "Chờ duyệt",
+        "requestSupplement": "Yêu cầu bổ sung",
+        "completed": "Hoàn thành",
+        "completionRate": "Tỷ lệ hoàn thành"
+      },
+      "table": {
+        "stt": "STT",
+        "driver": "Tài xế",
+        "vehicles": "Xe phụ trách",
+        "created": "Tạo mới",
+        "pending": "Chờ duyệt",
+        "supplement": "Y/C bổ sung",
+        "completed": "Hoàn thành",
+        "total": "Tổng cộng",
+        "rate": "Tỷ lệ HT",
+        "grandTotal": "TỔNG CỘNG"
+      },
+      "filters": {
+        "dateFrom": "Từ ngày",
+        "dateTo": "Đến ngày",
+        "plate": "Biển số xe",
+        "platePlaceholder": "Nhập biển số...",
+        "driver": "Tên tài xế",
+        "driverPlaceholder": "Nhập tên tài xế...",
+        "clear": "Xóa bộ lọc"
+      },
+      "empty": "Không có dữ liệu thống kê cho bộ lọc này."
+    },
+    "page": {
+      "title": "Theo dõi hóa đơn",
+      "empty": "Chưa có ticket nào",
+      "error": "Không thể tải danh sách ticket",
+      "retry": "Thử lại"
+    },
+    "filter": {
+      "searchPlaceholder": "Tìm theo biển số, tài xế, mã chuyến...",
+      "statusAll": "Tất cả trạng thái",
+      "statusCreated": "Tạo mới",
+      "statusPendingReview": "Chờ duyệt",
+      "statusCompleted": "Hoàn thành",
+      "statusRequestSupplement": "Yêu cầu bổ sung"
+    },
+    "table": {
+      "stt": "STT",
+      "date": "Ngày",
+      "bienSo": "Biển số",
+      "taiXe": "Tài xế",
+      "maChuyen": "Mã chuyến",
+      "diemNhan": "Điểm nhận",
+      "diemTra": "Điểm trả",
+      "status": "Trạng thái",
+      "actions": "Thao tác"
+    },
+    "detail": {
+      "title": "Chi tiết ticket",
+      "tripInfo": "Thông tin chuyến xe",
+      "statusHistory": "Trạng thái & Lịch sử",
+      "documents": "Chứng từ",
+      "driverNote": "Ghi chú tài xế",
+      "supplementNote": "Yêu cầu bổ sung",
+      "reviewedAt": "Duyệt lúc",
+      "completedAt": "Hoàn thành lúc",
+      "noDocuments": "Chưa có chứng từ",
+      "noNotes": "Không có ghi chú"
+    },
+    "action": {
+      "upload": "Upload chứng từ",
+      "finish": "Hoàn thành",
+      "requestSupplement": "Yêu cầu bổ sung",
+      "view": "Xem",
+      "cancel": "Hủy",
+      "submit": "Gửi",
+      "confirm": "Xác nhận",
+      "retry": "Thử lại"
+    },
+    "upload": {
+      "title": "Upload chứng từ",
+      "dropzone": "Kéo thả file hoặc click chọn",
+      "supported": "Hỗ trợ: JPG, PNG, PDF",
+      "max": "Tối đa: 10 files, 5MB/file",
+      "noteLabel": "Ghi chú",
+      "notePlaceholder": "Nhập ghi chú (tùy chọn)...",
+      "submit": "Gửi chứng từ",
+      "errorSize": "File vượt quá 5MB",
+      "errorType": "Chỉ chấp nhận JPG, PNG, PDF",
+      "errorCount": "Tối đa 10 files mỗi lần upload"
+    },
+    "supplement": {
+      "title": "Yêu cầu bổ sung chứng từ",
+      "noteLabel": "Ghi chú bổ sung (bắt buộc)",
+      "notePlaceholder": "Nhập lý do yêu cầu bổ sung...",
+      "noteRequired": "Ghi chú bổ sung là bắt buộc (tối thiểu 5 ký tự)",
+      "submit": "Gửi yêu cầu"
+    },
+    "confirmFinish": {
+      "title": "Xác nhận hoàn thành",
+      "message": "Bạn có chắc muốn đánh dấu ticket này là \"Hoàn thành\"?",
+      "warning": "Hành động này không thể hoàn tác."
+    },
+    "message": {
+      "successUpload": "Đã upload chứng từ thành công",
+      "successFinish": "Đã hoàn thành ticket",
+      "successSupplement": "Đã gửi yêu cầu bổ sung",
+      "errorUpload": "Upload thất bại, vui lòng thử lại",
+      "errorReview": "Không thể duyệt ticket này",
+      "errorWrongStatus": "Ticket không ở trạng thái phù hợp",
+      "errorServer": "Lỗi hệ thống, vui lòng thử lại"
+    },
+    "status": {
+      "created": "Tạo mới",
+      "pending_review": "Chờ duyệt",
+      "completed": "Hoàn thành",
+      "request_supplement": "Yêu cầu bổ sung"
+    }
+  },
+  "data_scopes": {
+    "title": "Quản lý phạm vi dữ liệu",
+    "tabs": {
+      "matrix": "Ma trận vai trò",
+      "user_entities": "Gán đối tượng người dùng"
+    },
+    "types": {
+      "all": "Tất cả dữ liệu",
+      "owner": "Chính chủ tạo",
+      "entity": "Theo đối tượng gán",
+      "none": "Bị khóa"
+    },
+    "entities": {
+      "driver": "Tài xế",
+      "vehicle": "Xe",
+      "customer": "Khách hàng"
+    },
+    "actions": {
+      "save_changes": "Lưu cấu hình",
+      "assign_entity": "Gán đối tượng",
+      "reset": "Hoàn tác"
+    },
+    "messages": {
+      "save_success": "Đã lưu cấu hình phạm vi dữ liệu",
+      "assign_success": "Đã gán đối tượng cho người dùng thành công",
+      "delete_assign_success": "Đã hủy gán đối tượng",
+      "delete_confirm": "Bạn có chắc muốn xóa phân quyền đối tượng này không?",
+      "empty_matrix": "Chưa có tính năng nào được đăng ký cấu hình phân quyền dữ liệu",
+      "empty_user_entities": "Chưa có phân quyền đối tượng nào được thiết lập",
+      "empty_user_entities_hint": "Bấm nút \"Gán đối tượng\" để chỉ định dữ liệu cho người dùng cụ thể."
+    }
+  },
+  "workflows": {
+    "title": "Cấu hình quy trình",
+    "status": {
+      "active": "Đang áp dụng",
+      "inactive": "Tạm dừng"
+    },
+    "actions": {
+      "configure": "Cấu hình bước",
+      "save": "Lưu cấu hình quy trình"
     }
   }
 }

@@ -6,7 +6,9 @@
     "userSettings": "User Settings",
     "userManagement": "User Management",
     "roleManagement": "Role Management",
-    "permissionManagement": "Permission Management"
+    "permissionManagement": "Permission Management",
+    "dataScopeManagement": "Data Scopes",
+    "workflowManagement": "Workflows"
   },
   "users": {
     "title": "User Management",
@@ -97,23 +99,63 @@
     "saveError": "Failed to save permissions. Please try again.",
     "loadError": "Failed to load permission matrix",
     "adminReadonly": "ADMIN role always has all permissions",
+    "groups": {
+      "dashboard": "Dashboard",
+      "route_pricing": "Route Pricing",
+      "delivery_data": "Delivery Data Processing",
+      "vehicle_data": "Vehicle Data",
+      "dispatch": "Transport Operations",
+      "accounting_data": "Accounting Data",
+      "user_settings": "User Settings",
+      "catalog": "Catalog Management",
+      "jobs": "Job Management"
+    },
+    "subMenus": {
+      "dashboard": "Dashboard",
+      "route_pricing": "Route Pricing",
+      "delivery_5_houses": "Process 5 Houses",
+      "delivery_rice": "Process Rice",
+      "driver_invoices": "Driver Invoices / Stats",
+      "inspections_oil_insurance_repairs": "Inspections, Oil, Insurance, Repairs",
+      "fuel": "Fuel Data & Stats",
+      "schedule": "Dispatch Schedule",
+      "invoice_tracking": "Invoice Tracking",
+      "accounting": "Weight Adjustment, Customers, Import, Invoice Matching",
+      "users": "User Management",
+      "roles": "Role Management",
+      "permissions": "Permission Management",
+      "data_scopes": "Data Scopes",
+      "workflows": "Workflows",
+      "logs": "System Audit Logs",
+      "catalog": "Vehicles, Inner-City Customers, Suppliers, Promo Items, Delivery Points",
+      "jobs": "Job Config & History"
+    },
     "modules": {
       "dashboard": "Dashboard",
       "delivery_data": "Delivery Data Processing",
-      "transport": "Vehicle Data",
+      "vehicle_data": "Vehicle Data",
+      "fuel": "Fuel Data",
       "dispatch": "Transport Operations",
       "accounting_data": "Accounting Data",
       "users": "Users",
       "roles": "Roles",
       "permissions": "Permissions",
-      "catalog": "Catalog Management"
+      "catalog": "Catalog Management",
+      "jobs": "Job Management",
+      "logs": "System Audit Logs",
+      "route_pricing": "Route Pricing",
+      "data_scopes": "Data Scopes",
+      "workflows": "Workflows",
+      "invoice_tracking": "Invoice Tracking"
     },
     "permCodes": {
       "dashboard_view": "View Dashboard",
       "delivery_data_view": "View Delivery Data",
       "delivery_data_manage": "Manage Delivery Data",
-      "transport_view": "View Transport Data",
-      "transport_manage": "Manage Transport Data",
+      "vehicle_data_view": "View Vehicle Data",
+      "vehicle_data_manage": "Manage Vehicle Data",
+      "fuel_view": "View Fuel Data",
+      "fuel_manage": "Manage Fuel Data",
       "dispatch_view": "View Dispatch Board",
       "dispatch_manage": "Manage Dispatch",
       "accounting_data_view": "View Accounting Data",
@@ -124,7 +166,18 @@
       "roles_manage": "Manage Roles",
       "permissions_manage": "Manage Permissions",
       "catalog_view": "View Catalog",
-      "catalog_manage": "Manage Catalog"
+      "catalog_manage": "Manage Catalog",
+      "jobs_view": "View Jobs Config",
+      "jobs_manage": "Manage Jobs Config",
+      "logs_view": "View System Audit Logs",
+      "route_pricing_view": "View Route Pricing",
+      "route_pricing_manage": "Manage Route Pricing",
+      "data_scopes_view": "View Data Scopes Config",
+      "data_scopes_manage": "Manage Data Scopes",
+      "workflows_view": "View Workflows",
+      "workflows_manage": "Manage Workflows",
+      "invoice_tracking_view": "View Invoice Tracking",
+      "invoice_tracking_manage": "Manage Invoice Tracking"
     }
   },
   "createUser": {
@@ -410,19 +463,19 @@
       "loadError": "Failed to load schedule",
       "retry": "Retry",
       "columns": {
+        "bienSo": "Plate No.",
         "diemNhan": "Pickup",
-        "diemTra": "Dropoff",
+        "tan": "Tons",
+        "can": "CAN",
         "loaiXe": "Vehicle Type",
-        "gioNhan": "Time",
         "ghiChu": "Note"
       }
     },
     "createModal": {
       "title": "Create Trip",
-      "step1Title": "Step 1/4 — Route Type",
-      "step2Title": "Step 2/4 — Vehicle Ownership",
-      "step3Title": "Step 3/4 — Vehicle Size",
-      "step4Title": "Step 4/4 — Trip Details",
+      "step1Title": "Step 1/3 — Route Type",
+      "step2Title": "Step 2/3 — Vehicle Size",
+      "step3Title": "Step 3/3 — Trip Details",
       "tuyenCoDinh": "Fixed Route",
       "tuyenNgoai": "Outside Route",
       "xeNha": "Company Vehicle",
@@ -433,8 +486,17 @@
       "submit": "Create Trip",
       "submitting": "Creating...",
       "diemNhan": "Pickup Point",
-      "diemTra": "Dropoff Point",
-      "gioNhan": "Pickup Time",
+      "diemNhanPlaceholder": "Select pickup point",
+      "tan": "Tons",
+      "can": "CAN",
+      "bienSo": "Plate Number",
+      "bienSoPlaceholder": "Select plate number",
+      "bienSoInputPlaceholder": "Enter plate number",
+      "taiXe": "Driver",
+      "taiXePlaceholder": "Auto-filled when vehicle selected",
+      "nhapTai": "Manual entry",
+      "tripNumber": "Trip",
+      "addTrip": "Add another trip",
       "ghiChu": "Note",
       "ghiChuPlaceholder": "Additional notes...",
       "createSuccess": "Trip created successfully",
@@ -457,16 +519,17 @@
     },
     "validation": {
       "diemNhanRequired": "Pickup point is required",
-      "diemTraRequired": "Dropoff point is required",
-      "gioNhanRequired": "Pickup time is required"
+      "bienSoRequired": "Plate number is required"
     }
   },
   "catalog": {
     "menuTitle": "Catalog Management",
     "vehicles": "Vehicle Catalog",
+    "drivers": "Driver Catalog",
     "innerCityCustomers": "Inner City Customers",
     "suppliers": "Suppliers",
-    "promoItems": "Promo Items"
+    "promoItems": "Promo Items",
+    "deliveryPoints": "Delivery Points"
   },
   "jobs": {
     "menuTitle": "Job Management"
@@ -596,6 +659,165 @@
       "rate": "L/100km",
       "odometer": "Odometer (km)",
       "diff": "Deviation"
+    }
+  },
+  "data_scopes": {
+    "title": "Data Scope Management",
+    "tabs": {
+      "matrix": "Role Matrix",
+      "user_entities": "User Entity Assignments"
+    },
+    "types": {
+      "all": "All Data",
+      "owner": "Owner Only",
+      "entity": "By Assigned Entities",
+      "none": "Locked"
+    },
+    "entities": {
+      "driver": "Driver",
+      "vehicle": "Vehicle",
+      "customer": "Customer"
+    },
+    "actions": {
+      "save_changes": "Save Changes",
+      "assign_entity": "Assign Entity",
+      "reset": "Reset"
+    },
+    "messages": {
+      "save_success": "Data scope configuration saved successfully",
+      "assign_success": "Entities assigned to user successfully",
+      "delete_assign_success": "Entity assignment removed"
+    }
+  },
+  "invoice_tracking": {
+    "page": {
+      "title": "Invoice Tracking",
+      "empty": "No tickets found",
+      "error": "Failed to load ticket list",
+      "retry": "Retry"
+    },
+    "filter": {
+      "searchPlaceholder": "Search by license plate, driver, trip code...",
+      "statusAll": "All statuses",
+      "statusCreated": "Created",
+      "statusPendingReview": "Pending Review",
+      "statusCompleted": "Completed",
+      "statusRequestSupplement": "Supplement Requested"
+    },
+    "table": {
+      "stt": "#",
+      "date": "Date",
+      "bienSo": "License Plate",
+      "taiXe": "Driver",
+      "maChuyen": "Trip Code",
+      "diemNhan": "Pick-up",
+      "diemTra": "Drop-off",
+      "status": "Status",
+      "actions": "Actions"
+    },
+    "detail": {
+      "title": "Ticket Details",
+      "tripInfo": "Trip Information",
+      "statusHistory": "Status & History",
+      "documents": "Documents",
+      "driverNote": "Driver Note",
+      "supplementNote": "Supplement Request",
+      "reviewedAt": "Reviewed at",
+      "completedAt": "Completed at",
+      "noDocuments": "No documents uploaded",
+      "noNotes": "No notes"
+    },
+    "action": {
+      "upload": "Upload Documents",
+      "finish": "Finish",
+      "requestSupplement": "Request Supplement",
+      "view": "View",
+      "cancel": "Cancel",
+      "submit": "Submit",
+      "confirm": "Confirm",
+      "retry": "Retry"
+    },
+    "upload": {
+      "title": "Upload Documents",
+      "dropzone": "Drag and drop files here, or click to browse",
+      "supported": "Supported formats: JPG, PNG, PDF",
+      "max": "Up to 10 files, max 5MB/file",
+      "noteLabel": "Note",
+      "notePlaceholder": "Enter note (optional)...",
+      "submit": "Submit Documents",
+      "errorSize": "File exceeds 5MB",
+      "errorType": "Only JPG, PNG, and PDF are allowed",
+      "errorCount": "Maximum 10 files per upload"
+    },
+    "supplement": {
+      "title": "Request Additional Documents",
+      "noteLabel": "Supplement note (required)",
+      "notePlaceholder": "Enter reason for requesting additional documents...",
+      "noteRequired": "Supplement note is required (min 5 characters)",
+      "submit": "Send Request"
+    },
+    "confirmFinish": {
+      "title": "Confirm Completion",
+      "message": "Are you sure you want to mark this ticket as Completed?",
+      "warning": "This action cannot be undone."
+    },
+    "message": {
+      "successUpload": "Documents uploaded successfully",
+      "successFinish": "Ticket marked as completed",
+      "successSupplement": "Supplement request submitted",
+      "errorUpload": "Upload failed. Please try again",
+      "errorReview": "Unable to review this ticket",
+      "errorWrongStatus": "Ticket is not in a valid status",
+      "errorServer": "System error. Please try again"
+    },
+    "status": {
+      "created": "Created",
+      "pending_review": "Pending Review",
+      "completed": "Completed",
+      "request_supplement": "Supplement Requested"
+    }
+  },
+  "data_scopes": {
+    "title": "Data Scope Management",
+    "tabs": {
+      "matrix": "Role Matrix",
+      "user_entities": "User Entity Assignments"
+    },
+    "types": {
+      "all": "All Data",
+      "owner": "Owner Only",
+      "entity": "By Assigned Entities",
+      "none": "Locked"
+    },
+    "entities": {
+      "driver": "Driver",
+      "vehicle": "Vehicle",
+      "customer": "Customer"
+    },
+    "actions": {
+      "save_changes": "Save Changes",
+      "assign_entity": "Assign Entity",
+      "reset": "Reset"
+    },
+    "messages": {
+      "save_success": "Data scope configuration saved successfully",
+      "assign_success": "Entities assigned to user successfully",
+      "delete_assign_success": "Entity assignment removed",
+      "delete_confirm": "Are you sure you want to remove this entity assignment?",
+      "empty_matrix": "No features have been registered for data scope configuration",
+      "empty_user_entities": "No user entity assignments have been set up yet",
+      "empty_user_entities_hint": "Click \"Assign Entity\" to grant specific data access to users."
+    }
+  },
+  "workflows": {
+    "title": "Workflow Configuration",
+    "status": {
+      "active": "Active",
+      "inactive": "Inactive"
+    },
+    "actions": {
+      "configure": "Configure Steps",
+      "save": "Save Workflow Configuration"
     }
   }
 }
