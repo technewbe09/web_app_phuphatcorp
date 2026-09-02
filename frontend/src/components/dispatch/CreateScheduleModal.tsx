@@ -1,8 +1,9 @@
-import { useState, useEffect } from 'react';
-import { ChevronLeft, Truck, Car, MapPin, Navigation, Plus, Trash2, User } from 'lucide-react';
+import { useState, useEffect, useMemo } from 'react';
+import { ChevronLeft, Truck, Car, MapPin, Navigation, Plus, Trash2 } from 'lucide-react';
 import { useI18n } from '../../i18n/useI18n';
 import { Modal } from '../ui/Modal';
 import { Button } from '../ui/Button';
+import { SearchableSelect, type SearchableSelectOption } from '../ui/SearchableSelect';
 import { cn } from '../../utils/cn';
 import { useGetVehicles } from '../../hooks/useVehicleCatalog';
 import { useGetDeliveryPoints } from '../../hooks/useDeliveryPoints';
@@ -73,6 +74,24 @@ export function CreateScheduleModal({
   const deliveryPoints = deliveryPointsData?.items ?? [];
 
   const [driversByVehicle, setDriversByVehicle] = useState<Map<number, VehicleDriver[]>>(new Map());
+
+  const vehicleOptions: SearchableSelectOption[] = useMemo(
+    () =>
+      vehicles.map((v) => ({
+        value: String(v.id),
+        label: `${v.plate_number}${v.driver_name ? ` (${v.driver_name})` : ''}`,
+      })),
+    [vehicles],
+  );
+
+  const deliveryPointOptions: SearchableSelectOption[] = useMemo(
+    () =>
+      deliveryPoints.map((dp) => ({
+        value: dp.code,
+        label: dp.address ? `${dp.code} - ${dp.address}` : dp.code,
+      })),
+    [deliveryPoints],
+  );
 
   useEffect(() => {
     if (isOpen) {
@@ -357,28 +376,15 @@ export function CreateScheduleModal({
                     <label className="block text-xs font-semibold text-neutral-700 dark:text-neutral-300 mb-1">
                       {t('dispatch.createModal.bienSo' as never)} <span className="text-red-500">*</span>
                     </label>
-                    <select
-                      value={trip.vehicle_id ?? ''}
-                      onChange={(e) =>
-                        handleVehicleSelect(trip.id, e.target.value ? Number(e.target.value) : null)
-                      }
-                      className={cn(
-                        'w-full px-3 py-2 rounded-lg border text-base sm:text-sm bg-white dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100 outline-none transition-colors h-11',
-                        errors[`trip-${index}-bien_so`]
-                          ? 'border-red-400 focus:border-red-500'
-                          : 'border-neutral-300 dark:border-neutral-600',
-                      )}
-                    >
-                      <option value="">{t('dispatch.createModal.bienSoPlaceholder' as never)}</option>
-                      {vehicles.map((v) => (
-                        <option key={v.id} value={v.id}>
-                          {v.plate_number} {v.driver_name ? `(${v.driver_name})` : ''}
-                        </option>
-                      ))}
-                    </select>
-                    {errors[`trip-${index}-bien_so`] && (
-                      <p className="mt-1 text-xs text-red-500">{errors[`trip-${index}-bien_so`]}</p>
-                    )}
+                    <SearchableSelect
+                      options={vehicleOptions}
+                      value={trip.vehicle_id ? String(trip.vehicle_id) : ''}
+                      onChange={(val) => handleVehicleSelect(trip.id, val ? Number(val) : null)}
+                      placeholder={t('dispatch.createModal.bienSoPlaceholder' as never)}
+                      searchPlaceholder="Tìm biển số xe..."
+                      clearable
+                      error={errors[`trip-${index}-bien_so`]}
+                    />
                   </div>
 
                   <div>
@@ -386,10 +392,14 @@ export function CreateScheduleModal({
                       {t('dispatch.createModal.taiXe' as never)}
                     </label>
                     {trip.vehicle_id ? (
-                      <select
-                        value={trip.driver_id ?? ''}
-                        onChange={(e) => {
-                          const driverUserId = e.target.value ? Number(e.target.value) : null;
+                      <SearchableSelect
+                        options={(driversByVehicle.get(trip.vehicle_id) || []).map((d) => ({
+                          value: String(d.user_id),
+                          label: d.full_name,
+                        }))}
+                        value={trip.driver_id ? String(trip.driver_id) : ''}
+                        onChange={(val) => {
+                          const driverUserId = val ? Number(val) : null;
                           const drivers = driversByVehicle.get(trip.vehicle_id!) || [];
                           const selectedDriver = drivers.find((d) => d.user_id === driverUserId);
                           setTrips((prev) =>
@@ -403,15 +413,10 @@ export function CreateScheduleModal({
                             }),
                           );
                         }}
-                        className="w-full px-3 py-2 rounded-lg border border-neutral-300 dark:border-neutral-600 text-base sm:text-sm bg-white dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100 outline-none h-11"
-                      >
-                        <option value="">{t('dispatch.createModal.taiXePlaceholder' as never)}</option>
-                        {(driversByVehicle.get(trip.vehicle_id) || []).map((d) => (
-                          <option key={d.id} value={d.user_id}>
-                            {d.full_name}
-                          </option>
-                        ))}
-                      </select>
+                        placeholder={t('dispatch.createModal.taiXePlaceholder' as never)}
+                        searchPlaceholder="Tìm tài xế..."
+                        clearable
+                      />
                     ) : (
                       <input
                         type="text"
@@ -427,26 +432,15 @@ export function CreateScheduleModal({
                     <label className="block text-xs font-semibold text-neutral-700 dark:text-neutral-300 mb-1">
                       {t('dispatch.createModal.diemNhan' as never)} <span className="text-red-500">*</span>
                     </label>
-                    <select
+                    <SearchableSelect
+                      options={deliveryPointOptions}
                       value={trip.diem_nhan}
-                      onChange={(e) => handleTripFieldChange(trip.id, 'diem_nhan', e.target.value)}
-                      className={cn(
-                        'w-full px-3 py-2 rounded-lg border text-base sm:text-sm bg-white dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100 outline-none h-11',
-                        errors[`trip-${index}-diem_nhan`]
-                          ? 'border-red-400 focus:border-red-500'
-                          : 'border-neutral-300 dark:border-neutral-600',
-                      )}
-                    >
-                      <option value="">{t('dispatch.createModal.diemNhanPlaceholder' as never)}</option>
-                      {deliveryPoints.map((dp) => (
-                        <option key={dp.id} value={dp.code}>
-                          {dp.code}
-                        </option>
-                      ))}
-                    </select>
-                    {errors[`trip-${index}-diem_nhan`] && (
-                      <p className="mt-1 text-xs text-red-500">{errors[`trip-${index}-diem_nhan`]}</p>
-                    )}
+                      onChange={(val) => handleTripFieldChange(trip.id, 'diem_nhan', val)}
+                      placeholder={t('dispatch.createModal.diemNhanPlaceholder' as never)}
+                      searchPlaceholder="Tìm điểm nhận hàng..."
+                      clearable
+                      error={errors[`trip-${index}-diem_nhan`]}
+                    />
                   </div>
 
                   <div className="grid grid-cols-2 gap-2">
@@ -522,36 +516,27 @@ export function CreateScheduleModal({
               <tbody>
                 {trips.map((trip, index) => (
                   <tr key={trip.id} className="border-b border-neutral-100 dark:border-neutral-800 last:border-b-0">
-                    <td className="px-2 py-2">
-                      <select
-                        value={trip.vehicle_id ?? ''}
-                        onChange={(e) =>
-                          handleVehicleSelect(trip.id, e.target.value ? Number(e.target.value) : null)
-                        }
-                        className={cn(
-                          'w-full px-2 py-1.5 rounded border text-sm bg-white dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100 outline-none transition-colors',
-                          errors[`trip-${index}-bien_so`]
-                            ? 'border-red-400 focus:border-red-500'
-                            : 'border-neutral-300 dark:border-neutral-600 focus:border-neutral-500 dark:focus:border-neutral-400',
-                        )}
-                      >
-                        <option value="">{t('dispatch.createModal.bienSoPlaceholder' as never)}</option>
-                        {vehicles.map((v) => (
-                          <option key={v.id} value={v.id}>
-                            {v.plate_number}
-                          </option>
-                        ))}
-                      </select>
-                      {errors[`trip-${index}-bien_so`] && (
-                        <p className="mt-0.5 text-xs text-red-500">{errors[`trip-${index}-bien_so`]}</p>
-                      )}
+                    <td className="px-2 py-2 min-w-[200px]">
+                      <SearchableSelect
+                        options={vehicleOptions}
+                        value={trip.vehicle_id ? String(trip.vehicle_id) : ''}
+                        onChange={(val) => handleVehicleSelect(trip.id, val ? Number(val) : null)}
+                        placeholder={t('dispatch.createModal.bienSoPlaceholder' as never)}
+                        searchPlaceholder="Tìm biển số xe..."
+                        clearable
+                        error={errors[`trip-${index}-bien_so`]}
+                      />
                     </td>
-                    <td className="px-2 py-2">
+                    <td className="px-2 py-2 min-w-[160px]">
                       {trip.vehicle_id ? (
-                        <select
-                          value={trip.driver_id ?? ''}
-                          onChange={(e) => {
-                            const driverUserId = e.target.value ? Number(e.target.value) : null;
+                        <SearchableSelect
+                          options={(driversByVehicle.get(trip.vehicle_id) || []).map((d) => ({
+                            value: String(d.user_id),
+                            label: d.full_name,
+                          }))}
+                          value={trip.driver_id ? String(trip.driver_id) : ''}
+                          onChange={(val) => {
+                            const driverUserId = val ? Number(val) : null;
                             const drivers = driversByVehicle.get(trip.vehicle_id!) || [];
                             const selectedDriver = drivers.find((d) => d.user_id === driverUserId);
                             setTrips((prev) =>
@@ -565,77 +550,65 @@ export function CreateScheduleModal({
                               }),
                             );
                           }}
-                          className="w-full px-2 py-1.5 rounded border border-neutral-300 dark:border-neutral-600 text-sm bg-white dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100 outline-none focus:border-neutral-500 dark:focus:border-neutral-400 transition-colors"
-                        >
-                          <option value="">{t('dispatch.createModal.taiXePlaceholder' as never)}</option>
-                          {(driversByVehicle.get(trip.vehicle_id) || []).map((d) => (
-                            <option key={d.id} value={d.user_id}>
-                              {d.full_name}
-                            </option>
-                          ))}
-                        </select>
+                          placeholder={t('dispatch.createModal.taiXePlaceholder' as never)}
+                          searchPlaceholder="Tìm tài xế..."
+                          clearable
+                        />
                       ) : (
                         <input
                           type="text"
                           value={trip.tai_xe}
                           onChange={(e) => handleTripFieldChange(trip.id, 'tai_xe', e.target.value)}
                           placeholder={t('dispatch.createModal.taiXePlaceholder' as never)}
-                          className="w-full px-2 py-1.5 rounded border border-neutral-300 dark:border-neutral-600 text-sm bg-white dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100 outline-none focus:border-neutral-500 dark:focus:border-neutral-400 transition-colors"
+                          className="w-full px-2 py-2 rounded-lg border border-neutral-300 dark:border-neutral-600 text-sm bg-white dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100 outline-none focus:border-neutral-500 dark:focus:border-neutral-400 transition-colors"
                         />
                       )}
                     </td>
-                    <td className="px-2 py-2">
-                      <select
+                    <td className="px-2 py-2 min-w-[200px]">
+                      <SearchableSelect
+                        options={deliveryPointOptions}
                         value={trip.diem_nhan}
-                        onChange={(e) => handleTripFieldChange(trip.id, 'diem_nhan', e.target.value)}
-                        className={cn(
-                          'w-full px-2 py-1.5 rounded border text-sm bg-white dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100 outline-none transition-colors',
-                          errors[`trip-${index}-diem_nhan`]
-                            ? 'border-red-400 focus:border-red-500'
-                            : 'border-neutral-300 dark:border-neutral-600 focus:border-neutral-500 dark:focus:border-neutral-400',
-                        )}
-                      >
-                        <option value="">{t('dispatch.createModal.diemNhanPlaceholder' as never)}</option>
-                        {deliveryPoints.map((dp) => (
-                          <option key={dp.id} value={dp.code}>
-                            {dp.code}
-                          </option>
-                        ))}
-                      </select>
-                      {errors[`trip-${index}-diem_nhan`] && (
-                        <p className="mt-0.5 text-xs text-red-500">{errors[`trip-${index}-diem_nhan`]}</p>
-                      )}
+                        onChange={(val) => handleTripFieldChange(trip.id, 'diem_nhan', val)}
+                        placeholder={t('dispatch.createModal.diemNhanPlaceholder' as never)}
+                        searchPlaceholder="Tìm điểm nhận..."
+                        clearable
+                        error={errors[`trip-${index}-diem_nhan`]}
+                      />
                     </td>
-                    <td className="px-2 py-2">
+                    <td className="px-2 py-2 w-[100px]">
                       <input
                         type="text"
                         value={trip.tan}
                         onChange={(e) => handleTripFieldChange(trip.id, 'tan', e.target.value)}
-                        className="w-full px-2 py-1.5 rounded border border-neutral-300 dark:border-neutral-600 text-sm bg-white dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100 outline-none focus:border-neutral-500 dark:focus:border-neutral-400 transition-colors"
+                        placeholder="Tấn"
+                        className="w-full px-2 py-2 rounded-lg border border-neutral-300 dark:border-neutral-600 text-sm bg-white dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100 outline-none focus:border-neutral-500 dark:focus:border-neutral-400 transition-colors"
                       />
                     </td>
-                    <td className="px-2 py-2">
+                    <td className="px-2 py-2 w-[100px]">
                       <input
                         type="text"
                         value={trip.can}
                         onChange={(e) => handleTripFieldChange(trip.id, 'can', e.target.value)}
-                        className="w-full px-2 py-1.5 rounded border border-neutral-300 dark:border-neutral-600 text-sm bg-white dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100 outline-none focus:border-neutral-500 dark:focus:border-neutral-400 transition-colors"
+                        placeholder="CAN"
+                        className="w-full px-2 py-2 rounded-lg border border-neutral-300 dark:border-neutral-600 text-sm bg-white dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100 outline-none focus:border-neutral-500 dark:focus:border-neutral-400 transition-colors"
                       />
                     </td>
-                    <td className="px-2 py-2">
+                    <td className="px-2 py-2 min-w-[140px]">
                       <input
                         type="text"
                         value={trip.ghi_chu}
                         onChange={(e) => handleTripFieldChange(trip.id, 'ghi_chu', e.target.value)}
                         placeholder={t('dispatch.createModal.ghiChuPlaceholder' as never)}
-                        className="w-full px-2 py-1.5 rounded border border-neutral-300 dark:border-neutral-600 text-sm bg-white dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100 outline-none focus:border-neutral-500 dark:focus:border-neutral-400 transition-colors"
+                        className="w-full px-2 py-2 rounded-lg border border-neutral-300 dark:border-neutral-600 text-sm bg-white dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100 outline-none focus:border-neutral-500 dark:focus:border-neutral-400 transition-colors"
                       />
                     </td>
-                    <td className="px-2 py-2">
+                    <td className="px-2 py-2 text-center">
                       {trips.length > 1 && (
                         <button
+                          type="button"
                           onClick={() => removeTrip(trip.id)}
-                          className="p-1 text-neutral-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors"
+                          className="p-1.5 text-neutral-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+                          title="Xóa chuyến"
                         >
                           <Trash2 className="w-4 h-4" />
                         </button>

@@ -34,6 +34,7 @@ import { RepairPage } from './pages/admin/vehicle-data/RepairPage';
 import { RoutePricingPage } from './pages/route-pricing/RoutePricingPage';
 import InvoiceTrackingPage from './pages/invoice-tracking/InvoiceTrackingPage';
 import { DataScopeManagementPage } from './pages/admin/DataScopeManagementPage';
+import { WorkflowManagementPage } from './pages/admin/WorkflowManagementPage';
 
 function PlaceholderPage({ title }: { title: string }) {
   return (
@@ -65,6 +66,7 @@ export function Router() {
             <Route path="/roles" element={<RoleManagementPage />} />
             <Route path="/permissions" element={<PermissionManagementPage />} />
             <Route path="/settings/data-scopes" element={<DataScopeManagementPage />} />
+            <Route path="/settings/workflows" element={<WorkflowManagementPage />} />
             <Route path="/logs" element={<AuditLogPage />} />
             {/* Delivery Data */}
             <Route path="/delivery-data/5-houses" element={<DeliveryDataPage />} />

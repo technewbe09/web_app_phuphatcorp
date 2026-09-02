@@ -1,8 +1,23 @@
 import { Response } from 'express';
 import { body, param, query, ValidationChain } from 'express-validator';
-import { invoiceTrackingService } from '../services/invoiceTrackingService';
+import { invoiceTrackingService, InvoiceTrackingError } from '../services/invoiceTrackingService';
 import { sendSuccess, sendError } from '../utils/response';
 import { AuthRequest } from '../middleware/auth';
+
+function getCurrentUser(req: AuthRequest) {
+  return req.user
+    ? { userId: req.user.userId, role: req.user.role, roleId: req.user.roleId }
+    : undefined;
+}
+
+function handleControllerError(res: Response, err: unknown, defaultMessage: string): void {
+  if (err instanceof InvoiceTrackingError) {
+    sendError(res, err.message, err.statusCode, err.code);
+    return;
+  }
+  const error = err instanceof Error ? err.message : 'Unknown error';
+  sendError(res, defaultMessage, 500, error);
+}
 
 export const invoiceTrackingListSchema: ValidationChain[] = [
   query('status')
@@ -26,7 +41,7 @@ export const invoiceTrackingListSchema: ValidationChain[] = [
     .optional()
     .matches(/^\d{4}-\d{2}-\d{2}$/)
     .withMessage('date_to phải có định dạng YYYY-MM-DD'),
-  query('search').optional().isString(),
+  query('search').optional().isString().trim(),
   query('page').optional().isInt({ min: 1 }).withMessage('page phải là số nguyên dương'),
   query('limit').optional().isInt({ min: 1, max: 100 }).withMessage('limit phải từ 1 đến 100'),
 ];
@@ -66,6 +81,20 @@ export const invoiceTrackingReviewSchema: ValidationChain[] = [
     .withMessage('supplement_note phải có ít nhất 5 ký tự'),
 ];
 
+export const invoiceTrackingStatisticsSchema: ValidationChain[] = [
+  query('date_from')
+    .optional()
+    .matches(/^\d{4}-\d{2}-\d{2}$/)
+    .withMessage('date_from phải có định dạng YYYY-MM-DD'),
+  query('date_to')
+    .optional()
+    .matches(/^\d{4}-\d{2}-\d{2}$/)
+    .withMessage('date_to phải có định dạng YYYY-MM-DD'),
+  query('bien_so').optional().isString().trim(),
+  query('driver_id').optional().isInt({ min: 1 }).withMessage('driver_id phải là số nguyên dương'),
+  query('tai_xe').optional().isString().trim(),
+];
+
 export const invoiceTrackingController = {
   async list(req: AuthRequest, res: Response): Promise<void> {
     try {
@@ -81,27 +110,22 @@ export const invoiceTrackingController = {
         limit: req.query.limit ? parseInt(req.query.limit as string, 10) : undefined,
       };
 
-      const result = await invoiceTrackingService.list(filters, req.dataScope);
+      const currentUser = getCurrentUser(req);
+      const result = await invoiceTrackingService.list(filters, req.dataScope, currentUser);
       sendSuccess(res, { items: result.data, pagination: result.pagination }, 'Danh sách ticket theo dõi hóa đơn');
     } catch (err) {
-      const error = err instanceof Error ? err.message : 'Unknown error';
-      sendError(res, 'Không thể tải danh sách ticket', 500, error);
+      handleControllerError(res, err, 'Không thể tải danh sách ticket');
     }
   },
 
   async getById(req: AuthRequest, res: Response): Promise<void> {
     try {
       const id = parseInt(req.params.id, 10);
-      const ticket = await invoiceTrackingService.getById(id, req.dataScope);
+      const currentUser = getCurrentUser(req);
+      const ticket = await invoiceTrackingService.getById(id, req.dataScope, currentUser);
       sendSuccess(res, ticket, 'Chi tiết ticket');
     } catch (err) {
-      if (err instanceof Error && err.name === 'InvoiceTrackingError') {
-        const statusCode = (err as any).statusCode || 400;
-        sendError(res, err.message, statusCode);
-        return;
-      }
-      const error = err instanceof Error ? err.message : 'Unknown error';
-      sendError(res, 'Không thể tải chi tiết ticket', 500, error);
+      handleControllerError(res, err, 'Không thể tải chi tiết ticket');
     }
   },
 
@@ -109,16 +133,11 @@ export const invoiceTrackingController = {
     try {
       const id = parseInt(req.params.id, 10);
       const { files, driver_note } = req.body;
-      const ticket = await invoiceTrackingService.uploadDocuments(id, files, driver_note, req.dataScope);
+      const currentUser = getCurrentUser(req);
+      const ticket = await invoiceTrackingService.uploadDocuments(id, files, driver_note, req.dataScope, currentUser);
       sendSuccess(res, ticket, 'Đã upload chứng từ thành công');
     } catch (err) {
-      if (err instanceof Error && err.name === 'InvoiceTrackingError') {
-        const statusCode = (err as any).statusCode || 400;
-        sendError(res, err.message, statusCode);
-        return;
-      }
-      const error = err instanceof Error ? err.message : 'Unknown error';
-      sendError(res, 'Không thể upload chứng từ', 500, error);
+      handleControllerError(res, err, 'Không thể upload chứng từ');
     }
   },
 
@@ -127,16 +146,38 @@ export const invoiceTrackingController = {
       const id = parseInt(req.params.id, 10);
       const { action, supplement_note } = req.body;
       const dispatcherId = req.user!.userId;
-      const ticket = await invoiceTrackingService.review(id, action, dispatcherId, supplement_note);
+      const currentUser = getCurrentUser(req);
+      const ticket = await invoiceTrackingService.review(id, action, dispatcherId, supplement_note, currentUser);
       sendSuccess(res, ticket, 'Đã duyệt ticket thành công');
     } catch (err) {
-      if (err instanceof Error && err.name === 'InvoiceTrackingError') {
-        const statusCode = (err as any).statusCode || 400;
-        sendError(res, err.message, statusCode);
-        return;
-      }
-      const error = err instanceof Error ? err.message : 'Unknown error';
-      sendError(res, 'Không thể duyệt ticket', 500, error);
+      handleControllerError(res, err, 'Không thể duyệt ticket');
+    }
+  },
+
+  async getHistory(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      const id = parseInt(req.params.id, 10);
+      const history = await invoiceTrackingService.getHistory(id, req.dataScope);
+      sendSuccess(res, history, 'Lịch sử thao tác ticket');
+    } catch (err) {
+      handleControllerError(res, err, 'Không thể tải lịch sử ticket');
+    }
+  },
+
+  async getStatistics(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      const filters = {
+        date_from: req.query.date_from as string | undefined,
+        date_to: req.query.date_to as string | undefined,
+        bien_so: req.query.bien_so as string | undefined,
+        driver_id: req.query.driver_id ? parseInt(req.query.driver_id as string, 10) : undefined,
+        tai_xe: req.query.tai_xe as string | undefined,
+      };
+
+      const result = await invoiceTrackingService.getStatistics(filters, req.dataScope);
+      sendSuccess(res, result, 'Thống kê theo dõi hóa đơn');
+    } catch (err) {
+      handleControllerError(res, err, 'Không thể tải thống kê theo dõi hóa đơn');
     }
   },
 };

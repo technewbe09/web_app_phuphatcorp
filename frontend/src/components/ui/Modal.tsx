@@ -34,7 +34,7 @@ export function Modal({ isOpen, onClose, title, children, className, size = 'md'
     '3xl': 'sm:max-w-3xl',
     '4xl': 'sm:max-w-4xl',
     '5xl': 'sm:max-w-5xl',
-    '2/3': 'sm:max-w-[90vw] md:max-w-[80vw] lg:w-2/3 lg:max-w-[68vw]',
+    '2/3': 'sm:max-w-[95vw] md:max-w-[85vw] lg:w-2/3 lg:max-w-[66.666667vw]',
     full: 'sm:max-w-[92vw]',
   };
 

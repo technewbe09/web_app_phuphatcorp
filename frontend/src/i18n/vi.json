@@ -7,7 +7,8 @@
     "userManagement": "Quản lý người dùng",
     "roleManagement": "Quản lý vai trò",
     "permissionManagement": "Quản lý quyền",
-    "dataScopeManagement": "Phạm vi dữ liệu"
+    "dataScopeManagement": "Phạm vi dữ liệu",
+    "workflowManagement": "Cấu hình quy trình"
   },
   "users": {
     "title": "Quản lý người dùng",
@@ -124,6 +125,7 @@
       "roles": "Quản lý vai trò",
       "permissions": "Quản lý quyền",
       "data_scopes": "Phạm vi dữ liệu",
+      "workflows": "Cấu hình quy trình",
       "logs": "Nhật ký hệ thống",
       "catalog": "Phương tiện, Khách hàng nội thành, Nhà cung cấp, Mặt hàng KM, Điểm giao",
       "jobs": "Cấu hình Job & Lịch sử"
@@ -143,6 +145,7 @@
       "logs": "Nhật ký hệ thống",
       "route_pricing": "Giá theo tuyến",
       "data_scopes": "Phạm vi dữ liệu",
+      "workflows": "Cấu hình quy trình",
       "invoice_tracking": "Theo dõi hóa đơn"
     },
     "permCodes": {
@@ -171,6 +174,8 @@
       "route_pricing_manage": "Quản lý giá theo tuyến",
       "data_scopes_view": "Xem cấu hình phạm vi dữ liệu",
       "data_scopes_manage": "Quản lý phạm vi dữ liệu",
+      "workflows_view": "Xem cấu hình quy trình",
+      "workflows_manage": "Quản lý cấu hình quy trình",
       "invoice_tracking_view": "Xem theo dõi hóa đơn",
       "invoice_tracking_manage": "Quản lý theo dõi hóa đơn"
     }
@@ -703,6 +708,43 @@
     }
   },
   "invoice_tracking": {
+    "tabs": {
+      "list": "Danh sách ticket",
+      "statistics": "Thống kê"
+    },
+    "stats": {
+      "title": "Thống kê hóa đơn theo tài xế",
+      "kpi": {
+        "total": "Tổng số ticket",
+        "created": "Tạo mới",
+        "pendingReview": "Chờ duyệt",
+        "requestSupplement": "Yêu cầu bổ sung",
+        "completed": "Hoàn thành",
+        "completionRate": "Tỷ lệ hoàn thành"
+      },
+      "table": {
+        "stt": "STT",
+        "driver": "Tài xế",
+        "vehicles": "Xe phụ trách",
+        "created": "Tạo mới",
+        "pending": "Chờ duyệt",
+        "supplement": "Y/C bổ sung",
+        "completed": "Hoàn thành",
+        "total": "Tổng cộng",
+        "rate": "Tỷ lệ HT",
+        "grandTotal": "TỔNG CỘNG"
+      },
+      "filters": {
+        "dateFrom": "Từ ngày",
+        "dateTo": "Đến ngày",
+        "plate": "Biển số xe",
+        "platePlaceholder": "Nhập biển số...",
+        "driver": "Tên tài xế",
+        "driverPlaceholder": "Nhập tên tài xế...",
+        "clear": "Xóa bộ lọc"
+      },
+      "empty": "Không có dữ liệu thống kê cho bộ lọc này."
+    },
     "page": {
       "title": "Theo dõi hóa đơn",
       "empty": "Chưa có ticket nào",
@@ -815,7 +857,22 @@
     "messages": {
       "save_success": "Đã lưu cấu hình phạm vi dữ liệu",
       "assign_success": "Đã gán đối tượng cho người dùng thành công",
-      "delete_assign_success": "Đã hủy gán đối tượng"
+      "delete_assign_success": "Đã hủy gán đối tượng",
+      "delete_confirm": "Bạn có chắc muốn xóa phân quyền đối tượng này không?",
+      "empty_matrix": "Chưa có tính năng nào được đăng ký cấu hình phân quyền dữ liệu",
+      "empty_user_entities": "Chưa có phân quyền đối tượng nào được thiết lập",
+      "empty_user_entities_hint": "Bấm nút \"Gán đối tượng\" để chỉ định dữ liệu cho người dùng cụ thể."
+    }
+  },
+  "workflows": {
+    "title": "Cấu hình quy trình",
+    "status": {
+      "active": "Đang áp dụng",
+      "inactive": "Tạm dừng"
+    },
+    "actions": {
+      "configure": "Cấu hình bước",
+      "save": "Lưu cấu hình quy trình"
     }
   }
 }

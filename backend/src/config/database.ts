@@ -25,7 +25,9 @@ export const pool = new Pool(
 );
 
 pool.on('connect', (client) => {
-  client.query("SET timezone = 'Asia/Ho_Chi_Minh'");
+  client.query("SET timezone = 'Asia/Ho_Chi_Minh'").catch((err) => {
+    console.error('Error setting timezone on connect:', err);
+  });
 });
 
 pool.on('error', (err) => {

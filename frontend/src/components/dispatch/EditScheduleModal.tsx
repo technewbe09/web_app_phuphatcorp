@@ -1,8 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useI18n } from '../../i18n/useI18n';
 import { Modal } from '../ui/Modal';
 import { Button } from '../ui/Button';
+import { SearchableSelect, type SearchableSelectOption } from '../ui/SearchableSelect';
 import { cn } from '../../utils/cn';
+import { useGetDeliveryPoints } from '../../hooks/useDeliveryPoints';
 import type { DispatchSchedule, UpdateDispatchScheduleRequest } from '../../api/dispatchApi';
 
 interface EditScheduleModalProps {
@@ -32,6 +34,18 @@ export function EditScheduleModal({
   isSubmitting,
 }: EditScheduleModalProps) {
   const { t } = useI18n();
+
+  const { data: deliveryPointsData } = useGetDeliveryPoints('', 1, 200);
+  const deliveryPoints = deliveryPointsData?.items ?? [];
+
+  const deliveryPointOptions: SearchableSelectOption[] = useMemo(
+    () =>
+      deliveryPoints.map((dp) => ({
+        value: dp.code,
+        label: dp.address ? `${dp.code} - ${dp.address}` : dp.code,
+      })),
+    [deliveryPoints],
+  );
 
   const [form, setForm] = useState<FormData>({
     diem_nhan: '',
@@ -110,13 +124,15 @@ export function EditScheduleModal({
           <label className="block text-xs sm:text-sm font-semibold text-neutral-700 dark:text-neutral-300 mb-1.5">
             {t('dispatch.createModal.diemNhan' as never)} <span className="text-red-500">*</span>
           </label>
-          <input
-            type="text"
+          <SearchableSelect
+            options={deliveryPointOptions}
             value={form.diem_nhan}
-            onChange={(e) => setForm((p) => ({ ...p, diem_nhan: e.target.value }))}
-            className={inputClass(!!errors.diem_nhan)}
+            onChange={(val) => setForm((p) => ({ ...p, diem_nhan: val }))}
+            placeholder={t('dispatch.createModal.diemNhanPlaceholder' as never)}
+            searchPlaceholder="Tìm điểm nhận..."
+            clearable
+            error={errors.diem_nhan}
           />
-          {errors.diem_nhan && <p className="mt-1.5 text-xs text-red-500 font-medium">{errors.diem_nhan}</p>}
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

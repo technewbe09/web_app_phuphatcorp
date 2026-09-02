@@ -8,6 +8,14 @@ export interface DocumentFile {
   uploaded_at?: string;
 }
 
+export interface UserTicketPermissions {
+  can_upload: boolean;
+  can_finish: boolean;
+  can_request_supplement: boolean;
+  current_step_name?: string;
+  assignee_description?: string;
+}
+
 export interface InvoiceTrackingTicket {
   id: number;
   ngay: string;
@@ -32,6 +40,7 @@ export interface InvoiceTrackingTicket {
   created_by: number | null;
   created_at: string;
   updated_at: string;
+  user_permissions?: UserTicketPermissions;
 }
 
 export interface InvoiceTrackingFilters {
@@ -65,6 +74,51 @@ export interface ReviewRequest {
   supplement_note?: string;
 }
 
+export interface InvoiceTrackingHistoryItem {
+  id: number;
+  action: string;
+  action_label: string;
+  user_id: number | null;
+  username: string | null;
+  user_full_name: string | null;
+  details: Record<string, unknown> | null;
+  created_at: string;
+}
+
+export interface InvoiceTrackingStatisticsFilters {
+  date_from?: string;
+  date_to?: string;
+  bien_so?: string;
+  driver_id?: number;
+  tai_xe?: string;
+}
+
+export interface InvoiceTrackingStatisticsSummary {
+  total_tickets: number;
+  created_count: number;
+  pending_review_count: number;
+  request_supplement_count: number;
+  completed_count: number;
+  completion_rate: number;
+}
+
+export interface DriverInvoiceStatistics {
+  driver_id: number | null;
+  driver_name: string;
+  vehicles: string[];
+  total_tickets: number;
+  created_count: number;
+  pending_review_count: number;
+  request_supplement_count: number;
+  completed_count: number;
+  completion_rate: number;
+}
+
+export interface InvoiceTrackingStatisticsResult {
+  summary: InvoiceTrackingStatisticsSummary;
+  by_driver: DriverInvoiceStatistics[];
+}
+
 export const invoiceTrackingApi = {
   list: async (filters: InvoiceTrackingFilters): Promise<InvoiceTrackingListResponse> => {
     const params = new URLSearchParams();
@@ -83,9 +137,30 @@ export const invoiceTrackingApi = {
     return res.data.data;
   },
 
+  getStatistics: async (filters: InvoiceTrackingStatisticsFilters): Promise<InvoiceTrackingStatisticsResult> => {
+    const params = new URLSearchParams();
+    if (filters.date_from) params.set('date_from', filters.date_from);
+    if (filters.date_to) params.set('date_to', filters.date_to);
+    if (filters.bien_so) params.set('bien_so', filters.bien_so);
+    if (filters.driver_id) params.set('driver_id', filters.driver_id.toString());
+    if (filters.tai_xe) params.set('tai_xe', filters.tai_xe);
+
+    const res = await axiosClient.get<{ success: boolean; data: InvoiceTrackingStatisticsResult }>(
+      `/invoice-tracking/statistics?${params.toString()}`,
+    );
+    return res.data.data;
+  },
+
   getById: async (id: number): Promise<InvoiceTrackingTicket> => {
     const res = await axiosClient.get<{ success: boolean; data: InvoiceTrackingTicket }>(
       `/invoice-tracking/${id}`,
+    );
+    return res.data.data;
+  },
+
+  getHistory: async (id: number): Promise<InvoiceTrackingHistoryItem[]> => {
+    const res = await axiosClient.get<{ success: boolean; data: InvoiceTrackingHistoryItem[] }>(
+      `/invoice-tracking/${id}/history`,
     );
     return res.data.data;
   },

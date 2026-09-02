@@ -36,13 +36,14 @@ import {
   FileCheck,
   Menu,
   X,
+  GitMerge,
 } from 'lucide-react';
 import { cn } from '../utils/cn';
 import { useAuth } from '../hooks/useAuth';
 import { useI18n } from '../i18n/useI18n';
 import { ThemeToggle } from '../components/ui/ThemeToggle';
 
-const USER_SETTINGS_ROUTES = ['/users', '/roles', '/permissions', '/settings/data-scopes', '/logs'];
+const USER_SETTINGS_ROUTES = ['/users', '/roles', '/permissions', '/settings/data-scopes', '/settings/workflows', '/logs'];
 const DISPATCH_ROUTES = ['/dispatch', '/invoice-tracking'];
 const ACCOUNTING_DATA_ROUTES = ['/accounting-data'];
 const DELIVERY_DATA_ROUTES = ['/delivery-data'];
@@ -130,7 +131,7 @@ export function MainLayout() {
       : null,
   ].filter(Boolean) as { to: string; icon: typeof CalendarRange; label: string }[];
 
-  const showUserSettings = hasAnyPermission(['users.view', 'roles.view', 'permissions.manage', 'data_scopes.view', 'logs.view'])
+  const showUserSettings = hasAnyPermission(['users.view', 'roles.view', 'permissions.manage', 'data_scopes.view', 'workflows.view', 'logs.view'])
     || user?.role === 'ADMIN';
 
   const showCatalog = hasAnyPermission(['catalog.view', 'catalog.manage'])
@@ -171,6 +172,9 @@ export function MainLayout() {
       : null,
     hasPermission('data_scopes.view') || user?.role === 'ADMIN'
       ? { to: '/settings/data-scopes', icon: Shield, label: t('sidebar.dataScopeManagement' as never) || 'Phạm vi dữ liệu' }
+      : null,
+    hasPermission('workflows.view') || user?.role === 'ADMIN'
+      ? { to: '/settings/workflows', icon: GitMerge, label: t('sidebar.workflowManagement' as never) || 'Cấu hình quy trình' }
       : null,
     hasPermission('logs.view') || user?.role === 'ADMIN'
       ? { to: '/logs', icon: FileText, label: 'Nhật ký hệ thống' }

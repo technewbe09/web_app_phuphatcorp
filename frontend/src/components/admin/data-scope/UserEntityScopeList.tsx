@@ -35,10 +35,12 @@ export const UserEntityScopeList: React.FC<UserEntityScopeListProps> = ({
       <div className="text-center py-12 bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-xl">
         <User className="w-10 h-10 mx-auto text-neutral-300 dark:text-neutral-600 mb-3" />
         <p className="text-sm text-neutral-500 dark:text-neutral-400 font-medium">
-          Chưa có phân quyền đối tượng nào được thiết lập
+          {t('data_scopes.messages.empty_user_entities' as never) ||
+            'Chưa có phân quyền đối tượng nào được thiết lập'}
         </p>
         <p className="text-xs text-neutral-400 dark:text-neutral-500 mt-1">
-          Bấm nút "Gán đối tượng" để chỉ định dữ liệu cho người dùng cụ thể.
+          {t('data_scopes.messages.empty_user_entities_hint' as never) ||
+            'Bấm nút "Gán đối tượng" để chỉ định dữ liệu cho người dùng cụ thể.'}
         </p>
       </div>
     );

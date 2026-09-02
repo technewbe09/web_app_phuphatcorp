@@ -5,6 +5,31 @@ description: Ghi lại các bài học kinh nghiệm, bug đã fix, và pitfalls
 # Lessons Learned — PhuPhatCorp
 
 ---
+## Feature: Tab Thống kê theo dõi hóa đơn theo tài xế
+- **Ngày:** 2026-09-02
+- **Severity:** Medium
+- **Feature liên quan:** Theo dõi hóa đơn (`invoice_tracking`), Báo cáo & Thống kê
+- **Mô tả:** Bổ sung tab Thống kê cho phép xem số lượng ticket của từng tài xế tương ứng từng trạng thái (Tạo mới, Chờ duyệt, Yêu cầu bổ sung, Hoàn thành, Tổng cộng, Tỷ lệ hoàn thành). Cho phép lọc theo biển số xe, tài xế và khoảng thời gian.
+- **Giải pháp:**
+  - Viết truy vấn SQL tổng hợp hiệu quả với `COUNT(*) FILTER (WHERE ...)` và `array_agg(DISTINCT bien_so)` nhóm theo tài xế.
+  - Tích hợp Data Scope: Tài xế chỉ xem được thống kê của chính mình; Quản lý xem theo phạm vi được phân quyền.
+  - Cung cấp API `GET /api/invoice-tracking/statistics` và component `InvoiceTrackingStatsTab` với 5 thẻ KPI + bảng phân tích chi tiết.
+- **Files liên quan:** `invoiceTrackingService.ts`, `invoiceTrackingController.ts`, `invoiceTracking.ts`, `invoiceTrackingApi.ts`, `useInvoiceTracking.ts`, `InvoiceTrackingStatsTab.tsx`, `InvoiceTrackingPage.tsx`.
+
+---
+## Feature Refactor: Audit Timeline cho Invoice Tracking
+- **Ngày:** 2026-09-02
+- **Severity:** Medium
+- **Feature liên quan:** Theo dõi hóa đơn (`invoice_tracking`), Audit Logging
+- **Mô tả:** Người dùng cần theo dõi lịch sử thao tác của từng ticket hóa đơn để biết ai đã tạo, ai upload chứng từ, ai duyệt hoặc yêu cầu bổ sung kèm lý do.
+- **Giải pháp:**
+  - Tận dụng bảng `audit_logs` có sẵn và service `auditService.logAudit` để ghi nhận các sự kiện nghiệp vụ (`UPLOAD_DOCUMENTS`, `REQUEST_SUPPLEMENT`, `REVIEW_FINISH`).
+  - Cung cấp API `GET /api/invoice-tracking/:id/history` trả về danh sách lịch sử có JOIN `users` để hiển thị tên đầy đủ `user_full_name`.
+  - Tự động bổ sung synthetic event `CREATE` nếu chuyến xe cũ chưa có log tường minh.
+  - Xây dựng component Timeline trực quan với icon và màu sắc trạng thái tương ứng trong `TicketDetailModal.tsx`.
+- **Files liên quan:** `invoiceTrackingService.ts`, `invoiceTrackingController.ts`, `invoiceTracking.ts`, `invoiceTrackingApi.ts`, `useInvoiceTracking.ts`, `TicketDetailModal.tsx`.
+
+---
 ## Lesson: Đồng bộ Permission Matrix, Sidebar và API Routes
 - **Ngày:** 2026-08-31
 - **Severity:** Medium

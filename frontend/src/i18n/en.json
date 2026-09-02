@@ -7,7 +7,8 @@
     "userManagement": "User Management",
     "roleManagement": "Role Management",
     "permissionManagement": "Permission Management",
-    "dataScopeManagement": "Data Scopes"
+    "dataScopeManagement": "Data Scopes",
+    "workflowManagement": "Workflows"
   },
   "users": {
     "title": "User Management",
@@ -124,6 +125,7 @@
       "roles": "Role Management",
       "permissions": "Permission Management",
       "data_scopes": "Data Scopes",
+      "workflows": "Workflows",
       "logs": "System Audit Logs",
       "catalog": "Vehicles, Inner-City Customers, Suppliers, Promo Items, Delivery Points",
       "jobs": "Job Config & History"
@@ -143,6 +145,7 @@
       "logs": "System Audit Logs",
       "route_pricing": "Route Pricing",
       "data_scopes": "Data Scopes",
+      "workflows": "Workflows",
       "invoice_tracking": "Invoice Tracking"
     },
     "permCodes": {
@@ -171,6 +174,8 @@
       "route_pricing_manage": "Manage Route Pricing",
       "data_scopes_view": "View Data Scopes Config",
       "data_scopes_manage": "Manage Data Scopes",
+      "workflows_view": "View Workflows",
+      "workflows_manage": "Manage Workflows",
       "invoice_tracking_view": "View Invoice Tracking",
       "invoice_tracking_manage": "Manage Invoice Tracking"
     }
@@ -770,6 +775,49 @@
       "pending_review": "Pending Review",
       "completed": "Completed",
       "request_supplement": "Supplement Requested"
+    }
+  },
+  "data_scopes": {
+    "title": "Data Scope Management",
+    "tabs": {
+      "matrix": "Role Matrix",
+      "user_entities": "User Entity Assignments"
+    },
+    "types": {
+      "all": "All Data",
+      "owner": "Owner Only",
+      "entity": "By Assigned Entities",
+      "none": "Locked"
+    },
+    "entities": {
+      "driver": "Driver",
+      "vehicle": "Vehicle",
+      "customer": "Customer"
+    },
+    "actions": {
+      "save_changes": "Save Changes",
+      "assign_entity": "Assign Entity",
+      "reset": "Reset"
+    },
+    "messages": {
+      "save_success": "Data scope configuration saved successfully",
+      "assign_success": "Entities assigned to user successfully",
+      "delete_assign_success": "Entity assignment removed",
+      "delete_confirm": "Are you sure you want to remove this entity assignment?",
+      "empty_matrix": "No features have been registered for data scope configuration",
+      "empty_user_entities": "No user entity assignments have been set up yet",
+      "empty_user_entities_hint": "Click \"Assign Entity\" to grant specific data access to users."
+    }
+  },
+  "workflows": {
+    "title": "Workflow Configuration",
+    "status": {
+      "active": "Active",
+      "inactive": "Inactive"
+    },
+    "actions": {
+      "configure": "Configure Steps",
+      "save": "Save Workflow Configuration"
     }
   }
 }

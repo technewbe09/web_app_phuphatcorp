@@ -1,12 +1,12 @@
 import { useState, useRef } from 'react';
 import { useI18n } from '../../i18n/useI18n';
-import { Upload, X, AlertCircle } from 'lucide-react';
+import { Upload, X, AlertCircle, FileText, Image as ImageIcon } from 'lucide-react';
 import { Modal } from '../ui/Modal';
 import { Button } from '../ui/Button';
 
 interface FileItem {
   file: File;
-  preview?: string;
+  previewUrl?: string;
   error?: string;
 }
 
@@ -18,7 +18,7 @@ interface UploadDocumentsModalProps {
 }
 
 const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
-const MAX_SIZE = 5 * 1024 * 1024;
+const MAX_SIZE = 5 * 1024 * 1024; // 5MB
 const MAX_FILES = 10;
 
 export function UploadDocumentsModal({
@@ -33,7 +33,15 @@ export function UploadDocumentsModal({
   const [dragOver, setDragOver] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const validateFiles = (files: File[]): FileItem[] => {
+  const cleanupPreviews = (items: FileItem[]) => {
+    items.forEach((item) => {
+      if (item.previewUrl) {
+        URL.revokeObjectURL(item.previewUrl);
+      }
+    });
+  };
+
+  const validateAndBuildFiles = (files: File[]): FileItem[] => {
     return files.map((file) => {
       if (!ALLOWED_TYPES.includes(file.type)) {
         return { file, error: t('invoice_tracking.upload.errorType') };
@@ -41,7 +49,11 @@ export function UploadDocumentsModal({
       if (file.size > MAX_SIZE) {
         return { file, error: t('invoice_tracking.upload.errorSize') };
       }
-      return { file };
+      let previewUrl: string | undefined;
+      if (file.type.startsWith('image/')) {
+        previewUrl = URL.createObjectURL(file);
+      }
+      return { file, previewUrl };
     });
   };
 
@@ -57,14 +69,16 @@ export function UploadDocumentsModal({
       return;
     }
 
-    const validated = validateFiles(fileArray);
+    const validated = validateAndBuildFiles(fileArray);
     setFileItems((prev) => [...prev, ...validated]);
   };
 
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     setDragOver(false);
-    handleFiles(e.dataTransfer.files);
+    if (e.dataTransfer.files) {
+      handleFiles(e.dataTransfer.files);
+    }
   };
 
   const handleDragOver = (e: React.DragEvent) => {
@@ -75,22 +89,32 @@ export function UploadDocumentsModal({
   const handleDragLeave = () => setDragOver(false);
 
   const removeFile = (index: number) => {
-    setFileItems((prev) => prev.filter((_, i) => i !== index));
+    setFileItems((prev) => {
+      const target = prev[index];
+      if (target?.previewUrl) {
+        URL.revokeObjectURL(target.previewUrl);
+      }
+      return prev.filter((_, i) => i !== index);
+    });
   };
 
   const handleSubmit = () => {
     const validFiles = fileItems.filter((f) => !f.error).map((f) => f.file);
     if (validFiles.length === 0) return;
     onSubmit(validFiles, note);
+    cleanupPreviews(fileItems);
     setFileItems([]);
     setNote('');
   };
 
   const handleClose = () => {
+    cleanupPreviews(fileItems);
     setFileItems([]);
     setNote('');
     onClose();
   };
+
+  const validCount = fileItems.filter((f) => !f.error).length;
 
   return (
     <Modal isOpen={isOpen} onClose={handleClose} title={t('invoice_tracking.upload.title')} size="md">
@@ -117,29 +141,70 @@ export function UploadDocumentsModal({
             type="file"
             multiple
             accept="image/jpeg,image/png,image/webp,application/pdf"
-            onChange={(e) => e.target.files && handleFiles(e.target.files)}
+            onChange={(e) => {
+              if (e.target.files) {
+                handleFiles(e.target.files);
+                e.target.value = '';
+              }
+            }}
             className="hidden"
           />
         </div>
 
         {fileItems.length > 0 && (
-          <div className="max-h-40 sm:max-h-48 space-y-1.5 overflow-y-auto pr-1">
+          <div className="max-h-44 sm:max-h-52 space-y-2 overflow-y-auto pr-1">
             {fileItems.map((item, idx) => (
               <div
                 key={idx}
-                className="flex items-center gap-2 rounded-lg border border-neutral-200 dark:border-neutral-800 p-2.5 bg-neutral-50/50 dark:bg-neutral-800/40"
+                className={`flex items-center gap-2.5 rounded-lg border p-2.5 transition-colors ${
+                  item.error
+                    ? 'border-red-200 bg-red-50/50 dark:border-red-900 dark:bg-red-950/30'
+                    : 'border-neutral-200 dark:border-neutral-800 bg-neutral-50/50 dark:bg-neutral-800/40'
+                }`}
               >
-                <span className="flex-1 truncate text-xs sm:text-sm font-medium text-neutral-800 dark:text-neutral-200">{item.file.name}</span>
-                <span className="text-[11px] text-neutral-400 shrink-0">
-                  {(item.file.size / 1024 / 1024).toFixed(2)} MB
-                </span>
+                {item.previewUrl ? (
+                  <img
+                    src={item.previewUrl}
+                    alt={item.file.name}
+                    className="w-10 h-10 object-cover rounded shrink-0 border border-neutral-200 dark:border-neutral-700"
+                  />
+                ) : item.file.type === 'application/pdf' ? (
+                  <div className="w-10 h-10 rounded bg-rose-100 dark:bg-rose-950/60 flex items-center justify-center shrink-0">
+                    <FileText className="w-5 h-5 text-rose-600 dark:text-rose-400" />
+                  </div>
+                ) : (
+                  <div className="w-10 h-10 rounded bg-neutral-200 dark:bg-neutral-700 flex items-center justify-center shrink-0">
+                    <ImageIcon className="w-5 h-5 text-neutral-500" />
+                  </div>
+                )}
+
+                <div className="flex-1 min-w-0">
+                  <p className="truncate text-xs sm:text-sm font-medium text-neutral-800 dark:text-neutral-200">
+                    {item.file.name}
+                  </p>
+                  <p className="text-[11px] text-neutral-400">
+                    {(item.file.size / 1024 / 1024).toFixed(2)} MB
+                    {item.error && <span className="ml-2 text-red-500 font-medium">{item.error}</span>}
+                  </p>
+                </div>
+
                 {item.error ? (
-                  <AlertCircle className="h-4 w-4 text-red-500 shrink-0" title={item.error} />
+                  <div className="flex items-center gap-1 shrink-0">
+                    <AlertCircle className="h-4 w-4 text-red-500" />
+                    <button
+                      type="button"
+                      onClick={() => removeFile(idx)}
+                      className="p-1 text-neutral-400 hover:text-red-500 rounded transition-colors"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
                 ) : (
                   <button
                     type="button"
                     onClick={() => removeFile(idx)}
                     className="p-1 text-neutral-400 hover:text-red-500 rounded transition-colors shrink-0"
+                    title="Xóa file"
                   >
                     <X className="h-4 w-4" />
                   </button>
@@ -158,7 +223,7 @@ export function UploadDocumentsModal({
             onChange={(e) => setNote(e.target.value)}
             placeholder={t('invoice_tracking.upload.notePlaceholder')}
             rows={3}
-            className="w-full rounded-lg border border-neutral-300 px-3 py-2.5 text-base sm:text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-100"
+            className="w-full rounded-lg border border-neutral-300 px-3 py-2.5 text-base sm:text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-100 placeholder:text-neutral-400"
           />
         </div>
 
@@ -174,10 +239,10 @@ export function UploadDocumentsModal({
           <Button
             onClick={handleSubmit}
             isLoading={isLoading}
-            disabled={fileItems.filter((f) => !f.error).length === 0}
+            disabled={validCount === 0 || isLoading}
             className="w-full sm:w-auto h-11 sm:h-10"
           >
-            {t('invoice_tracking.upload.submit')}
+            {t('invoice_tracking.upload.submit')} ({validCount})
           </Button>
         </div>
       </div>

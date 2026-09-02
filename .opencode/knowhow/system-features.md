@@ -880,6 +880,32 @@ frontend/src/pages/dispatch/SchedulePage.tsx
 
 **Access:** Tất cả authenticated users. Route: `/dispatch/schedule`
 
+### 10.2 Theo dõi hóa đơn (/invoice-tracking)
+
+**Mục đích:** Theo dõi tiến trình tải lên và xác thực chứng từ giao nhận hóa đơn của tài xế và điều phối xe.
+
+**State Machine:**
+`created` (Tạo mới) ➔ `pending_review` (Chờ duyệt) ➔ `completed` (Hoàn thành) / `request_supplement` (Yêu cầu bổ sung)
+
+**Lịch sử thao tác (Audit Timeline):**
+- Mọi hoạt động nghiệp vụ: Tạo chuyến xe, Tải lên chứng từ, Yêu cầu bổ sung (kèm ghi chú lý do), Duyệt hoàn thành đều được tự động lưu vào `audit_logs`.
+- Giao diện Modal Chi tiết hiển thị Timeline dọc trực quan với người thực hiện, thời gian chi tiết, hành động và ghi chú liên quan.
+
+**Thống kê theo tài xế (Statistics Tab):**
+- Tab "Thống kê" tổng hợp số lượng ticket theo từng trạng thái (Tạo mới, Chờ duyệt, Yêu cầu bổ sung, Hoàn thành, Tổng số, Tỷ lệ hoàn thành).
+- Cho phép lọc linh hoạt theo Biển số xe, Tên tài xế, Khoảng ngày (Từ ngày - Đến ngày).
+- Tự động thực thi phân quyền dữ liệu (Data Scope).
+
+**API Endpoints:**
+```
+GET    /api/invoice-tracking           → Danh sách tickets (kèm phân trang, lọc status, tìm kiếm)
+GET    /api/invoice-tracking/statistics → Thống kê tổng quan & theo tài xế
+GET    /api/invoice-tracking/:id       → Chi tiết ticket (kèm user_permissions động)
+GET    /api/invoice-tracking/:id/history → Timeline lịch sử thao tác ticket
+POST   /api/invoice-tracking/:id/documents → Tải lên chứng từ (tài xế)
+PUT    /api/invoice-tracking/:id/review    → Duyệt hoàn thành hoặc yêu cầu bổ sung (điều phối)
+```
+
 ## 8. Dark/Light Mode
 
 **Mục đích:** Cho phép user chuyển đổi chế độ sáng/tối cho toàn bộ giao diện, persist qua sessions.

@@ -26,6 +26,7 @@ import routePricingRoutes from './routePricing';
 import dashboardRoutes from './dashboard';
 import invoiceTrackingRoutes from './invoiceTracking';
 import dataScopeRoutes from './dataScopes';
+import workflowRoutes from './workflows';
 
 const router = Router();
 
@@ -56,5 +57,6 @@ router.use('/route-pricing', routePricingRoutes);
 router.use('/dashboard', dashboardRoutes);
 router.use('/invoice-tracking', invoiceTrackingRoutes);
 router.use('/data-scopes', dataScopeRoutes);
+router.use('/workflows', workflowRoutes);
 
 export default router;

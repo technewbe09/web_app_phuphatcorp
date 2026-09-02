@@ -1,17 +1,30 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useI18n } from '../../i18n/useI18n';
 import { Modal } from '../ui/Modal';
 import { Button } from '../ui/Button';
 import { InvoiceStatusBadge } from './InvoiceStatusBadge';
 import { DocumentPreview } from './DocumentPreview';
+import { DocumentViewerModal } from './DocumentViewerModal';
 import { UploadDocumentsModal } from './UploadDocumentsModal';
 import { SupplementNoteDialog } from './SupplementNoteDialog';
 import { ConfirmFinishDialog } from './ConfirmFinishDialog';
-import { useUploadDocuments, useReviewTicket } from '../../hooks/useInvoiceTracking';
-import { useAuth } from '../../hooks/useAuth';
-import type { InvoiceTrackingTicket } from '../../api/invoiceTrackingApi';
+import { useUploadDocuments, useReviewTicket, useInvoiceTrackingHistory } from '../../hooks/useInvoiceTracking';
+import type { InvoiceTrackingTicket, DocumentFile } from '../../api/invoiceTrackingApi';
 import { formatDate, formatDateTime } from '../../utils/format';
-import { Truck, AlertCircle, FileText, CheckCircle2, Clock } from 'lucide-react';
+import {
+  Truck,
+  AlertCircle,
+  FileText,
+  CheckCircle2,
+  Clock,
+  AlertTriangle,
+  History,
+  Upload,
+  PlusCircle,
+  User,
+  Image as ImageIcon,
+  ExternalLink,
+} from 'lucide-react';
 
 interface TicketDetailModalProps {
   ticket: InvoiceTrackingTicket | null;
@@ -21,53 +34,72 @@ interface TicketDetailModalProps {
 
 export function TicketDetailModal({ ticket, isOpen, onClose }: TicketDetailModalProps) {
   const { t } = useI18n();
-  const { hasPermission } = useAuth();
   const [showUpload, setShowUpload] = useState(false);
   const [showSupplement, setShowSupplement] = useState(false);
   const [showConfirmFinish, setShowConfirmFinish] = useState(false);
+  const [selectedHistoryDoc, setSelectedHistoryDoc] = useState<DocumentFile | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   const uploadMutation = useUploadDocuments();
   const reviewMutation = useReviewTicket();
+  const { data: historyItems, isLoading: isLoadingHistory } = useInvoiceTrackingHistory(ticket?.id ?? null);
+
+  // Determine permissions from backend dynamic evaluation
+  const canUpload = useMemo(() => !!ticket?.user_permissions?.can_upload, [ticket?.user_permissions]);
+  const canFinish = useMemo(() => !!ticket?.user_permissions?.can_finish, [ticket?.user_permissions]);
+  const canRequestSupplement = useMemo(() => !!ticket?.user_permissions?.can_request_supplement, [ticket?.user_permissions]);
 
   if (!ticket) return null;
 
-  const canUpload = ticket.invoice_status === 'created' || ticket.invoice_status === 'request_supplement';
-  const canReview = ticket.invoice_status === 'pending_review' && (hasPermission('invoice_tracking.manage') || hasPermission('dispatch.manage'));
-
   const handleUpload = async (files: File[], note: string) => {
-    const filePromises = files.map(async (file) => {
-      const base64 = await new Promise<string>((resolve) => {
-        const reader = new FileReader();
-        reader.onload = () => {
-          const result = reader.result as string;
-          resolve(result.split(',')[1]);
+    setActionError(null);
+    try {
+      const filePromises = files.map(async (file) => {
+        const base64 = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => {
+            const result = reader.result as string;
+            if (result.includes(',')) {
+              resolve(result.split(',')[1]);
+            } else {
+              resolve(result);
+            }
+          };
+          reader.onerror = (err) => reject(err);
+          reader.readAsDataURL(file);
+        });
+        return {
+          file_name: file.name,
+          mime_type: file.type,
+          file_data: base64,
         };
-        reader.readAsDataURL(file);
       });
-      return {
-        file_name: file.name,
-        mime_type: file.type,
-        file_data: base64,
-      };
-    });
 
-    const fileData = await Promise.all(filePromises);
+      const fileData = await Promise.all(filePromises);
 
-    uploadMutation.mutate(
-      { id: ticket.id, data: { files: fileData, driver_note: note || undefined } },
-      {
-        onSuccess: () => {
-          setShowUpload(false);
-          onClose();
+      uploadMutation.mutate(
+        { id: ticket.id, data: { files: fileData, driver_note: note || undefined } },
+        {
+          onSuccess: () => {
+            setShowUpload(false);
+            onClose();
+          },
+          onError: (err: unknown) => {
+            const msg =
+              (err as { response?: { data?: { message?: string } } })?.response?.data?.message ||
+              t('invoice_tracking.message.errorUpload');
+            setActionError(msg);
+          },
         },
-        onError: (err: any) => {
-          console.error("Error:", err?.response?.data?.message || t('invoice_tracking.message.errorUpload'));
-        },
-      },
-    );
+      );
+    } catch (e) {
+      console.error('File reading failed:', e);
+      setActionError('Không thể đọc dữ liệu file. Vui lòng thử lại.');
+    }
   };
 
   const handleFinish = () => {
+    setActionError(null);
     reviewMutation.mutate(
       { id: ticket.id, data: { action: 'finish' } },
       {
@@ -75,14 +107,18 @@ export function TicketDetailModal({ ticket, isOpen, onClose }: TicketDetailModal
           setShowConfirmFinish(false);
           onClose();
         },
-        onError: (err: any) => {
-          console.error("Error:", err?.response?.data?.message || t('invoice_tracking.message.errorReview'));
+        onError: (err: unknown) => {
+          const msg =
+            (err as { response?: { data?: { message?: string } } })?.response?.data?.message ||
+            t('invoice_tracking.message.errorReview');
+          setActionError(msg);
         },
       },
     );
   };
 
   const handleRequestSupplement = (note: string) => {
+    setActionError(null);
     reviewMutation.mutate(
       { id: ticket.id, data: { action: 'request_supplement', supplement_note: note } },
       {
@@ -90,8 +126,11 @@ export function TicketDetailModal({ ticket, isOpen, onClose }: TicketDetailModal
           setShowSupplement(false);
           onClose();
         },
-        onError: (err: any) => {
-          console.error("Error:", err?.response?.data?.message || t('invoice_tracking.message.errorReview'));
+        onError: (err: unknown) => {
+          const msg =
+            (err as { response?: { data?: { message?: string } } })?.response?.data?.message ||
+            t('invoice_tracking.message.errorReview');
+          setActionError(msg);
         },
       },
     );
@@ -101,6 +140,13 @@ export function TicketDetailModal({ ticket, isOpen, onClose }: TicketDetailModal
     <>
       <Modal isOpen={isOpen} onClose={onClose} title={t('invoice_tracking.detail.title')} size="xl">
         <div className="space-y-4 sm:space-y-5">
+          {actionError && (
+            <div className="flex items-center gap-2 p-3 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 rounded-lg text-sm text-red-700 dark:text-red-300">
+              <AlertTriangle className="w-4 h-4 shrink-0 text-red-500" />
+              <span>{actionError}</span>
+            </div>
+          )}
+
           {/* Main Trip Overview Card */}
           <div className="rounded-xl border border-neutral-200 p-3.5 sm:p-4 dark:border-neutral-800 bg-neutral-50/50 dark:bg-neutral-800/30">
             <div className="flex items-center justify-between gap-2 mb-3">
@@ -125,8 +171,10 @@ export function TicketDetailModal({ ticket, isOpen, onClose }: TicketDetailModal
                 <span className="font-semibold text-neutral-900 dark:text-neutral-100 mt-0.5 block">{ticket.tai_xe || '—'}</span>
               </div>
               <div className="bg-white dark:bg-neutral-900 p-2.5 rounded-lg border border-neutral-100 dark:border-neutral-800">
-                <span className="text-neutral-500 dark:text-neutral-400 block text-xs">{t('invoice_tracking.table.maChuyen')}</span>
-                <span className="font-mono font-medium text-neutral-900 dark:text-neutral-100 mt-0.5 block">{ticket.ma_chuyen || '—'}</span>
+                <span className="text-neutral-500 dark:text-neutral-400 block text-xs">Loại tuyến / Loại xe</span>
+                <span className="font-medium text-neutral-900 dark:text-neutral-100 mt-0.5 block">
+                  {ticket.loai_tuyen} • {ticket.loai_xe}
+                </span>
               </div>
               <div className="bg-white dark:bg-neutral-900 p-2.5 rounded-lg border border-neutral-100 dark:border-neutral-800 sm:col-span-2">
                 <span className="text-neutral-500 dark:text-neutral-400 block text-xs">{t('invoice_tracking.table.diemNhan')}</span>
@@ -199,6 +247,148 @@ export function TicketDetailModal({ ticket, isOpen, onClose }: TicketDetailModal
             <DocumentPreview documents={ticket.documents || []} />
           </div>
 
+          {/* Operation History Timeline */}
+          <div className="rounded-xl border border-neutral-200 p-3.5 sm:p-4 dark:border-neutral-800">
+            <h3 className="mb-3 text-sm font-semibold text-neutral-900 dark:text-neutral-100 flex items-center gap-1.5">
+              <History className="w-4 h-4 text-neutral-500" />
+              Lịch sử thao tác ({historyItems?.length || 0})
+            </h3>
+
+            {isLoadingHistory ? (
+              <div className="space-y-2 py-2">
+                <div className="h-6 w-1/3 animate-pulse rounded bg-neutral-200 dark:bg-neutral-800" />
+                <div className="h-6 w-2/3 animate-pulse rounded bg-neutral-200 dark:bg-neutral-800" />
+              </div>
+            ) : !historyItems || historyItems.length === 0 ? (
+              <p className="text-xs text-neutral-400 dark:text-neutral-500 italic py-1">Chưa có bản ghi lịch sử thao tác.</p>
+            ) : (
+              <div className="relative pl-5 space-y-4 before:absolute before:left-2 before:top-2 before:bottom-2 before:w-0.5 before:bg-neutral-200 dark:before:bg-neutral-700">
+                {historyItems.map((item, index) => {
+                  let badgeColor = 'bg-neutral-500 text-white';
+                  let Icon = Clock;
+                  if (item.action === 'CREATE' || item.action === 'CREATE_DISPATCH') {
+                    badgeColor = 'bg-neutral-800 dark:bg-neutral-200 text-white dark:text-neutral-900';
+                    Icon = PlusCircle;
+                  } else if (item.action === 'UPLOAD_DOCUMENTS') {
+                    badgeColor = 'bg-blue-600 text-white';
+                    Icon = Upload;
+                  } else if (item.action === 'REQUEST_SUPPLEMENT') {
+                    badgeColor = 'bg-amber-500 text-white';
+                    Icon = AlertTriangle;
+                  } else if (item.action === 'REVIEW_FINISH') {
+                    badgeColor = 'bg-emerald-600 text-white';
+                    Icon = CheckCircle2;
+                  }
+
+                  const details = item.details as Record<string, any> | null;
+
+                  return (
+                    <div key={item.id || index} className="relative group">
+                      {/* Timeline node icon */}
+                      <div
+                        className={`absolute -left-5 mt-0.5 flex h-4 w-4 items-center justify-center rounded-full ring-4 ring-white dark:ring-neutral-900 ${badgeColor}`}
+                      >
+                        <Icon className="h-2.5 w-2.5" />
+                      </div>
+
+                      {/* Content */}
+                      <div className="flex flex-col sm:flex-row sm:items-baseline sm:justify-between gap-0.5 sm:gap-2">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="text-xs font-semibold text-neutral-900 dark:text-neutral-100">
+                            {item.action_label}
+                          </span>
+                          <span className="text-neutral-400 text-xs">•</span>
+                          <span className="text-xs font-medium text-neutral-600 dark:text-neutral-400 flex items-center gap-1">
+                            <User className="w-3 h-3 text-neutral-400" />
+                            {item.user_full_name || item.username || 'Hệ thống'}
+                          </span>
+                        </div>
+                        <span className="text-[11px] text-neutral-400 font-mono">
+                          {formatDateTime(item.created_at)}
+                        </span>
+                      </div>
+
+                      {/* Details preview */}
+                      {details && (
+                        <div className="mt-1 text-xs text-neutral-600 dark:text-neutral-400 bg-neutral-50 dark:bg-neutral-800/40 p-2.5 rounded-lg border border-neutral-100 dark:border-neutral-800 space-y-1.5">
+                          {details.step && (
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-[11px] font-medium px-2 py-0.5 rounded bg-neutral-200/80 dark:bg-neutral-700/80 text-neutral-800 dark:text-neutral-200">
+                                {details.step}
+                              </span>
+                            </div>
+                          )}
+
+                          {Array.isArray(details.files) && details.files.length > 0 && (
+                            <div>
+                              <p className="text-[11px] font-medium text-neutral-500 dark:text-neutral-400 mb-1">
+                                Tệp chứng từ đính kèm ({details.files.length}):
+                              </p>
+                              <div className="flex flex-wrap gap-1.5">
+                                {details.files.map((f: { file_name: string; mime_type?: string }, fIdx: number) => {
+                                  const isImg = f.mime_type?.startsWith('image/');
+                                  const matchedDoc = (ticket.documents || []).find((d) => d.file_name === f.file_name);
+
+                                  return (
+                                    <button
+                                      key={fIdx}
+                                      type="button"
+                                      onClick={() => {
+                                        if (matchedDoc) {
+                                          setSelectedHistoryDoc(matchedDoc);
+                                        } else {
+                                          setSelectedHistoryDoc({
+                                            file_name: f.file_name,
+                                            mime_type: f.mime_type || (isImg ? 'image/jpeg' : 'application/pdf'),
+                                            file_data: '',
+                                          });
+                                        }
+                                      }}
+                                      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white dark:bg-neutral-800 border border-neutral-200 hover:border-neutral-400 dark:border-neutral-700 dark:hover:border-neutral-500 text-xs font-medium text-neutral-800 dark:text-neutral-200 shadow-2xs hover:shadow-xs transition cursor-pointer text-left group/file"
+                                      title={`Nhấn để xem tệp "${f.file_name}"`}
+                                    >
+                                      {isImg ? (
+                                        <ImageIcon className="w-3.5 h-3.5 text-sky-500 shrink-0 group-hover/file:scale-110 transition-transform" />
+                                      ) : (
+                                        <FileText className="w-3.5 h-3.5 text-rose-500 shrink-0 group-hover/file:scale-110 transition-transform" />
+                                      )}
+                                      <span className="max-w-[170px] sm:max-w-[200px] truncate">
+                                        {f.file_name}
+                                      </span>
+                                      <ExternalLink className="w-2.5 h-2.5 text-neutral-400 opacity-0 group-hover/file:opacity-100 transition-opacity ml-0.5 shrink-0" />
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          )}
+
+                          {!details.files && details.file_count && (
+                            <p>Đã tải lên: <span className="font-medium text-neutral-800 dark:text-neutral-200">{details.file_count} tệp chứng từ</span></p>
+                          )}
+
+                          {details.driver_note && (
+                            <p>Ghi chú tài xế: <span className="italic text-neutral-700 dark:text-neutral-300">"{details.driver_note}"</span></p>
+                          )}
+
+                          {details.supplement_note && (
+                            <p className="text-amber-700 dark:text-amber-400 font-medium">Lý do yêu cầu: <span>"{details.supplement_note}"</span></p>
+                          )}
+
+                          {details.prev_status && details.new_status && (
+                            <p className="text-[11px] text-neutral-400">
+                              Trạng thái: <span className="font-mono">{details.prev_status}</span> ➔ <span className="font-mono font-medium text-neutral-700 dark:text-neutral-300">{details.new_status}</span>
+                            </p>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
           {/* Bottom Actions Toolbar */}
           <div className="pt-2 flex flex-col sm:flex-row sm:justify-end gap-2.5">
             {canUpload && (
@@ -210,23 +400,23 @@ export function TicketDetailModal({ ticket, isOpen, onClose }: TicketDetailModal
                 {t('invoice_tracking.action.upload')}
               </Button>
             )}
-            {canReview && (
-              <>
-                <Button
-                  variant="secondary"
-                  onClick={() => setShowSupplement(true)}
-                  className="w-full sm:w-auto h-11 sm:h-10 text-sm font-medium"
-                >
-                  {t('invoice_tracking.action.requestSupplement')}
-                </Button>
-                <Button
-                  variant="primary"
-                  onClick={() => setShowConfirmFinish(true)}
-                  className="w-full sm:w-auto h-11 sm:h-10 text-sm font-medium"
-                >
-                  {t('invoice_tracking.action.finish')}
-                </Button>
-              </>
+            {canRequestSupplement && (
+              <Button
+                variant="secondary"
+                onClick={() => setShowSupplement(true)}
+                className="w-full sm:w-auto h-11 sm:h-10 text-sm font-medium"
+              >
+                {t('invoice_tracking.action.requestSupplement')}
+              </Button>
+            )}
+            {canFinish && (
+              <Button
+                variant="primary"
+                onClick={() => setShowConfirmFinish(true)}
+                className="w-full sm:w-auto h-11 sm:h-10 text-sm font-medium"
+              >
+                {t('invoice_tracking.action.finish')}
+              </Button>
             )}
             <Button
               variant="outline"
@@ -256,6 +446,12 @@ export function TicketDetailModal({ ticket, isOpen, onClose }: TicketDetailModal
         onClose={() => setShowConfirmFinish(false)}
         onConfirm={handleFinish}
         isLoading={reviewMutation.isPending}
+      />
+
+      {/* Preview File From History Timeline */}
+      <DocumentViewerModal
+        document={selectedHistoryDoc}
+        onClose={() => setSelectedHistoryDoc(null)}
       />
     </>
   );

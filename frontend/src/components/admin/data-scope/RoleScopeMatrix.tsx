@@ -49,6 +49,18 @@ export const RoleScopeMatrix: React.FC<RoleScopeMatrixProps> = ({
   // Extract all distinct roles from the first feature (or all features)
   const roles = features.length > 0 ? features[0].role_configs : [];
 
+  if (features.length === 0) {
+    return (
+      <div className="text-center py-12 bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-xl">
+        <Shield className="w-10 h-10 mx-auto text-neutral-300 dark:text-neutral-600 mb-3" />
+        <p className="text-sm text-neutral-500 dark:text-neutral-400 font-medium">
+          {t('data_scopes.messages.empty_matrix' as never) ||
+            'Chưa có tính năng nào được đăng ký cấu hình phân quyền dữ liệu'}
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-4">
       {hasDirty && (

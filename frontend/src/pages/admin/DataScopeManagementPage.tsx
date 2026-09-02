@@ -54,7 +54,10 @@ export function DataScopeManagementPage() {
   };
 
   const handleDeleteEntity = async (id: number) => {
-    if (window.confirm('Bạn có chắc muốn xóa phân quyền đối tượng này không?')) {
+    const confirmMsg =
+      t('data_scopes.messages.delete_confirm' as never) ||
+      'Bạn có chắc muốn xóa phân quyền đối tượng này không?';
+    if (window.confirm(confirmMsg)) {
       await removeEntityMutation.mutateAsync(id);
     }
   };

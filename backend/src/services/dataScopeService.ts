@@ -220,11 +220,18 @@ export const dataScopeService = {
     const res = await pool.query<UserEntityScopeWithDetails>(
       `SELECT ues.id, ues.user_id, ues.feature_code, ues.entity_type, ues.entity_id, ues.created_at,
               u.username, u.full_name, fs.feature_name,
-              COALESCE(v.plate_number, target_u.full_name, target_u.username, ues.entity_id::text) as entity_name
+              COALESCE(
+                v.plate_number,
+                c.ten_khach_hang,
+                target_u.full_name,
+                target_u.username,
+                ues.entity_id::text
+              ) as entity_name
        FROM user_entity_scopes ues
        JOIN users u ON u.id = ues.user_id
        JOIN feature_scopes fs ON fs.feature_code = ues.feature_code
        LEFT JOIN vehicles v ON (ues.entity_type = 'vehicle' AND v.id = ues.entity_id)
+       LEFT JOIN customers c ON (ues.entity_type = 'customer' AND c.id = ues.entity_id)
        LEFT JOIN users target_u ON (ues.entity_type = 'driver' AND target_u.id = ues.entity_id)
        ${whereClause}
        ORDER BY ues.created_at DESC`,
@@ -272,17 +279,21 @@ export const dataScopeService = {
       throw new DataScopeError('NO_ENTITIES', 'Danh sách đối tượng gán không được rỗng', 400);
     }
 
+    // Filter valid positive integer IDs and remove duplicates
+    const uniqueEntityIds = Array.from(new Set(entityIds.filter((id) => Number.isInteger(id) && id > 0)));
+    if (uniqueEntityIds.length === 0) {
+      throw new DataScopeError('NO_VALID_ENTITIES', 'Danh sách ID đối tượng không hợp lệ', 400);
+    }
+
     const client = await pool.connect();
     try {
       await client.query('BEGIN');
-      for (const entityId of entityIds) {
-        await client.query(
-          `INSERT INTO user_entity_scopes (user_id, feature_code, entity_type, entity_id)
-           VALUES ($1, $2, $3, $4)
-           ON CONFLICT (user_id, feature_code, entity_type, entity_id) DO NOTHING`,
-          [userId, featureCode, entityType, entityId],
-        );
-      }
+      await client.query(
+        `INSERT INTO user_entity_scopes (user_id, feature_code, entity_type, entity_id)
+         SELECT $1, $2, $3, unnest($4::int[])
+         ON CONFLICT (user_id, feature_code, entity_type, entity_id) DO NOTHING`,
+        [userId, featureCode, entityType, uniqueEntityIds],
+      );
       await client.query('COMMIT');
     } catch (err) {
       await client.query('ROLLBACK');
@@ -318,33 +329,85 @@ export const dataScopeService = {
 
     const summary: UserDataScopeSummary = {};
 
-    for (const f of featuresRes.rows) {
-      const scope = await this.resolveScope(userId, roleId, userRole, f.feature_code);
+    // Parallelize scope resolution across features to prevent N+1 serial bottlenecks
+    const scopesWithFeature = await Promise.all(
+      featuresRes.rows.map(async (f) => {
+        const scope = await this.resolveScope(userId, roleId, userRole, f.feature_code);
+        return { featureCode: f.feature_code, scope };
+      }),
+    );
+
+    // Batch resolve vehicle and user driver names in parallel
+    const vehicleEntityIds = new Set<number>();
+    const driverEntityIds = new Set<number>();
+
+    for (const { scope } of scopesWithFeature) {
+      if (scope.type === 'entity' && scope.entityIds?.length) {
+        if (scope.entityType === 'vehicle') {
+          scope.entityIds.forEach((id) => vehicleEntityIds.add(id));
+        } else if (scope.entityType === 'driver') {
+          scope.entityIds.forEach((id) => driverEntityIds.add(id));
+        }
+      }
+    }
+
+    const vehicleMap = new Map<number, string>();
+    const driverMap = new Map<number, string>();
+
+    const queries: Promise<void>[] = [];
+
+    if (vehicleEntityIds.size > 0) {
+      queries.push(
+        pool
+          .query<{ id: number; plate_number: string }>(
+            'SELECT id, plate_number FROM vehicles WHERE id = ANY($1)',
+            [Array.from(vehicleEntityIds)],
+          )
+          .then((res) => {
+            res.rows.forEach((v) => vehicleMap.set(v.id, v.plate_number));
+          }),
+      );
+    }
+
+    if (driverEntityIds.size > 0) {
+      queries.push(
+        pool
+          .query<{ id: number; full_name: string; username: string }>(
+            'SELECT id, full_name, username FROM users WHERE id = ANY($1)',
+            [Array.from(driverEntityIds)],
+          )
+          .then((res) => {
+            res.rows.forEach((d) => driverMap.set(d.id, d.full_name || d.username));
+          }),
+      );
+    }
+
+    if (queries.length > 0) {
+      await Promise.all(queries);
+    }
+
+    for (const { featureCode, scope } of scopesWithFeature) {
       if (scope.type === 'owner') {
-        summary[f.feature_code] = {
+        summary[featureCode] = {
           scope_type: 'owner',
         };
       } else {
-        summary[f.feature_code] = {
+        summary[featureCode] = {
           scope_type: scope.type,
           entity_type: scope.entityType,
           entity_ids: scope.entityIds,
         };
 
-        if (scope.type === 'entity' && scope.entityType === 'vehicle' && scope.entityIds?.length) {
-          const vehiclesRes = await pool.query<{ plate_number: string }>(
-            'SELECT plate_number FROM vehicles WHERE id = ANY($1)',
-            [scope.entityIds],
-          );
-          summary[f.feature_code].entity_names = vehiclesRes.rows.map((v) => v.plate_number);
-        } else if (scope.type === 'entity' && scope.entityType === 'driver' && scope.entityIds?.length) {
-          const driversRes = await pool.query<{ full_name: string; username: string }>(
-            'SELECT full_name, username FROM users WHERE id = ANY($1)',
-            [scope.entityIds],
-          );
-          summary[f.feature_code].entity_names = driversRes.rows.map(
-            (d) => d.full_name || d.username,
-          );
+        if (scope.type === 'entity' && scope.entityIds?.length) {
+          if (scope.entityType === 'vehicle') {
+            summary[featureCode].entity_names = scope.entityIds
+              .map((id) => vehicleMap.get(id))
+              .filter(Boolean) as string[];
+          } else if (scope.entityType === 'driver') {
+            summary[featureCode].entity_names = scope.entityIds
+              .map((id) => driverMap.get(id))
+              .filter(Boolean) as string[];
+          }
         }
       }
     }

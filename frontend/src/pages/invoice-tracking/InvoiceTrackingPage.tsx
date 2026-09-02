@@ -1,10 +1,23 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useI18n } from '../../i18n/useI18n';
-import { Search, RefreshCw, Shield, User, Calendar, MapPin, ChevronRight, FileCheck, Layers } from 'lucide-react';
+import {
+  Search,
+  RefreshCw,
+  Shield,
+  User,
+  Calendar,
+  MapPin,
+  ChevronRight,
+  FileCheck,
+  X,
+  List,
+  BarChart3,
+} from 'lucide-react';
 import { useInvoiceTracking } from '../../hooks/useInvoiceTracking';
 import { useMyDataScopes } from '../../hooks/useDataScopes';
 import { InvoiceStatusBadge } from '../../components/invoice-tracking/InvoiceStatusBadge';
 import { TicketDetailModal } from '../../components/invoice-tracking/TicketDetailModal';
+import { InvoiceTrackingStatsTab } from '../../components/invoice-tracking/InvoiceTrackingStatsTab';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
 import { Select } from '../../components/ui/Select';
@@ -20,43 +33,61 @@ import { Card, CardContent, CardHeader } from '../../components/ui/Card';
 import { formatDate } from '../../utils/format';
 import type { InvoiceTrackingTicket } from '../../api/invoiceTrackingApi';
 
+const PAGE_SIZE = 20;
+
 export default function InvoiceTrackingPage() {
   const { t } = useI18n();
-  const [search, setSearch] = useState('');
+  const [activeTab, setActiveTab] = useState<'list' | 'stats'>('list');
+  const [searchInput, setSearchInput] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string[]>([]);
   const [page, setPage] = useState(1);
   const [selectedTicket, setSelectedTicket] = useState<InvoiceTrackingTicket | null>(null);
+
+  // Debounce search input by 350ms
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedSearch(searchInput.trim());
+      setPage(1);
+    }, 350);
+
+    return () => clearTimeout(handler);
+  }, [searchInput]);
 
   const { data: myScopes } = useMyDataScopes();
   const invoiceScope = myScopes?.invoice_tracking;
 
   const filters = useMemo(
     () => ({
-      search: search || undefined,
+      search: debouncedSearch || undefined,
       status: statusFilter.length > 0 ? statusFilter : undefined,
       page,
-      limit: 20,
+      limit: PAGE_SIZE,
     }),
-    [search, statusFilter, page],
+    [debouncedSearch, statusFilter, page],
   );
 
-  const { data, isLoading, isError, refetch } = useInvoiceTracking(filters);
+  const { data, isLoading, isError, refetch, isFetching } = useInvoiceTracking(filters);
 
-  const statusOptions = [
-    { value: '', label: t('invoice_tracking.filter.statusAll') },
-    { value: 'created', label: t('invoice_tracking.filter.statusCreated') },
-    { value: 'pending_review', label: t('invoice_tracking.filter.statusPendingReview') },
-    { value: 'completed', label: t('invoice_tracking.filter.statusCompleted') },
-    { value: 'request_supplement', label: t('invoice_tracking.filter.statusRequestSupplement') },
-  ];
+  const statusOptions = useMemo(
+    () => [
+      { value: '', label: t('invoice_tracking.filter.statusAll') },
+      { value: 'created', label: t('invoice_tracking.filter.statusCreated') },
+      { value: 'pending_review', label: t('invoice_tracking.filter.statusPendingReview') },
+      { value: 'completed', label: t('invoice_tracking.filter.statusCompleted') },
+      { value: 'request_supplement', label: t('invoice_tracking.filter.statusRequestSupplement') },
+    ],
+    [t],
+  );
 
   const handleStatusChange = (value: string) => {
     setStatusFilter(value ? [value] : []);
     setPage(1);
   };
 
-  const handleSearch = (value: string) => {
-    setSearch(value);
+  const handleClearSearch = () => {
+    setSearchInput('');
+    setDebouncedSearch('');
     setPage(1);
   };
 
@@ -77,9 +108,14 @@ export default function InvoiceTrackingPage() {
       {/* Header & Data Scope Banner */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
-          <h1 className="text-xl sm:text-2xl font-bold text-neutral-900 dark:text-neutral-100">
-            {t('invoice_tracking.page.title')}
-          </h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-xl sm:text-2xl font-bold text-neutral-900 dark:text-neutral-100">
+              {t('invoice_tracking.page.title')}
+            </h1>
+            {isFetching && !isLoading && (
+              <RefreshCw className="w-4 h-4 text-neutral-400 animate-spin" />
+            )}
+          </div>
           <p className="text-xs sm:text-sm text-neutral-500 dark:text-neutral-400 mt-0.5">
             Quản lý và tra cứu trạng thái chứng từ / hóa đơn chuyến hàng
           </p>
@@ -102,6 +138,36 @@ export default function InvoiceTrackingPage() {
         )}
       </div>
 
+      {/* Tabs Switcher Navigation */}
+      {(!invoiceScope || invoiceScope.scope_type !== 'none') && (
+        <div className="flex items-center gap-2 border-b border-neutral-200 dark:border-neutral-800">
+          <button
+            type="button"
+            onClick={() => setActiveTab('list')}
+            className={`flex items-center gap-2 px-4 py-2.5 text-sm font-semibold border-b-2 transition-colors ${
+              activeTab === 'list'
+                ? 'border-neutral-900 dark:border-neutral-100 text-neutral-900 dark:text-neutral-100'
+                : 'border-transparent text-neutral-500 hover:text-neutral-700 dark:text-neutral-400 dark:hover:text-neutral-200'
+            }`}
+          >
+            <List className="w-4 h-4" />
+            <span>{t('invoice_tracking.tabs.list')}</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab('stats')}
+            className={`flex items-center gap-2 px-4 py-2.5 text-sm font-semibold border-b-2 transition-colors ${
+              activeTab === 'stats'
+                ? 'border-neutral-900 dark:border-neutral-100 text-neutral-900 dark:text-neutral-100'
+                : 'border-transparent text-neutral-500 hover:text-neutral-700 dark:text-neutral-400 dark:hover:text-neutral-200'
+            }`}
+          >
+            <BarChart3 className="w-4 h-4" />
+            <span>{t('invoice_tracking.tabs.statistics')}</span>
+          </button>
+        </div>
+      )}
+
       {invoiceScope && invoiceScope.scope_type === 'none' ? (
         <Card>
           <CardContent className="py-12 px-4 text-center text-neutral-500">
@@ -114,19 +180,31 @@ export default function InvoiceTrackingPage() {
             </p>
           </CardContent>
         </Card>
+      ) : activeTab === 'stats' ? (
+        <InvoiceTrackingStatsTab />
       ) : (
         <Card className="overflow-hidden border border-neutral-200 dark:border-neutral-800 shadow-sm">
           {/* Responsive Filter Toolbar */}
           <CardHeader className="p-4 sm:p-5 border-b border-neutral-100 dark:border-neutral-800 bg-white dark:bg-neutral-900">
             <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-              <div className="flex-1">
+              <div className="flex-1 relative">
                 <Input
                   placeholder={t('invoice_tracking.filter.searchPlaceholder')}
-                  value={search}
-                  onChange={(e) => handleSearch(e.target.value)}
+                  value={searchInput}
+                  onChange={(e) => setSearchInput(e.target.value)}
                   prefix={<Search className="h-4 w-4 text-neutral-400" />}
-                  className="w-full text-base sm:text-sm h-11 sm:h-10"
+                  className="w-full text-base sm:text-sm h-11 sm:h-10 pr-8"
                 />
+                {searchInput && (
+                  <button
+                    type="button"
+                    onClick={handleClearSearch}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-200"
+                    title="Xóa tìm kiếm"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                )}
               </div>
               <div className="w-full sm:w-56">
                 <Select
@@ -169,7 +247,7 @@ export default function InvoiceTrackingPage() {
                       <div className="flex items-start justify-between gap-2 mb-2">
                         <div className="flex items-center gap-2">
                           <span className="text-xs font-semibold px-2 py-0.5 rounded bg-neutral-100 dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300">
-                            #{ (page - 1) * 20 + idx + 1 }
+                            #{ (page - 1) * PAGE_SIZE + idx + 1 }
                           </span>
                           <span className="font-semibold text-base text-neutral-900 dark:text-neutral-100">
                             {ticket.bien_so}
@@ -189,12 +267,6 @@ export default function InvoiceTrackingPage() {
                             {ticket.tai_xe || 'Chưa gán'}
                           </span>
                         </div>
-                        {ticket.ma_chuyen && (
-                          <div className="flex items-center gap-1.5 truncate col-span-2">
-                            <Layers className="w-3.5 h-3.5 text-neutral-400 shrink-0" />
-                            <span className="truncate">Mã: <span className="font-mono">{ticket.ma_chuyen}</span></span>
-                          </div>
-                        )}
                         <div className="flex items-center gap-1.5 truncate col-span-2">
                           <MapPin className="w-3.5 h-3.5 text-neutral-400 shrink-0" />
                           <span className="truncate">{ticket.diem_nhan || '—'}</span>
@@ -221,7 +293,6 @@ export default function InvoiceTrackingPage() {
                         <TableHead className="whitespace-nowrap">{t('invoice_tracking.table.date')}</TableHead>
                         <TableHead className="whitespace-nowrap">{t('invoice_tracking.table.bienSo')}</TableHead>
                         <TableHead className="whitespace-nowrap">{t('invoice_tracking.table.taiXe')}</TableHead>
-                        <TableHead className="whitespace-nowrap">{t('invoice_tracking.table.maChuyen')}</TableHead>
                         <TableHead className="min-w-[140px]">{t('invoice_tracking.table.diemNhan')}</TableHead>
                         <TableHead className="whitespace-nowrap">{t('invoice_tracking.table.status')}</TableHead>
                         <TableHead className="w-20 text-center">{t('invoice_tracking.table.actions')}</TableHead>
@@ -234,22 +305,21 @@ export default function InvoiceTrackingPage() {
                           className="cursor-pointer hover:bg-neutral-50 dark:hover:bg-neutral-800/50 transition-colors"
                           onClick={() => setSelectedTicket(ticket)}
                         >
-                          <TableCell className="text-center text-neutral-500 font-mono text-xs">{(page - 1) * 20 + idx + 1}</TableCell>
+                          <TableCell className="text-center text-neutral-500 font-mono text-xs">{(page - 1) * PAGE_SIZE + idx + 1}</TableCell>
                           <TableCell className="whitespace-nowrap">{formatDate(ticket.ngay)}</TableCell>
                           <TableCell className="font-semibold text-neutral-900 dark:text-neutral-100 whitespace-nowrap">
                             {ticket.bien_so}
                           </TableCell>
                           <TableCell className="whitespace-nowrap">{ticket.tai_xe || '—'}</TableCell>
-                          <TableCell className="font-mono text-xs whitespace-nowrap">{ticket.ma_chuyen || '—'}</TableCell>
-                          <TableCell className="max-w-[200px] truncate" title={ticket.diem_nhan}>{ticket.diem_nhan}</TableCell>
+                          <TableCell className="max-w-[240px] truncate" title={ticket.diem_nhan}>{ticket.diem_nhan}</TableCell>
                           <TableCell className="whitespace-nowrap">
                             <InvoiceStatusBadge status={ticket.invoice_status} />
                           </TableCell>
                           <TableCell className="text-center">
                             <Button
-                              variant="ghost"
+                              variant="outline"
                               size="sm"
-                              className="h-8 px-3"
+                              className="h-7.5 px-3 text-xs font-medium"
                               onClick={(e) => {
                                 e.stopPropagation();
                                 setSelectedTicket(ticket);
@@ -268,7 +338,7 @@ export default function InvoiceTrackingPage() {
                 {data.pagination.total_pages > 1 && (
                   <div className="p-4 border-t border-neutral-100 dark:border-neutral-800 flex flex-col sm:flex-row items-center justify-between gap-3">
                     <p className="text-xs sm:text-sm text-neutral-500 dark:text-neutral-400 text-center sm:text-left">
-                      Hiển thị <span className="font-medium text-neutral-700 dark:text-neutral-300">{(page - 1) * 20 + 1}–{Math.min(page * 20, data.pagination.total)}</span> trên <span className="font-medium text-neutral-700 dark:text-neutral-300">{data.pagination.total}</span> chuyến
+                      Hiển thị <span className="font-medium text-neutral-700 dark:text-neutral-300">{(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, data.pagination.total)}</span> trên <span className="font-medium text-neutral-700 dark:text-neutral-300">{data.pagination.total}</span> chuyến
                     </p>
                     <div className="flex items-center gap-1.5">
                       <Button

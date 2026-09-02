@@ -18,6 +18,11 @@ export const dataScopeController = {
     try {
       const featureCode = req.params.featureCode;
       const roleId = parseInt(req.params.roleId, 10);
+      if (Number.isNaN(roleId) || roleId <= 0) {
+        sendError(res, 'ID vai trò không hợp lệ', 400);
+        return;
+      }
+
       const { scope_type } = req.body as { scope_type: ScopeType };
 
       if (!scope_type) {
@@ -39,7 +44,15 @@ export const dataScopeController = {
   async getUserEntityScopes(req: AuthRequest, res: Response): Promise<void> {
     try {
       const featureCode = req.query.feature_code as string | undefined;
-      const userId = req.query.user_id ? parseInt(req.query.user_id as string, 10) : undefined;
+      let userId: number | undefined;
+      if (req.query.user_id) {
+        const parsedUserId = parseInt(req.query.user_id as string, 10);
+        if (Number.isNaN(parsedUserId) || parsedUserId <= 0) {
+          sendError(res, 'user_id không hợp lệ', 400);
+          return;
+        }
+        userId = parsedUserId;
+      }
 
       const userEntities = await dataScopeService.getUserEntityScopes(featureCode, userId);
       sendSuccess(res, userEntities, 'Danh sách phân quyền đối tượng cho người dùng');
@@ -52,12 +65,29 @@ export const dataScopeController = {
     try {
       const { user_id, feature_code, entity_type, entity_ids } = req.body;
 
-      if (!user_id || !feature_code || !entity_type || !Array.isArray(entity_ids)) {
-        sendError(res, 'Thiếu các trường bắt buộc (user_id, feature_code, entity_type, entity_ids)', 400);
+      const parsedUserId = parseInt(user_id, 10);
+      if (Number.isNaN(parsedUserId) || parsedUserId <= 0) {
+        sendError(res, 'user_id không hợp lệ', 400);
         return;
       }
 
-      await dataScopeService.assignUserEntities(user_id, feature_code, entity_type, entity_ids);
+      if (!feature_code || typeof feature_code !== 'string' || !entity_type || typeof entity_type !== 'string') {
+        sendError(res, 'feature_code hoặc entity_type không hợp lệ', 400);
+        return;
+      }
+
+      if (!Array.isArray(entity_ids) || entity_ids.length === 0) {
+        sendError(res, 'entity_ids phải là mảng không rỗng', 400);
+        return;
+      }
+
+      const numericEntityIds = entity_ids.map((id: any) => parseInt(id, 10));
+      if (numericEntityIds.some((id: number) => Number.isNaN(id) || id <= 0)) {
+        sendError(res, 'Mọi entity_id phải là số nguyên dương hợp lệ', 400);
+        return;
+      }
+
+      await dataScopeService.assignUserEntities(parsedUserId, feature_code, entity_type, numericEntityIds);
       sendSuccess(res, undefined, 'Gán đối tượng cho người dùng thành công', 201);
     } catch (err: any) {
       if (err instanceof DataScopeError) {
@@ -71,6 +101,10 @@ export const dataScopeController = {
   async removeUserEntityScope(req: AuthRequest, res: Response): Promise<void> {
     try {
       const id = parseInt(req.params.id, 10);
+      if (Number.isNaN(id) || id <= 0) {
+        sendError(res, 'ID không hợp lệ', 400);
+        return;
+      }
       await dataScopeService.removeUserEntityScope(id);
       sendSuccess(res, undefined, 'Hủy gán đối tượng thành công');
     } catch (err: any) {

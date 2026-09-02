@@ -50,6 +50,15 @@ describe('dataScopeService.resolveScope', () => {
     expect(scope).toEqual({ type: 'all', userId: 2 });
   });
 
+  it('returns scope "owner" when role is configured as owner', async () => {
+    mockPool.query.mockResolvedValueOnce({ rows: [{ is_active: true }] } as never); // feature active
+    mockPool.query.mockResolvedValueOnce({ rows: [] } as never); // no user entities
+    mockPool.query.mockResolvedValueOnce({ rows: [{ scope_type: 'owner' }] } as never); // role config = owner
+
+    const scope = await dataScopeService.resolveScope(7, 3, UserRole.VIEWER, 'invoice_tracking');
+    expect(scope).toEqual({ type: 'owner', userId: 7 });
+  });
+
   it('returns scope "none" if role is entity-scoped but user has no entity assigned', async () => {
     mockPool.query.mockResolvedValueOnce({ rows: [{ is_active: true }] } as never); // feature active
     mockPool.query.mockResolvedValueOnce({ rows: [] } as never); // no user entities
@@ -103,5 +112,62 @@ describe('dataScopeService.updateRoleScopeConfig', () => {
 
     const result = await dataScopeService.updateRoleScopeConfig('invoice_tracking', 3, 'entity');
     expect(result.scope_type).toBe('entity');
+  });
+});
+
+describe('dataScopeService.assignUserEntities', () => {
+  it('throws error when feature is not found', async () => {
+    mockPool.query.mockResolvedValueOnce({ rows: [] } as never);
+
+    await expect(
+      dataScopeService.assignUserEntities(1, 'invalid_feature', 'vehicle', [1, 2]),
+    ).rejects.toThrow(DataScopeError);
+  });
+
+  it('throws error when entity_type is not allowed for the feature', async () => {
+    mockPool.query.mockResolvedValueOnce({ rows: [{ entity_types: ['vehicle'] }] } as never);
+
+    await expect(
+      dataScopeService.assignUserEntities(1, 'invoice_tracking', 'unsupported_entity', [1, 2]),
+    ).rejects.toThrow(DataScopeError);
+  });
+
+  it('throws error when user is not found', async () => {
+    mockPool.query.mockResolvedValueOnce({ rows: [{ entity_types: ['vehicle'] }] } as never);
+    mockPool.query.mockResolvedValueOnce({ rows: [] } as never); // user not found
+
+    await expect(
+      dataScopeService.assignUserEntities(999, 'invoice_tracking', 'vehicle', [1, 2]),
+    ).rejects.toThrow(DataScopeError);
+  });
+
+  it('assigns entities in bulk via transaction query', async () => {
+    mockPool.query.mockResolvedValueOnce({ rows: [{ entity_types: ['vehicle'] }] } as never); // feature
+    mockPool.query.mockResolvedValueOnce({ rows: [{ id: 1 }] } as never); // user exists
+
+    const mockClient = {
+      query: jest.fn().mockResolvedValue({ rows: [] }),
+      release: jest.fn(),
+    };
+    mockPool.connect.mockResolvedValueOnce(mockClient as any);
+
+    await dataScopeService.assignUserEntities(1, 'invoice_tracking', 'vehicle', [10, 20]);
+    expect(mockClient.query).toHaveBeenCalledWith('BEGIN');
+    expect(mockClient.query).toHaveBeenCalledWith('COMMIT');
+    expect(mockClient.release).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('dataScopeService.removeUserEntityScope', () => {
+  it('deletes assignment by id', async () => {
+    mockPool.query.mockResolvedValueOnce({ rows: [{ id: 5 }] } as never);
+
+    await expect(dataScopeService.removeUserEntityScope(5)).resolves.toBeUndefined();
+  });
+
+  it('throws NOT_FOUND when assignment id does not exist', async () => {
+    mockPool.query.mockResolvedValueOnce({ rows: [] } as never);
+
+    await expect(dataScopeService.removeUserEntityScope(999)).rejects.toThrow(DataScopeError);
   });
 });
