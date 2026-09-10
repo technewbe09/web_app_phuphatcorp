@@ -9,6 +9,9 @@ export const pool = new Pool(
         min: 2,
         idleTimeoutMillis: 30000,
         connectionTimeoutMillis: 10000,
+        options: '-c timezone=Asia/Ho_Chi_Minh',
+        keepAlive: true,
+        keepAliveInitialDelayMillis: 10000,
       }
     : {
         host: env.db.host,
@@ -21,14 +24,11 @@ export const pool = new Pool(
         min: 2,
         idleTimeoutMillis: 30000,
         connectionTimeoutMillis: 10000,
+        options: '-c timezone=Asia/Ho_Chi_Minh',
+        keepAlive: true,
+        keepAliveInitialDelayMillis: 10000,
       },
 );
-
-pool.on('connect', (client) => {
-  client.query("SET timezone = 'Asia/Ho_Chi_Minh'").catch((err) => {
-    console.error('Error setting timezone on connect:', err);
-  });
-});
 
 pool.on('error', (err) => {
   console.error('Unexpected error on idle client', err);

@@ -180,7 +180,14 @@ export const invoiceTrackingService = {
     const dataPromise = pool.query<DispatchSchedule>(
       `SELECT id, ngay, loai_tuyen, loai_xe, xe_type, bien_so, tai_xe, vehicle_id,
               diem_nhan, tan, can, ghi_chu,
-              invoice_status, driver_id, dispatcher_id, documents,
+              invoice_status, driver_id, dispatcher_id,
+              CASE
+                WHEN documents IS NULL OR jsonb_typeof(documents) <> 'array' THEN '[]'::jsonb
+                ELSE (
+                  SELECT COALESCE(jsonb_agg(d - 'file_data'), '[]'::jsonb)
+                  FROM jsonb_array_elements(documents) d
+                )
+              END AS documents,
               supplement_note, driver_note, reviewed_at, completed_at,
               created_by, created_at, updated_at
        FROM dispatch_schedules

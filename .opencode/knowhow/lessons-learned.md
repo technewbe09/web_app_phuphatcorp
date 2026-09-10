@@ -5,6 +5,119 @@ description: Ghi lại các bài học kinh nghiệm, bug đã fix, và pitfalls
 # Lessons Learned — PhuPhatCorp
 
 ---
+## Rule: Cảnh báo và chặn tạo lịch điều phối xe nếu không tìm thấy driver_id
+- **Ngày:** 2026-09-11
+- **Feature:** Bảng điều phối xe (`dispatchScheduleService` & `ImportDispatchExcelModal`)
+- **Mô tả:** Bắt buộc mọi chuyến xe khi tạo (đơn lẻ hoặc Import Excel) phải tìm được tài xế (`driver_id` từ `driver_vehicles` + `drivers`).
+- **Thực hiện:**
+  - **Frontend (`ImportDispatchExcelModal.tsx`)**: Tra cứu danh mục tài xế hoạt động (`/api/drivers`). Nếu phát hiện biển số chưa được gán tài xế, hiển thị khung cảnh báo màu đỏ nổi bật danh sách các biển số cụ thể không thể insert vào database, đánh dấu dòng lỗi trong bảng preview và loại trừ khi bấm "Xác nhận Import".
+  - **Backend (`dispatchScheduleService.ts`)**: Trong `create` và `createBatch`, nếu sau khi tra cứu vẫn không tìm thấy `driver_id`, backend sẽ throw error liệt kê các biển số xe chưa có tài xế, ngăn chặn việc tạo bản ghi mồ côi không có tài xế.
+
+---
+## Change: Permission-based Dynamic Navigation for Mobile (`web_v2_mobile`)
+- **Ngày:** 2026-09-08
+- **Feature:** Phân quyền điều hướng trên Mobile (Flutter)
+- **Mô tả:** Ẩn các icon/tab chức năng trên thanh `BottomNavigationBar` của Mobile đối với các chức năng mà người dùng hiện tại không có quyền truy cập.
+- **Thực hiện:**
+  - `lib/providers/auth_provider.dart`: Thêm phương thức `hasAnyPermission(List<String> codes)`.
+  - `lib/screens/home/home_screen.dart`: Chuyển danh sách `destinations` thành mảng động:
+    - Tab "Tài khoản": Luôn hiển thị cho mọi người dùng.
+    - Tab "Theo dõi HĐ": Chỉ hiển thị khi có quyền `invoice_tracking.view` hoặc `invoice_tracking.manage` (hoặc role `ADMIN`).
+    - Tab "Đăng kiểm": Chỉ hiển thị khi có quyền `vehicle_data.view` hoặc `vehicle_data.manage` (hoặc role `ADMIN`).
+    - Tab "Bảo hiểm": Chỉ hiển thị khi có quyền `vehicle_data.view` hoặc `vehicle_data.manage` (hoặc role `ADMIN`).
+    - Tab "Thay nhớt": Chỉ hiển thị khi có quyền `vehicle_data.view` hoặc `vehicle_data.manage` (hoặc role `ADMIN`).
+    - Tự động ẩn `BottomNavigationBar` nếu chỉ có duy nhất 1 tab "Tài khoản", an toàn tránh index out of bounds khi chuyển đổi tài khoản.
+- **Verify:** `flutter test` 20/20 tests pass (bao gồm 4 test cases kiểm tra hiển thị phân quyền cho các role ADMIN, TAI_XE, STAFF, VIEWER), `flutter analyze` 0 issues.
+
+---
+## Feature: Vehicle Oil Change Management on Mobile (`web_v2_mobile`)
+- **Ngày:** 2026-09-08
+- **Feature:** Quản lý thay nhớt xe trên Mobile (Flutter)
+- **Mô tả:** Port toàn bộ chức năng Quản lý thay nhớt xe từ Web App sang Mobile Client dùng chung 100% backend API hiện hữu (`/api/vehicle-oil-changes`, `/api/vehicles/:id/oil-interval`).
+- **Thực hiện:**
+  - `OilChangeScreen`: Màn hình chính 2 Tab ("Xe cần thay nhớt" và "Lịch sử thay nhớt"). Tab 1 hiển thị tiến độ km đã đi / định mức km kèm thanh `LinearProgressIndicator` đổi màu theo mức cảnh báo (Đỏ: Quá hạn, Vàng: Sắp đến hạn, Xanh: Bình thường, Xám: Chưa có ODO). Tab 2 hiển thị toàn bộ lịch sử các lần thay nhớt.
+  - `OilChangeFormScreen`: Ghi nhận mới và chỉnh sửa lần thay nhớt, chọn xe, chọn ngày, nhập số ODO, chọn loại nhớt nhanh (`15W-40`, `20W-50`...) và ghi chú.
+  - `OilIntervalDialog`: Cài đặt số km định mức chu kỳ thay nhớt cho từng xe kèm preset gợi ý nhanh (`3000`, `4000`, `5000`, `6000`, `8000`, `10000` km).
+  - `VehicleOilHistoryScreen`: Lịch sử các lần thay nhớt của riêng một xe cụ thể theo thứ tự thời gian.
+  - `HomeScreen`: Tích hợp tab thứ 5 "Thay nhớt" vào thanh Bottom Navigation Bar.
+- **Verify:** `flutter analyze` 0 issues, `flutter test` 16/16 tests pass 100%.
+
+---
+## Feature: Vehicle Insurance Management on Mobile (`web_v2_mobile`)
+- **Ngày:** 2026-09-08
+- **Feature:** Quản lý bảo hiểm xe trên Mobile (Flutter)
+- **Mô tả:** Port toàn bộ chức năng Quản lý bảo hiểm xe từ Web App sang Mobile Client dùng chung 100% backend API hiện hữu (`/api/vehicle-insurances`).
+- **Thực hiện:**
+  - `InsuranceListScreen`: Tóm tắt bảo hiểm theo xe kèm tìm kiếm nhanh, bộ lọc trạng thái dạng chip (Còn hạn, Sắp hết hạn, Hết hạn, Chưa có BH), badge số ngày còn lại, phân trang và pull-to-refresh.
+  - `InsuranceDetailScreen`: Chi tiết đợt bảo hiểm, thông tin xe, tài xế, ngày mua, ngày hết hạn, ghi chú và lưới ảnh chứng từ.
+  - `InsuranceImageViewerDialog`: Xem ảnh chứng từ bảo hiểm phóng to với hỗ trợ cử chỉ zoom/pan và 2 nút Back/Next lướt qua lại giữa các ảnh.
+  - `InsuranceFormScreen`: Tạo mới / chỉnh sửa bảo hiểm, chọn xe từ danh sách "Xe nhà" (chỉ áp dụng xe nhà theo business rule BR-00), chọn ngày với DatePicker, đính kèm ảnh chụp trực tiếp từ Camera hoặc chọn từ Thư viện ảnh.
+  - `InsuranceHistoryScreen`: Lịch sử các lần mua bảo hiểm của 1 xe cụ thể theo thứ tự thời gian.
+  - `HomeScreen`: Tích hợp tab thứ 4 "Bảo hiểm" vào thanh Bottom Navigation Bar.
+- **Verify:** `flutter analyze` 0 issues, `flutter test` pass 100%.
+
+---
+## Feature: Vehicle Inspection Management on Mobile (`web_v2_mobile`)
+- **Ngày:** 2026-09-08
+- **Feature:** Quản lý đăng kiểm xe trên Mobile (Flutter)
+- **Mô tả:** Port toàn bộ chức năng Quản lý đăng kiểm xe từ Web App sang Mobile Client dùng chung 100% backend API hiện hữu (`/api/vehicle-inspections`).
+- **Thực hiện:**
+  - `InspectionListScreen`: Tóm tắt đăng kiểm theo xe kèm tìm kiếm nhanh, bộ lọc trạng thái dạng chip (Còn hạn, Sắp hết hạn, Hết hạn, Chưa ĐK), badge số ngày còn lại, phân trang và pull-to-refresh.
+  - `InspectionDetailScreen`: Chi tiết đợt đăng kiểm, thông tin xe, tài xế, ngày ĐK, ngày hết hạn, ghi chú và lưới ảnh chứng từ.
+  - `InspectionImageViewerDialog`: Xem ảnh chứng từ phóng to với hỗ trợ cử chỉ zoom/pan và 2 nút Back/Next lướt qua lại giữa các ảnh.
+  - `InspectionFormScreen`: Tạo mới / chỉnh sửa đăng kiểm, chọn xe từ danh sách active, chọn ngày với DatePicker, đính kèm ảnh chụp trực tiếp từ Camera hoặc chọn từ Thư viện ảnh.
+  - `InspectionHistoryScreen`: Lịch sử các lần đăng kiểm của 1 xe cụ thể theo thứ tự thời gian.
+  - `HomeScreen`: Tích hợp tab thứ 3 "Đăng kiểm" vào thanh Bottom Navigation Bar.
+- **Verify:** `flutter analyze` 0 issues, `flutter test` pass 100%.
+
+---
+## Feature: Image Gallery Carousel (Back/Next Navigation) for Mobile Invoice Tracking
+- **Ngày:** 2026-09-08
+- **Feature:** Xem ảnh chứng từ hóa đơn trên Mobile (`DocumentViewerDialog`)
+- **Mô tả:** Khi tài xế vào chi tiết chuyến xe và chạm vào hình ảnh để xem phóng to, dialog hiển thị 2 icon điều hướng Back (ChevronLeft) / Next (ChevronRight) nổi trên ảnh và huy hiệu số trang (vd: `1/4`), cho phép lướt xem lần lượt các hình ảnh chứng từ trong ticket.
+- **Thực hiện:**
+  - `mobile/web_v2_mobile/lib/screens/invoice_tracking/dialogs/document_viewer_dialog.dart`: Nâng cấp sang `StatefulWidget`, quản lý `currentIndex` và danh sách `documents`. Bổ sung 2 nút `IconButton.filled` nổi trên ảnh kèm auto disable khi ở đầu/cuối danh sách.
+  - `mobile/web_v2_mobile/lib/screens/invoice_tracking/ticket_detail_screen.dart`: Truyền `ticket.documents` và `index` khi mở `_viewDocument`.
+- **Verify:** `flutter analyze` & `flutter test` pass 100%.
+
+---
+## Perf: Invoice Tracking List Payload & Database Socket Optimization
+- **Ngày:** 2026-09-08
+- **Feature:** Theo dõi hóa đơn (`/api/invoice-tracking`) trên Web App & Mobile
+- **Vấn đề:** 
+  1. API list `GET /api/invoice-tracking` trước đây SELECT trực tiếp cột `documents` chứa toàn bộ `file_data` (Base64 ảnh chụp 2-5MB/ảnh) khiến payload 20 dòng lên tới 20-60MB, gây nghẽn băng thông, lag UI thread và timeout trên cả Web và Mobile.
+  2. `pool.on('connect')` gọi `client.query("SET timezone...")` bất đồng bộ làm nghẽn socket và đứt kết nối DB (`Connection terminated unexpectedly`).
+- **Fix:**
+  1. Dùng PostgreSQL JSONB aggregation `SELECT COALESCE(jsonb_agg(d - 'file_data'), '[]'::jsonb) FROM jsonb_array_elements(documents) d` trong câu SELECT list để loại bỏ chuỗi Base64 nặng, chỉ giữ metadata và trả về payload siêu nhẹ (~15KB). API detail `getById` vẫn giữ đầy đủ `file_data`.
+  2. Chuyển cấu hình timezone sang connection parameter `options: '-c timezone=Asia/Ho_Chi_Minh'` và bật `keepAlive: true` trong `database.ts`.
+  3. Tạo migration `053_perf_invoice_tracking_index.sql` thêm composite index `idx_dispatch_schedules_invoice_list`.
+  4. Thêm bypass cho `UserRole.ADMIN` trong `requirePermission` middleware.
+- **Kết quả:** Dung lượng payload API giảm từ **~40MB xuống ~15KB** (giảm 99.9%). Thời gian phản hồi API từ **8-15s xuống < 200ms**.
+- **Files sửa:** `backend/src/services/invoiceTrackingService.ts`, `backend/src/config/database.ts`, `backend/src/middleware/auth.ts`, `backend/src/migrations/053_perf_invoice_tracking_index.sql`.
+
+---
+## Bug: Mobile Flutter Dio Timeout & Dynamic Tab Lazy Loading
+- **Ngày:** 2026-09-08
+- **Severity:** High
+- **Feature liên quan:** Mobile Flutter Client (`web_v2_mobile`), Invoice Tracking API
+- **Triệu chứng:** Khi mở màn hình trên điện thoại, danh sách hóa đơn báo "Lỗi kết nối máy chủ khi lấy danh sách hóa đơn", terminal backend ngắt kết nối do client timeout.
+- **Root cause:** Dio timeout mặc định quá ngắn (15s) không đủ cho các tác vụ tổng hợp dữ liệu DB từ xa. `IndexedStack` khởi tạo đồng thời màn hình hóa đơn ngay từ lúc vào app gây nghẽn kết nối.
+- **Fix:** Tăng timeout lên 45s, tối ưu hóa SharedPreferences cho TokenStorage, và chuyển đổi hiển thị tab theo nhu cầu (Lazy render).
+- **Files sửa:** `mobile/web_v2_mobile/lib/core/api/api_client.dart`, `mobile/web_v2_mobile/lib/core/storage/token_storage.dart`, `mobile/web_v2_mobile/lib/data/services/invoice_tracking_service.dart`, `mobile/web_v2_mobile/lib/screens/home/home_screen.dart`.
+- **Verify:** `flutter test` & `flutter analyze` pass 100%.
+
+---
+## Bug: CORS Preflight block Flutter Web / Dynamic Localhost Ports
+- **Ngày:** 2026-09-08
+- **Severity:** High
+- **Feature liên quan:** Authentication, API Preflight, Mobile/Flutter Web client
+- **Triệu chứng:** Khi chạy client Flutter Web (`flutter run -d chrome`), browser gửi request từ origin động như `http://localhost:53734` tới `http://localhost:3021/api/auth/login` bị block CORS do backend trả lỗi `No 'Access-Control-Allow-Origin' header is present on the requested resource`.
+- **Root cause:** Trong `backend/src/app.ts`, mảng `allowedOrigins` chỉ chứa các port cố định `5173`, `5174`. Khi client dev server chạy ở port khác của localhost/127.0.0.1, hàm callback CORS báo lỗi khiến Express trả về 500 error không kèm header `Access-Control-Allow-Origin`.
+- **Fix:** Thêm regex check `const localhostRegex = /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/;` cho phép mọi port của `localhost` và `127.0.0.1` trong môi trường phát triển local, đồng thời giữ nguyên danh sách domain production.
+- **Files sửa:** `backend/src/app.ts`, `backend/src/__tests__/cors.test.ts`
+- **Regression test:** `backend/src/__tests__/cors.test.ts` pass 100%.
+
+---
 ## Feature: Tab Thống kê theo dõi hóa đơn theo tài xế
 - **Ngày:** 2026-09-02
 - **Severity:** Medium
@@ -627,6 +740,25 @@ Vite không hot-reload `.env` khi dev server đang chạy. Phải restart `npm r
 - **Fix:** Gộp thành 1 query với `COUNT(*) OVER()::int AS total_count`
 - **Pattern:** Paginated list queries nên dùng `COUNT(*) OVER()` để lấy total trong cùng 1 query.
 - **Files:** `backend/src/services/repairService.ts:159-178`
+
+## Bug: Lịch điều phối xe không hiển thị ticket cho tài xế do thiếu driver_id
+- **Ngày:** 2026-09-11
+- **Severity:** High
+- **Feature liên quan:** Bảng điều phối xe (`dispatchScheduleService`) & Theo dõi hóa đơn (`invoiceTrackingService`)
+- **Triệu chứng:** Người điều phối tạo lịch xe hoặc Import Excel cho xe (e.g. `50E16461`), nhưng khi tài xế (`16461`, role `TAI_XE`) đăng nhập thì danh sách ticket trống.
+- **Root cause:** Khi tạo hoặc import lịch xe vào `dispatch_schedules`, trường `driver_id` bị để trống (`NULL`). Phân quyền dữ liệu (Data scope) của role `TAI_XE` là `owner` (`driver_id = userId OR created_by = userId`), nên tài xế không thấy ticket của xe mình phụ trách.
+- **Fix:**
+  1. `dispatchScheduleService.ts`: Tự động tra cứu `vehicle_id` (từ bảng `vehicles`) và `driver_id` (từ bảng `driver_vehicles` + `drivers`) theo biển số xe nếu chưa được truyền từ frontend.
+  2. Migration `048_backfill_dispatch_schedules_driver_id.sql`: Chạy câu lệnh UPDATE cập nhật `driver_id`, `vehicle_id`, và `tai_xe` cho toàn bộ các bản ghi `dispatch_schedules` lịch sử.
+- **Files:** `backend/src/services/dispatchScheduleService.ts`, `backend/src/migrations/048_backfill_dispatch_schedules_driver_id.sql`, `backend/src/__tests__/dispatchScheduleService.test.ts`.
+
+## Change: Bảng điều phối xe — Chuẩn hóa biển số xe theo định dạng XXYXXXXX trước khi lưu
+- **Ngày:** 2026-09-11
+- **Severity:** Medium
+- **Feature liên quan:** Bảng điều phối xe (`dispatchScheduleService`)
+- **Thay đổi:** Thêm hàm `normalizePlateNumber()` biến đổi biển số xe về dạng chuẩn `xxyxxxxx` (ví dụ `51C 81056` → `51C81056`, `50H-55116` → `50H55116`, `50H 63174\u00a0` → `50H63174`) trước khi thực hiện INSERT đơn lẻ hoặc Batch insert vào DB `dispatch_schedules`.
+- **Files:** `backend/src/services/dispatchScheduleService.ts`, `frontend/src/components/dispatch/ImportDispatchExcelModal.tsx`, `backend/src/__tests__/dispatchScheduleService.test.ts`.
+- **Cần chú ý:** Format chuẩn hóa đồng nhất với bảng `vehicles` và `driver_invoices` (không chứa dấu cách, dấu gạch nối hay ký tự ẩn).
 
 ## Change: Xử lý Data Gạo — Đổi master data từ delivery_schedules sang driver_invoices
 
