@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Trash2, Pencil, Plus, MapPin, Scale, Truck, MessageSquare } from 'lucide-react';
+import { Trash2, Pencil, Plus, MapPin, Scale, Truck, MessageSquare, FileSpreadsheet } from 'lucide-react';
 import { useI18n } from '../../i18n/useI18n';
 import { cn } from '../../utils/cn';
 import type { DispatchSchedule } from '../../api/dispatchApi';
@@ -12,6 +12,7 @@ interface OutsideRouteTableProps {
   onDelete: (id: number) => void;
   isDeleting: boolean;
   onAdd?: () => void;
+  onImport?: () => void;
 }
 
 function SkeletonRow() {
@@ -34,6 +35,7 @@ export function OutsideRouteTable({
   onDelete,
   isDeleting,
   onAdd,
+  onImport,
 }: OutsideRouteTableProps) {
   const { t } = useI18n();
   const [deletingId, setDeletingId] = useState<number | null>(null);
@@ -52,16 +54,28 @@ export function OutsideRouteTable({
             {data.length}
           </span>
         </div>
-        {onAdd && (
-          <button
-            onClick={onAdd}
-            className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 text-xs font-medium text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-700 transition-colors shadow-2xs"
-            title={t('dispatch.schedule.addTrip' as never)}
-          >
-            <Plus className="w-3.5 h-3.5 text-neutral-600 dark:text-neutral-300" />
-            <span className="hidden sm:inline">{t('dispatch.schedule.addTrip' as never)}</span>
-          </button>
-        )}
+        <div className="flex items-center gap-1.5 sm:gap-2">
+          {onImport && (
+            <button
+              onClick={onImport}
+              className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 text-xs font-medium text-emerald-700 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 hover:border-emerald-300 transition-colors shadow-2xs"
+              title={t('dispatch.schedule.importExcel' as never) || 'Import Excel'}
+            >
+              <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+              <span className="hidden sm:inline">{t('dispatch.schedule.importExcel' as never) || 'Import Excel'}</span>
+            </button>
+          )}
+          {onAdd && (
+            <button
+              onClick={onAdd}
+              className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 text-xs font-medium text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-700 transition-colors shadow-2xs"
+              title={t('dispatch.schedule.addTrip' as never)}
+            >
+              <Plus className="w-3.5 h-3.5 text-neutral-600 dark:text-neutral-300" />
+              <span className="hidden sm:inline">{t('dispatch.schedule.addTrip' as never)}</span>
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Mobile Card List (< md) */}

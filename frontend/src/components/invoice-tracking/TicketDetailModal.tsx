@@ -8,7 +8,7 @@ import { DocumentViewerModal } from './DocumentViewerModal';
 import { UploadDocumentsModal } from './UploadDocumentsModal';
 import { SupplementNoteDialog } from './SupplementNoteDialog';
 import { ConfirmFinishDialog } from './ConfirmFinishDialog';
-import { useUploadDocuments, useReviewTicket, useInvoiceTrackingHistory } from '../../hooks/useInvoiceTracking';
+import { useUploadDocuments, useReviewTicket, useInvoiceTrackingHistory, useInvoiceTrackingDetail } from '../../hooks/useInvoiceTracking';
 import type { InvoiceTrackingTicket, DocumentFile } from '../../api/invoiceTrackingApi';
 import { formatDate, formatDateTime } from '../../utils/format';
 import {
@@ -32,13 +32,16 @@ interface TicketDetailModalProps {
   onClose: () => void;
 }
 
-export function TicketDetailModal({ ticket, isOpen, onClose }: TicketDetailModalProps) {
+export function TicketDetailModal({ ticket: initialTicket, isOpen, onClose }: TicketDetailModalProps) {
   const { t } = useI18n();
   const [showUpload, setShowUpload] = useState(false);
   const [showSupplement, setShowSupplement] = useState(false);
   const [showConfirmFinish, setShowConfirmFinish] = useState(false);
   const [selectedHistoryDoc, setSelectedHistoryDoc] = useState<DocumentFile | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+
+  const { data: detailTicket } = useInvoiceTrackingDetail(isOpen ? initialTicket?.id ?? null : null);
+  const ticket = detailTicket || initialTicket;
 
   const uploadMutation = useUploadDocuments();
   const reviewMutation = useReviewTicket();

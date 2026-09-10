@@ -88,6 +88,10 @@ export function requirePermission(permissionCode: string) {
       res.status(401).json({ success: false, message: 'Unauthorized' });
       return;
     }
+    // Admin has full access to all permissions
+    if (req.user.role === UserRole.ADMIN) {
+      return next();
+    }
     if (!req.user.permissions.includes(permissionCode)) {
       res.status(403).json({ success: false, message: 'Insufficient permissions' });
       return;
@@ -101,6 +105,10 @@ export function requireAnyPermission(...permissionCodes: string[]) {
     if (!req.user) {
       res.status(401).json({ success: false, message: 'Unauthorized' });
       return;
+    }
+    // Admin has full access to all permissions
+    if (req.user.role === UserRole.ADMIN) {
+      return next();
     }
     if (!permissionCodes.some((code) => req.user!.permissions.includes(code))) {
       res.status(403).json({ success: false, message: 'Insufficient permissions' });

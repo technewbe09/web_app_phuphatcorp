@@ -26,7 +26,7 @@ export function DocumentPreview({ documents }: DocumentPreviewProps) {
               onClick={() => setSelectedDoc(doc)}
               className="group relative aspect-square overflow-hidden rounded-xl border border-neutral-200 bg-neutral-100/70 transition hover:border-primary hover:shadow-md dark:border-neutral-700 dark:bg-neutral-800 focus:outline-none focus:ring-2 focus:ring-primary/50 text-left"
             >
-              {isImage ? (
+              {isImage && doc.file_data ? (
                 <>
                   <img
                     src={`data:${doc.mime_type};base64,${doc.file_data}`}
@@ -38,6 +38,15 @@ export function DocumentPreview({ documents }: DocumentPreviewProps) {
                     <ZoomIn className="w-5 h-5 text-white" />
                   </div>
                 </>
+              ) : isImage ? (
+                <div className="flex h-full w-full flex-col items-center justify-center gap-1.5 p-2 text-center bg-sky-50/50 dark:bg-sky-950/20">
+                  <div className="w-10 h-10 rounded-lg bg-sky-100 dark:bg-sky-950/60 flex items-center justify-center text-sky-600 dark:text-sky-400">
+                    <ZoomIn className="h-5 w-5 group-hover:scale-110 transition-transform" />
+                  </div>
+                  <span className="line-clamp-2 text-[11px] font-medium text-neutral-700 dark:text-neutral-300">
+                    {doc.file_name}
+                  </span>
+                </div>
               ) : (
                 <div className="flex h-full w-full flex-col items-center justify-center gap-1.5 p-2 text-center bg-rose-50/50 dark:bg-rose-950/20">
                   <div className="w-10 h-10 rounded-lg bg-rose-100 dark:bg-rose-950/60 flex items-center justify-center text-rose-600 dark:text-rose-400">
