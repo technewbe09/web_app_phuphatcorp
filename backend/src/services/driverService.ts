@@ -212,7 +212,7 @@ export const driverService = {
     const query = `
       SELECT id, plate_number, driver_name, vehicle_type
       FROM vehicles
-      WHERE status = 'active' AND vehicle_type = 'Xe nhà'
+      WHERE status = 'active'
       ORDER BY plate_number ASC
     `;
     const result = await pool.query<AvailableVehicle>(query);
@@ -232,14 +232,14 @@ export const driverService = {
       throw { code: 'DUPLICATE_DRIVER', message: 'Tài khoản người dùng này đã được gán làm tài xế' };
     }
 
-    // Validate vehicles: must be active and vehicle_type = 'Xe nhà'
+    // Validate vehicles: must be active
     if (data.vehicle_ids && data.vehicle_ids.length > 0) {
       const vCheck = await pool.query(
-        `SELECT id FROM vehicles WHERE id = ANY($1::int[]) AND status = 'active' AND vehicle_type = 'Xe nhà'`,
+        `SELECT id FROM vehicles WHERE id = ANY($1::int[]) AND status = 'active'`,
         [data.vehicle_ids],
       );
       if (vCheck.rows.length !== data.vehicle_ids.length) {
-        throw { code: 'INVALID_VEHICLE', message: 'Có xe không hợp lệ hoặc không phải là Xe nhà đang hoạt động' };
+        throw { code: 'INVALID_VEHICLE', message: 'Có xe không hợp lệ hoặc đang không hoạt động' };
       }
     }
 
@@ -300,11 +300,11 @@ export const driverService = {
     // Validate vehicles
     if (data.vehicle_ids && data.vehicle_ids.length > 0) {
       const vCheck = await pool.query(
-        `SELECT id FROM vehicles WHERE id = ANY($1::int[]) AND status = 'active' AND vehicle_type = 'Xe nhà'`,
+        `SELECT id FROM vehicles WHERE id = ANY($1::int[]) AND status = 'active'`,
         [data.vehicle_ids],
       );
       if (vCheck.rows.length !== data.vehicle_ids.length) {
-        throw { code: 'INVALID_VEHICLE', message: 'Có xe không hợp lệ hoặc không phải là Xe nhà đang hoạt động' };
+        throw { code: 'INVALID_VEHICLE', message: 'Có xe không hợp lệ hoặc đang không hoạt động' };
       }
     }
 

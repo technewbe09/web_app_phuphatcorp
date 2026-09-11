@@ -73,7 +73,7 @@ export const driverController = {
   async getAvailableVehicles(_req: AuthRequest, res: Response): Promise<void> {
     try {
       const vehicles = await driverService.getAvailableVehicles();
-      sendSuccess(res, vehicles, 'Danh sách xe nhà khả dụng');
+      sendSuccess(res, vehicles, 'Danh sách xe khả dụng');
     } catch (err) {
       const error = err instanceof Error ? err.message : 'Unknown error';
       sendError(res, 'Không thể tải danh sách xe', 500, error);

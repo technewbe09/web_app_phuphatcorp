@@ -165,11 +165,11 @@ function FormContent({
         )}
       </div>
 
-      {/* Chọn Xe Nhà (Multi-select có Search Filter) */}
+      {/* Chọn Xe (Multi-select có Search Filter) */}
       <div>
         <div className="flex items-center justify-between mb-1.5">
           <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300">
-            Xe phụ trách (Chỉ gồm Xe nhà)
+            Xe phụ trách
           </label>
           {availableVehicles.length > 0 && (
             <button
@@ -186,11 +186,11 @@ function FormContent({
 
         {loadingVehicles ? (
           <div className="flex items-center gap-2 text-sm text-neutral-500 py-2">
-            <Loader2 className="w-4 h-4 animate-spin" /> Đang tải danh sách xe nhà...
+            <Loader2 className="w-4 h-4 animate-spin" /> Đang tải danh sách xe...
           </div>
         ) : availableVehicles.length === 0 ? (
           <p className="text-xs text-neutral-400 bg-neutral-50 dark:bg-neutral-800/50 p-3 rounded-lg border border-neutral-200 dark:border-neutral-700">
-            Chưa có xe nào thuộc phân loại "Xe nhà" trong Danh mục xe.
+            Chưa có xe nào đang hoạt động trong Danh mục xe.
           </p>
         ) : (
           <div className="space-y-2">
@@ -201,7 +201,7 @@ function FormContent({
                 type="text"
                 value={vehicleSearch}
                 onChange={(e) => setVehicleSearch(e.target.value)}
-                placeholder="Tìm theo biển số, tài xế..."
+                placeholder="Tìm theo biển số, tài xế, phân loại..."
                 className="w-full pl-8 pr-3 py-1.5 text-xs rounded-lg border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 text-neutral-900 dark:text-neutral-100 placeholder-neutral-400 focus:outline-none focus:ring-1 focus:ring-neutral-900 dark:focus:ring-neutral-100"
               />
             </div>
@@ -228,6 +228,17 @@ function FormContent({
                       <div className="flex items-center gap-2">
                         <Truck className="w-4 h-4 opacity-70" />
                         <span className="font-mono">{v.plate_number}</span>
+                        <span
+                          className={`text-[10px] px-1.5 py-0.2 rounded font-medium ${
+                            isSelected
+                              ? 'bg-white/20 text-white dark:text-neutral-900'
+                              : v.vehicle_type === 'Xe nhà'
+                              ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300'
+                              : 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300'
+                          }`}
+                        >
+                          {v.vehicle_type}
+                        </span>
                         {v.driver_name && (
                           <span className="text-xs opacity-75">({v.driver_name})</span>
                         )}
