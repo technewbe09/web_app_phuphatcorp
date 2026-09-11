@@ -184,7 +184,7 @@ export function DriverCatalogPage() {
                     <TableHead className="w-14">STT</TableHead>
                     <TableHead className="w-48">Họ tên tài xế</TableHead>
                     <TableHead className="w-40">Tên đăng nhập</TableHead>
-                    <TableHead className="min-w-64">Xe nhà phụ trách</TableHead>
+                    <TableHead className="min-w-64">Xe phụ trách</TableHead>
                     <TableHead className="w-48 hidden md:table-cell">Ghi chú</TableHead>
                     <TableHead className="w-28 text-center">Trạng thái</TableHead>
                     <TableHead className="w-36">Ngày tạo</TableHead>
@@ -209,11 +209,20 @@ export function DriverCatalogPage() {
                             {driver.vehicles.map((v) => (
                               <span
                                 key={v.id}
-                                className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-neutral-100 dark:bg-neutral-800 text-neutral-800 dark:text-neutral-200 font-mono text-xs font-medium border border-neutral-200 dark:border-neutral-700"
-                                title={`Tài xế mặc định: ${v.driver_name || '—'}`}
+                                className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded bg-neutral-100 dark:bg-neutral-800 text-neutral-800 dark:text-neutral-200 font-mono text-xs font-medium border border-neutral-200 dark:border-neutral-700"
+                                title={`Phân loại: ${v.vehicle_type} | Tài xế mặc định: ${v.driver_name || '—'}`}
                               >
                                 <Truck className="w-3 h-3 text-neutral-500" />
-                                {v.plate_number}
+                                <span>{v.plate_number}</span>
+                                <span
+                                  className={`text-[10px] px-1 rounded font-sans ${
+                                    v.vehicle_type === 'Xe nhà'
+                                      ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300'
+                                      : 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300'
+                                  }`}
+                                >
+                                  {v.vehicle_type}
+                                </span>
                               </span>
                             ))}
                           </div>

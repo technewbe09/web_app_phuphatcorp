@@ -11,17 +11,17 @@
 - Khi thêm mới hoặc chỉnh sửa tài xế:
   - Chọn tài xế từ dropdown danh sách người dùng (`users` có trạng thái active). Mỗi tài xế phải gắn với 1 tài khoản đăng nhập (`user_id`).
   - Chọn danh sách xe mà tài xế này được phân công lái (quan hệ N - N: 1 tài xế có thể lái nhiều xe, 1 xe có thể có nhiều tài xế lái).
-  - Danh sách xe trong dropdown chọn chỉ bao gồm các xe từ Danh mục xe (`vehicles`) có `vehicle_type = 'Xe nhà'` và `status = 'active'`.
+  - Danh sách xe trong dropdown chọn bao gồm tất cả các xe từ Danh mục xe (`vehicles`) đang hoạt động (`status = 'active'`), không phân biệt "Xe nhà" hay "Xe ngoài".
 - Quản lý trạng thái tài xế (Active / Inactive, soft-delete hoặc toggle).
 
 ---
 
 ## 2. Business Rules
 - **BR-001:** Mỗi `user_id` chỉ được tạo thành 1 record tài xế trong danh mục (Unique constraint trên active drivers).
-- **BR-002:** Danh sách xe phân công chỉ lấy các xe có `status = 'active'` và `vehicle_type = 'Xe nhà'`. Xe ngoài không được gắn vào danh mục tài xế này.
+- **BR-002:** Danh sách xe phân công lấy tất cả các xe có `status = 'active'` (cả Xe nhà và Xe ngoài).
 - **BR-003:** Mối quan hệ giữa Driver và Vehicle là Many-to-Many (`driver_vehicles` table).
 - **BR-004:** Khi toggle/deactivate tài xế hoặc xóa, cập nhật status về `deactive` / `deleted` tương ứng.
-- **BR-005:** Danh sách tài xế hiển thị các cột: STT, Họ tên tài xế, Tên đăng nhập / Email, Danh sách xe phụ trách (biển số xe), Trạng thái, Ngày tạo, Thao tác (Sửa, Đổi trạng thái).
+- **BR-005:** Danh sách tài xế hiển thị các cột: STT, Họ tên tài xế, Tên đăng nhập / Email, Danh sách xe phụ trách (kèm tag phân loại Xe nhà/Xe ngoài), Trạng thái, Ngày tạo, Thao tác (Sửa, Đổi trạng thái).
 
 ---
 
