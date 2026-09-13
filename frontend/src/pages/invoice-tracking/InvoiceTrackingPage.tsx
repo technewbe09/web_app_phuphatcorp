@@ -9,6 +9,7 @@ import {
   MapPin,
   ChevronRight,
   FileCheck,
+  FileText,
   X,
   List,
   BarChart3,
@@ -271,6 +272,12 @@ export default function InvoiceTrackingPage() {
                           <MapPin className="w-3.5 h-3.5 text-neutral-400 shrink-0" />
                           <span className="truncate">{ticket.diem_nhan || '—'}</span>
                         </div>
+                        {ticket.ghi_chu && (
+                          <div className="flex items-start gap-1.5 text-xs text-neutral-500 dark:text-neutral-400 col-span-2 mt-0.5">
+                            <FileText className="w-3.5 h-3.5 text-neutral-400 shrink-0 mt-0.5" />
+                            <span className="truncate italic">Ghi chú: {ticket.ghi_chu}</span>
+                          </div>
+                        )}
                       </div>
 
                       <div className="mt-3 pt-2 border-t border-neutral-100 dark:border-neutral-800/80 flex items-center justify-between text-xs text-neutral-500">
@@ -294,6 +301,7 @@ export default function InvoiceTrackingPage() {
                         <TableHead className="whitespace-nowrap">{t('invoice_tracking.table.bienSo')}</TableHead>
                         <TableHead className="whitespace-nowrap">{t('invoice_tracking.table.taiXe')}</TableHead>
                         <TableHead className="min-w-[140px]">{t('invoice_tracking.table.diemNhan')}</TableHead>
+                        <TableHead className="min-w-[150px] max-w-[220px]">{t('invoice_tracking.table.ghiChu')}</TableHead>
                         <TableHead className="whitespace-nowrap">{t('invoice_tracking.table.status')}</TableHead>
                         <TableHead className="w-20 text-center">{t('invoice_tracking.table.actions')}</TableHead>
                       </TableRow>
@@ -311,7 +319,10 @@ export default function InvoiceTrackingPage() {
                             {ticket.bien_so}
                           </TableCell>
                           <TableCell className="whitespace-nowrap">{ticket.tai_xe || '—'}</TableCell>
-                          <TableCell className="max-w-[240px] truncate" title={ticket.diem_nhan}>{ticket.diem_nhan}</TableCell>
+                          <TableCell className="max-w-[200px] truncate" title={ticket.diem_nhan}>{ticket.diem_nhan}</TableCell>
+                          <TableCell className="max-w-[220px] truncate text-neutral-600 dark:text-neutral-400 text-xs" title={ticket.ghi_chu || undefined}>
+                            {ticket.ghi_chu || '—'}
+                          </TableCell>
                           <TableCell className="whitespace-nowrap">
                             <InvoiceStatusBadge status={ticket.invoice_status} />
                           </TableCell>

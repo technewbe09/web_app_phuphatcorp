@@ -39,6 +39,7 @@ export interface DispatchSchedule {
   driver_note: string | null;
   reviewed_at: string | null;
   completed_at: string | null;
+  share_token?: string | null;
   created_by: number | null;
   created_at: string;
   updated_at: string;

@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../../core/api/api_endpoints.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/utils/format_utils.dart';
 import '../../data/models/invoice_tracking_ticket.dart';
@@ -10,6 +11,7 @@ import '../../widgets/app_card.dart';
 import '../../widgets/custom_button.dart';
 import '../../widgets/invoice_status_badge.dart';
 import 'dialogs/confirm_finish_dialog.dart';
+import 'dialogs/copy_documents_modal.dart';
 import 'dialogs/document_viewer_dialog.dart';
 import 'dialogs/supplement_note_dialog.dart';
 import 'dialogs/upload_documents_modal.dart';
@@ -30,6 +32,21 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<InvoiceTrackingProvider>().fetchTicketDetail(widget.ticketId);
     });
+  }
+
+  void _openCopyModal(BuildContext screenContext, String ticketDate) {
+    showModalBottomSheet(
+      context: screenContext,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (modalContext) => CopyDocumentsModal(
+        ticketId: widget.ticketId,
+        ticketDate: ticketDate,
+        onSuccess: () {
+          context.read<InvoiceTrackingProvider>().fetchTicketDetail(widget.ticketId);
+        },
+      ),
+    );
   }
 
   void _openUploadModal(BuildContext screenContext) {
@@ -211,41 +228,47 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                 children: [
-                                  Row(
-                                    children: [
-                                      Container(
-                                        padding: const EdgeInsets.all(8),
-                                        decoration: BoxDecoration(
-                                          color: isDark ? AppColors.neutral800 : AppColors.neutral100,
-                                          borderRadius: BorderRadius.circular(8),
+                                  Expanded(
+                                    child: Row(
+                                      children: [
+                                        Container(
+                                          padding: const EdgeInsets.all(8),
+                                          decoration: BoxDecoration(
+                                            color: isDark ? AppColors.neutral800 : AppColors.neutral100,
+                                            borderRadius: BorderRadius.circular(8),
+                                          ),
+                                          child: const Icon(Icons.local_shipping, size: 20),
                                         ),
-                                        child: const Icon(Icons.local_shipping, size: 20),
-                                      ),
-                                      const SizedBox(width: 10),
-                                      Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: [
-                                          Text(
-                                            ticket.bienSo,
-                                            style: TextStyle(
-                                              fontSize: 17,
-                                              fontWeight: FontWeight.bold,
-                                              color: isDark ? AppColors.neutral100 : AppColors.neutral900,
-                                            ),
+                                        const SizedBox(width: 10),
+                                        Expanded(
+                                          child: Column(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            children: [
+                                              Text(
+                                                ticket.bienSo,
+                                                style: TextStyle(
+                                                  fontSize: 17,
+                                                  fontWeight: FontWeight.bold,
+                                                  color: isDark ? AppColors.neutral100 : AppColors.neutral900,
+                                                ),
+                                                overflow: TextOverflow.ellipsis,
+                                              ),
+                                              Text(
+                                                '${ticket.loaiTuyen} • ${ticket.loaiXe}',
+                                                style: TextStyle(
+                                                  fontSize: 12,
+                                                  color: isDark ? AppColors.neutral400 : AppColors.neutral500,
+                                                ),
+                                                overflow: TextOverflow.ellipsis,
+                                              ),
+                                            ],
                                           ),
-                                          Text(
-                                            '${ticket.loaiTuyen} • ${ticket.loaiXe}',
-                                            style: TextStyle(
-                                              fontSize: 12,
-                                              color: isDark ? AppColors.neutral400 : AppColors.neutral500,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ],
+                                        ),
+                                      ],
+                                    ),
                                   ),
+                                  const SizedBox(width: 8),
                                   InvoiceStatusBadge(status: ticket.invoiceStatus),
                                 ],
                               ),
@@ -361,19 +384,23 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
                               Row(
                                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                 children: [
-                                  Text(
-                                    'Hình chụp chứng từ (${ticket.documents.length})',
-                                    style: TextStyle(
-                                      fontSize: 15,
-                                      fontWeight: FontWeight.bold,
-                                      color: isDark ? AppColors.neutral100 : AppColors.neutral900,
+                                  Expanded(
+                                    child: Text(
+                                      'Chứng từ (${ticket.documents.length})',
+                                      style: TextStyle(
+                                        fontSize: 15,
+                                        fontWeight: FontWeight.bold,
+                                        color: isDark ? AppColors.neutral100 : AppColors.neutral900,
+                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
                                     ),
                                   ),
                                   if (canUpload)
                                     TextButton.icon(
                                       onPressed: () => _openUploadModal(context),
                                       icon: const Icon(Icons.add_photo_alternate_outlined, size: 16),
-                                      label: const Text('Thêm ảnh', style: TextStyle(fontSize: 13)),
+                                      label: const Text('Thêm ảnh', style: TextStyle(fontSize: 12.5)),
                                     ),
                                 ],
                               ),
@@ -418,15 +445,26 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
                                     final isImg = doc.mimeType.startsWith('image/');
 
                                     Widget thumbnail;
-                                    try {
-                                      if (doc.fileData.isNotEmpty && isImg) {
+                                    if (doc.isMinIO && isImg) {
+                                      final imgUrl = ApiEndpoints.invoiceTrackingFile(doc.filename!);
+                                      thumbnail = Image.network(
+                                        imgUrl,
+                                        fit: BoxFit.cover,
+                                        loadingBuilder: (_, child, progress) {
+                                          if (progress == null) return child;
+                                          return const Center(child: CircularProgressIndicator(strokeWidth: 2));
+                                        },
+                                        errorBuilder: (_, _, _) => const Icon(Icons.broken_image_outlined, size: 28),
+                                      );
+                                    } else if (doc.fileData.isNotEmpty && isImg) {
+                                      try {
                                         final bytes = base64Decode(doc.fileData);
                                         thumbnail = Image.memory(bytes, fit: BoxFit.cover);
-                                      } else {
-                                        thumbnail = const Icon(Icons.insert_drive_file, size: 32);
+                                      } catch (_) {
+                                        thumbnail = const Icon(Icons.broken_image, size: 32);
                                       }
-                                    } catch (_) {
-                                      thumbnail = const Icon(Icons.broken_image, size: 32);
+                                    } else {
+                                      thumbnail = const Icon(Icons.insert_drive_file, size: 32);
                                     }
 
                                     return GestureDetector(
@@ -445,6 +483,37 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
                                             fit: StackFit.expand,
                                             children: [
                                               thumbnail,
+
+                                              // Copied source badge
+                                              if (doc.isCopied)
+                                                Positioned(
+                                                  top: 3,
+                                                  left: 3,
+                                                  child: Container(
+                                                    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1.5),
+                                                    decoration: BoxDecoration(
+                                                      color: Colors.black.withValues(alpha: 0.75),
+                                                      borderRadius: BorderRadius.circular(4),
+                                                    ),
+                                                    child: Row(
+                                                      mainAxisSize: MainAxisSize.min,
+                                                      children: [
+                                                        const Icon(Icons.link, size: 10, color: Colors.lightBlueAccent),
+                                                        const SizedBox(width: 2),
+                                                        Text(
+                                                          doc.sourcePlateNumber!,
+                                                          style: const TextStyle(
+                                                            fontSize: 9,
+                                                            fontWeight: FontWeight.bold,
+                                                            color: Colors.white,
+                                                          ),
+                                                        ),
+                                                      ],
+                                                    ),
+                                                  ),
+                                                ),
+
+                                              // File Name footer
                                               Positioned(
                                                 bottom: 0,
                                                 left: 0,
@@ -453,7 +522,7 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
                                                   color: Colors.black.withValues(alpha: 0.6),
                                                   padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
                                                   child: Text(
-                                                    doc.fileName,
+                                                    doc.displayName,
                                                     style: const TextStyle(
                                                       fontSize: 10,
                                                       color: Colors.white,
@@ -581,6 +650,13 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
 
                         // Action Buttons Bar
                         if (canUpload) ...[
+                          CustomButton(
+                            text: 'Sao chép chứng từ cùng ngày',
+                            variant: ButtonVariant.outline,
+                            icon: const Icon(Icons.copy_rounded, size: 18),
+                            onPressed: () => _openCopyModal(context, ticket.ngay),
+                          ),
+                          const SizedBox(height: 10),
                           CustomButton(
                             text: ticket.documents.isEmpty ? 'Tải lên chứng từ' : 'Bổ sung thêm chứng từ',
                             icon: const Icon(Icons.upload_file_outlined, size: 20),

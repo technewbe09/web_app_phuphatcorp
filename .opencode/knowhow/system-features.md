@@ -896,14 +896,31 @@ frontend/src/pages/dispatch/SchedulePage.tsx
 - Cho phép lọc linh hoạt theo Biển số xe, Tên tài xế, Khoảng ngày (Từ ngày - Đến ngày).
 - Tự động thực thi phân quyền dữ liệu (Data Scope).
 
+**Lưu trữ MinIO & Sao chép chứng từ cùng ngày (Zero Storage Duplication):**
+- Tệp chứng từ mới tải lên được lưu trực tiếp vào MinIO Object Storage (`phuphatcorp-inspections` bucket) thay vì lưu chuỗi Base64 dài trong PostgreSQL. Hỗ trợ tương thích ngược dữ liệu cũ.
+- Tài xế có thể sao chép bộ ảnh chứng từ từ chuyến xe khác cùng ngày (`CopyDocumentsModal`).
+- Cơ chế sao chép chỉ tạo tham chiếu (reference metadata), trỏ chung 1 object key trong MinIO, hoàn toàn không nhân bản file hay tốn dung lượng lưu trữ.
+- Hiển thị huy hiệu `🔗 Từ xe [Biển số]` trên hình ảnh và Lightbox Viewer để phân biệt nguồn gốc chứng từ.
+- Tích hợp kiểm tra quyền Workflow Engine: hoàn thành bước tải ảnh và chuyển trạng thái sang `pending_review`.
+
+**Chia sẻ Ticket & Trang Public View (/shared/invoice-tracking/:token):**
+- Nút "Chia sẻ" trong Chi tiết Ticket tự động tạo token chia sẻ duy nhất và sao chép link công khai vào Clipboard.
+- Người nhận không cần đăng nhập vẫn xem được thông tin chuyến xe và bộ sưu tập chứng từ / hình ảnh đính kèm.
+- Trang Public Viewer hỗ trợ Lightbox Gallery với nút Back/Next và phím điều hướng (← → Esc), xem ảnh full-size, mở PDF trong tab mới và tải tệp về máy.
+
 **API Endpoints:**
 ```
 GET    /api/invoice-tracking           → Danh sách tickets (kèm phân trang, lọc status, tìm kiếm)
 GET    /api/invoice-tracking/statistics → Thống kê tổng quan & theo tài xế
 GET    /api/invoice-tracking/:id       → Chi tiết ticket (kèm user_permissions động)
 GET    /api/invoice-tracking/:id/history → Timeline lịch sử thao tác ticket
-POST   /api/invoice-tracking/:id/documents → Tải lên chứng từ (tài xế)
+GET    /api/invoice-tracking/:id/copyable-tickets → Danh sách chuyến cùng ngày để sao chép
+GET    /api/invoice-tracking/files/:filename → Phục vụ tệp từ MinIO qua presigned URL 24h
+POST   /api/invoice-tracking/:id/share → Tạo / lấy token chia sẻ công khai
+POST   /api/invoice-tracking/:id/copy-documents → Sao chép chứng từ từ chuyến cùng ngày
+POST   /api/invoice-tracking/:id/documents → Tải lên chứng từ mới dạng multipart/form-data lên MinIO
 PUT    /api/invoice-tracking/:id/review    → Duyệt hoàn thành hoặc yêu cầu bổ sung (điều phối)
+GET    /api/public/invoice-tracking/:token → Xem thông tin & chứng từ ticket công khai (Public)
 ```
 
 ## 8. Dark/Light Mode

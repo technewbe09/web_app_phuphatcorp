@@ -1,6 +1,6 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useI18n } from '../../i18n/useI18n';
-import { Upload, X, AlertCircle, FileText, Image as ImageIcon } from 'lucide-react';
+import { Upload, X, AlertCircle, FileText, Image as ImageIcon, Copy } from 'lucide-react';
 import { Modal } from '../ui/Modal';
 import { Button } from '../ui/Button';
 
@@ -14,17 +14,19 @@ interface UploadDocumentsModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSubmit: (files: File[], note: string) => void;
+  onOpenCopyModal?: () => void;
   isLoading?: boolean;
 }
 
 const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
-const MAX_SIZE = 5 * 1024 * 1024; // 5MB
+const MAX_SIZE = 50 * 1024 * 1024; // 50MB to match backend limit
 const MAX_FILES = 10;
 
 export function UploadDocumentsModal({
   isOpen,
   onClose,
   onSubmit,
+  onOpenCopyModal,
   isLoading,
 }: UploadDocumentsModalProps) {
   const { t } = useI18n();
@@ -40,6 +42,13 @@ export function UploadDocumentsModal({
       }
     });
   };
+
+  // Cleanup object URLs on unmount
+  useEffect(() => {
+    return () => {
+      cleanupPreviews(fileItems);
+    };
+  }, []);
 
   const validateAndBuildFiles = (files: File[]): FileItem[] => {
     return files.map((file) => {
@@ -101,7 +110,7 @@ export function UploadDocumentsModal({
   const handleSubmit = () => {
     const validFiles = fileItems.filter((f) => !f.error).map((f) => f.file);
     if (validFiles.length === 0) return;
-    onSubmit(validFiles, note);
+    onSubmit(validFiles, note.trim());
     cleanupPreviews(fileItems);
     setFileItems([]);
     setNote('');
@@ -151,6 +160,22 @@ export function UploadDocumentsModal({
           />
         </div>
 
+        {onOpenCopyModal && fileItems.length === 0 && (
+          <div className="text-center pt-0.5">
+            <button
+              type="button"
+              onClick={() => {
+                handleClose();
+                onOpenCopyModal();
+              }}
+              className="inline-flex items-center gap-1.5 text-xs text-neutral-600 hover:text-neutral-900 dark:text-neutral-400 dark:hover:text-neutral-100 font-medium py-1 px-2.5 rounded-lg hover:bg-neutral-100 dark:hover:bg-neutral-800 transition cursor-pointer"
+            >
+              <Copy className="w-3.5 h-3.5 text-sky-500" />
+              <span>Hoặc sao chép chứng từ từ chuyến xe khác cùng ngày</span>
+            </button>
+          </div>
+        )}
+
         {fileItems.length > 0 && (
           <div className="max-h-44 sm:max-h-52 space-y-2 overflow-y-auto pr-1">
             {fileItems.map((item, idx) => (
@@ -194,7 +219,7 @@ export function UploadDocumentsModal({
                     <button
                       type="button"
                       onClick={() => removeFile(idx)}
-                      className="p-1 text-neutral-400 hover:text-red-500 rounded transition-colors"
+                      className="p-1 text-neutral-400 hover:text-red-500 rounded transition-colors cursor-pointer"
                     >
                       <X className="h-4 w-4" />
                     </button>
@@ -203,7 +228,7 @@ export function UploadDocumentsModal({
                   <button
                     type="button"
                     onClick={() => removeFile(idx)}
-                    className="p-1 text-neutral-400 hover:text-red-500 rounded transition-colors shrink-0"
+                    className="p-1 text-neutral-400 hover:text-red-500 rounded transition-colors shrink-0 cursor-pointer"
                     title="Xóa file"
                   >
                     <X className="h-4 w-4" />

@@ -712,6 +712,57 @@
     }
   },
   "invoice_tracking": {
+    "tabs": {
+      "list": "Ticket List",
+      "statistics": "Statistics"
+    },
+    "stats": {
+      "title": "Invoice Tracking Statistics by Driver",
+      "kpi": {
+        "total": "Total Tickets",
+        "created": "Created",
+        "pendingReview": "Pending Review",
+        "requestSupplement": "Supplement Requested",
+        "completed": "Completed",
+        "completionRate": "Completion Rate"
+      },
+      "table": {
+        "stt": "#",
+        "driver": "Driver",
+        "vehicles": "Assigned Vehicles",
+        "created": "Created",
+        "pending": "Pending",
+        "supplement": "Supp. Req.",
+        "completed": "Completed",
+        "total": "Total",
+        "rate": "Comp. Rate",
+        "grandTotal": "GRAND TOTAL"
+      },
+      "filters": {
+        "dateFrom": "From Date",
+        "dateTo": "To Date",
+        "plate": "License Plate",
+        "platePlaceholder": "Enter license plate...",
+        "driver": "Driver Name",
+        "driverPlaceholder": "Enter driver name...",
+        "note": "Notes",
+        "notePlaceholder": "Enter note content...",
+        "clear": "Clear Filters"
+      },
+      "empty": "No statistics found for this filter."
+    },
+    "copy": {
+      "button": "Copy from another trip",
+      "title": "Copy documents from same-day trip",
+      "searchPlaceholder": "Search by license plate, driver, destination...",
+      "selectTrip": "Select trip to copy documents from:",
+      "empty": "No other trips on the same day have uploaded documents yet.",
+      "copiedFrom": "Copied from vehicle {{plate}}",
+      "confirmSubmit": "Confirm copy",
+      "driverNoteLabel": "Driver note (optional)",
+      "driverNotePlaceholder": "e.g. Shared pick-up point with vehicle...",
+      "successMessage": "Successfully copied documents from vehicle {{plate}}!"
+    },
     "page": {
       "title": "Invoice Tracking",
       "empty": "No tickets found",
@@ -719,7 +770,7 @@
       "retry": "Retry"
     },
     "filter": {
-      "searchPlaceholder": "Search by license plate, driver, trip code...",
+      "searchPlaceholder": "Search by license plate, driver, pick-up, notes...",
       "statusAll": "All statuses",
       "statusCreated": "Created",
       "statusPendingReview": "Pending Review",
@@ -734,6 +785,7 @@
       "maChuyen": "Trip Code",
       "diemNhan": "Pick-up",
       "diemTra": "Drop-off",
+      "ghiChu": "Notes",
       "status": "Status",
       "actions": "Actions"
     },
@@ -742,6 +794,7 @@
       "tripInfo": "Trip Information",
       "statusHistory": "Status & History",
       "documents": "Documents",
+      "downloadAll": "Download All",
       "driverNote": "Driver Note",
       "supplementNote": "Supplement Request",
       "reviewedAt": "Reviewed at",
@@ -754,6 +807,8 @@
       "finish": "Finish",
       "requestSupplement": "Request Supplement",
       "view": "View",
+      "share": "Share",
+      "copied": "Link Copied!",
       "cancel": "Cancel",
       "submit": "Submit",
       "confirm": "Confirm",

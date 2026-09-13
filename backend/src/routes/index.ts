@@ -27,9 +27,11 @@ import dashboardRoutes from './dashboard';
 import invoiceTrackingRoutes from './invoiceTracking';
 import dataScopeRoutes from './dataScopes';
 import workflowRoutes from './workflows';
+import publicRoutes from './publicRoutes';
 
 const router = Router();
 
+router.use('/public', publicRoutes);
 router.use('/auth', authRoutes);
 router.use('/users', userRoutes);
 router.use('/roles', roleRoutes);

@@ -24,8 +24,11 @@ class AuthService {
       final body = response.data;
       if (body['success'] == true && body['data'] != null) {
         final authResponse = AuthResponseModel.fromJson(body['data']);
-        // Save token and cached user
+        // Save token, refresh token and cached user
         await TokenStorage.saveToken(authResponse.accessToken);
+        if (authResponse.refreshToken != null && authResponse.refreshToken!.isNotEmpty) {
+          await TokenStorage.saveRefreshToken(authResponse.refreshToken!);
+        }
         await TokenStorage.saveUserData(jsonEncode(authResponse.user.toJson()));
         return authResponse;
       } else {
