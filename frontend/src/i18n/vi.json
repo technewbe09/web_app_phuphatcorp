@@ -695,5 +695,70 @@
         "deleteBook": "Không xóa được bảng giá"
       }
     }
+  },
+  "bangKeTho": {
+    "title": "Lên bảng kê thô 5 nhà",
+    "subtitle": "Lưu file đã xử lý 5 nhà để đồng nghiệp tải đúng đợt.",
+    "subtitleHint": "Module từng nhà sẽ bổ sung sau — hiện tại chỉ lưu file gốc.",
+    "nav": "Bảng kê thô 5 nhà",
+    "dropzone": "Kéo thả file .xlsx vào đây, hoặc bấm để chọn",
+    "dropzoneHint": "Tối đa 10 MB. Cần sheet “Processed”.",
+    "chooseFile": "Chọn file Excel",
+    "selectedFile": "File đã chọn",
+    "clearFile": "Hủy chọn",
+    "saveFile": "Lưu file",
+    "saving": "Đang lưu…",
+    "overwriting": "Đang ghi đè…",
+    "searchPlaceholder": "Tìm theo tên file…",
+    "col": {
+      "filename": "Tên file",
+      "uploadedBy": "Người upload",
+      "uploadedAt": "Thời điểm",
+      "ndMcc": "ND-MCC",
+      "clv": "CLV",
+      "calofic": "Calofic",
+      "actions": "Thao tác"
+    },
+    "house": {
+      "pending": "Chưa xử lý",
+      "ready": "Sẵn sàng",
+      "failed": "Lỗi"
+    },
+    "action": {
+      "downloadInput": "Tải file gốc",
+      "downloadOutput": "Tải {filename}",
+      "delete": "Xóa đợt"
+    },
+    "empty": "Chưa có file bảng kê thô.",
+    "emptyHintManage": "Upload file đã xử lý 5 nhà để bắt đầu.",
+    "emptySearch": "Không tìm thấy đợt nào khớp “{q}”.",
+    "error": "Không tải được danh sách.",
+    "retry": "Thử lại",
+    "message": {
+      "success": {
+        "save": "Đã lưu file bảng kê thô",
+        "overwrite": "Đã ghi đè file",
+        "delete": "Đã xóa đợt"
+      },
+      "error": {
+        "save": "Không lưu được file. Thử lại.",
+        "download": "Không tìm thấy file",
+        "forbidden": "Bạn không có quyền thực hiện thao tác này",
+        "type": "Chỉ chấp nhận file .xlsx",
+        "size": "File quá lớn (tối đa 10 MB)"
+      }
+    },
+    "overwrite": {
+      "title": "File đã tồn tại",
+      "body": "Đã có đợt “{filename}”. Ghi đè sẽ xóa file gốc hiện tại và mọi bảng kê nhà (kể cả đã xử lý).",
+      "confirm": "Ghi đè file",
+      "cancel": "Hủy"
+    },
+    "delete": {
+      "title": "Xóa đợt",
+      "body": "Xóa “{filename}”? File gốc và bảng kê nhà sẽ không khôi phục được.",
+      "confirm": "Xóa đợt",
+      "cancel": "Hủy"
+    }
   }
 }

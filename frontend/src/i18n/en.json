@@ -649,5 +649,70 @@
         "deleteBook": "Could not delete the price book"
       }
     }
+  },
+  "bangKeTho": {
+    "title": "Draft statements (5 houses)",
+    "subtitle": "Store processed 5-house workbooks so others can download the right batch.",
+    "subtitleHint": "Per-house modules come later — this screen only stores the source file.",
+    "nav": "Draft statements",
+    "dropzone": "Drop an .xlsx file here, or click to choose",
+    "dropzoneHint": "Max 10 MB. The workbook must include a “Processed” sheet.",
+    "chooseFile": "Choose Excel file",
+    "selectedFile": "Selected file",
+    "clearFile": "Clear",
+    "saveFile": "Save file",
+    "saving": "Saving…",
+    "overwriting": "Overwriting…",
+    "searchPlaceholder": "Search by file name…",
+    "col": {
+      "filename": "File name",
+      "uploadedBy": "Uploaded by",
+      "uploadedAt": "Uploaded at",
+      "ndMcc": "ND-MCC",
+      "clv": "CLV",
+      "calofic": "Calofic",
+      "actions": "Actions"
+    },
+    "house": {
+      "pending": "Not processed",
+      "ready": "Ready",
+      "failed": "Failed"
+    },
+    "action": {
+      "downloadInput": "Download source file",
+      "downloadOutput": "Download {filename}",
+      "delete": "Delete batch"
+    },
+    "empty": "No draft statement files yet.",
+    "emptyHintManage": "Upload a processed 5-house workbook to start.",
+    "emptySearch": "No batches match “{q}”.",
+    "error": "Could not load the list.",
+    "retry": "Retry",
+    "message": {
+      "success": {
+        "save": "Draft statement file saved",
+        "overwrite": "File overwritten",
+        "delete": "Batch deleted"
+      },
+      "error": {
+        "save": "Could not save the file. Try again.",
+        "download": "File not found",
+        "forbidden": "You do not have permission for this action",
+        "type": "Only .xlsx files are accepted",
+        "size": "File is too large (max 10 MB)"
+      }
+    },
+    "overwrite": {
+      "title": "File already exists",
+      "body": "A batch named “{filename}” already exists. Overwriting deletes the current source file and every house output (including processed ones).",
+      "confirm": "Overwrite file",
+      "cancel": "Cancel"
+    },
+    "delete": {
+      "title": "Delete batch",
+      "body": "Delete “{filename}”? The source file and house outputs cannot be restored.",
+      "confirm": "Delete batch",
+      "cancel": "Cancel"
+    }
   }
 }

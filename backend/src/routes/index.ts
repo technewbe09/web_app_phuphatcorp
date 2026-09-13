@@ -23,6 +23,7 @@ import vehicleInsuranceRoutes from './vehicleInsurances';
 import vehicleRepairRoutes from './vehicleRepairs';
 import routePricingRoutes from './routePricing';
 import dashboardRoutes from './dashboard';
+import bangKeThoRoutes from './bangKeTho';
 
 const router = Router();
 
@@ -50,5 +51,6 @@ router.use('/vehicle-insurances', vehicleInsuranceRoutes);
 router.use('/vehicle-repairs', vehicleRepairRoutes);
 router.use('/route-pricing', routePricingRoutes);
 router.use('/dashboard', dashboardRoutes);
+router.use('/bang-ke-tho', bangKeThoRoutes);
 
 export default router;

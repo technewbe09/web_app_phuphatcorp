@@ -49,6 +49,7 @@ export function Modal({ isOpen, onClose, title, children, className, size = 'md'
             </h3>
             <button
               onClick={onClose}
+              aria-label="Close"
               className="p-1 text-neutral-400 dark:text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-200 rounded-lg hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors"
             >
               <X className="w-5 h-5" />
