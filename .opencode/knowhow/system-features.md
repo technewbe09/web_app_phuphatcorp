@@ -25,18 +25,28 @@ Hệ thống dùng **RBAC** (Role-Based Access Control) — mỗi user gắn 1 r
 | dashboard.view | Xem Dashboard |
 | delivery_data.view | Xem Delivery Data |
 | delivery_data.manage | Quản lý Delivery Data |
+| vehicle_data.view | Xem dữ liệu xe (đăng kiểm, thay nhớt, bảo hiểm, sửa chữa) |
+| vehicle_data.manage | Quản lý dữ liệu xe |
+| fuel.view | Xem dữ liệu dầu & thống kê dầu |
+| fuel.manage | Quản lý dữ liệu dầu |
+| dispatch.view | Xem bảng điều phối xe |
+| dispatch.manage | Tạo/xóa lịch điều phối xe |
+| accounting_data.view | Xem dữ liệu kế toán |
+| accounting_data.manage | Quản lý dữ liệu kế toán |
 | users.view | Xem Users |
 | users.manage | Quản lý Users |
-| reports.view | Xem Báo cáo |
 | roles.view | Xem Roles |
 | roles.manage | Quản lý Roles |
 | permissions.manage | Quản lý Permissions |
-| transport.view | Xem dữ liệu vận tải (trip codes, xe, tài xế) |
-| transport.manage | Quản lý dữ liệu vận tải (CRUD trip codes, xe, tài xế) |
-| dispatch.view | Xem bảng điều phối xe |
-| dispatch.manage | Tạo/xóa lịch điều phối xe |
+| catalog.view | Xem danh mục |
+| catalog.manage | Quản lý danh mục |
+| jobs.view | Xem cấu hình Job |
+| jobs.manage | Quản lý Job |
+| logs.view | Xem nhật ký hệ thống |
 | route_pricing.view | Xem giá theo tuyến |
 | route_pricing.manage | Quản lý giá theo tuyến |
+| data_scopes.view | Xem phạm vi dữ liệu |
+| data_scopes.manage | Quản lý phạm vi dữ liệu |
 
 **Cơ chế enforcement:**
 - JWT payload chứa `roleId` và `permissions: string[]`
@@ -254,6 +264,24 @@ User upload file .xlsx ERP (Delivery Report)
       → Return: { outputBlob, outputFilename, processedRows, groupCount, dateRange, warnings }
   → User tải file output xuống
 ```
+
+### 5.1b Xử lý Data Gạo (Rice Data Processing)
+
+**Mục đích:** Upload file `data_gao.xlsx` → so khớp biển số + ngày với hóa đơn tài xế (driver_invoices DB) → xuất Excel kết quả lọc.
+
+**Flow:**
+```
+User upload data_gao.xlsx (sheet "Data xuất")
+  → RiceDeliveryDataPage
+    → parseRiceFile(file) — parse ngày (serial), biển số, sản phẩm, đại lý, tấn
+    → normalizePlate(so_xe) — uppercase, strip spaces/dashes/dots/commas
+    → riceDeliveryApi.fetchPlatesForRange(from, to) — GET /api/driver-invoices?ngay_from&ngay_to
+    → buildMasterPlateMap(invoices) — Map<ngay, Set<normalizedPlate>>
+    → filterRiceData(rows, masterMap) — matched/unmatched/unknownPlates
+    → exportRiceResult() — 4 sheets: Khớp lịch, Không khớp, Raw (highlight), Thống kê
+```
+
+**Master data:** Bảng `driver_invoices` (Hóa đơn tài xế) — NOT `delivery_schedules` (Lịch đi hàng).
 
 ### 5.2 Column Mapping (Source → Output)
 
@@ -821,6 +849,14 @@ Step 1: Chọn loai_tuyen (Tuyến cố định / Tuyến ngoài)
         → Toast success → Modal đóng → Refresh bảng
 ```
 
+**Auto-fill tài xế (BR-008):**
+- Khi chọn xe (vehicle_id), hệ thống fetch danh sách tài xế từ `driver_vehicles` junction
+- Auto-fill tài xế đầu tiên trong danh sách (theo `driver_vehicles.created_at ASC`)
+- Dropdown chỉ hiển thị tài xế được gán cho xe đó
+- User có thể đổi tài xế nếu muốn
+- Lưu `driver_id` (= `driver.user_id`) vào `dispatch_schedules`
+- Fallback: nếu xe chưa có tài xế → nhập tay
+
 **API Endpoints:**
 ```
 GET    /api/dispatch-schedules?date=YYYY-MM-DD  → { xe_nho: [], xe_lon: [], tuyen_ngoai: [] }
@@ -846,6 +882,49 @@ frontend/src/pages/dispatch/SchedulePage.tsx
 ```
 
 **Access:** Tất cả authenticated users. Route: `/dispatch/schedule`
+
+### 10.2 Theo dõi hóa đơn (/invoice-tracking)
+
+**Mục đích:** Theo dõi tiến trình tải lên và xác thực chứng từ giao nhận hóa đơn của tài xế và điều phối xe.
+
+**State Machine:**
+`created` (Tạo mới) ➔ `pending_review` (Chờ duyệt) ➔ `completed` (Hoàn thành) / `request_supplement` (Yêu cầu bổ sung)
+
+**Lịch sử thao tác (Audit Timeline):**
+- Mọi hoạt động nghiệp vụ: Tạo chuyến xe, Tải lên chứng từ, Yêu cầu bổ sung (kèm ghi chú lý do), Duyệt hoàn thành đều được tự động lưu vào `audit_logs`.
+- Giao diện Modal Chi tiết hiển thị Timeline dọc trực quan với người thực hiện, thời gian chi tiết, hành động và ghi chú liên quan.
+
+**Thống kê theo tài xế (Statistics Tab):**
+- Tab "Thống kê" tổng hợp số lượng ticket theo từng trạng thái (Tạo mới, Chờ duyệt, Yêu cầu bổ sung, Hoàn thành, Tổng số, Tỷ lệ hoàn thành).
+- Cho phép lọc linh hoạt theo Biển số xe, Tên tài xế, Khoảng ngày (Từ ngày - Đến ngày).
+- Tự động thực thi phân quyền dữ liệu (Data Scope).
+
+**Lưu trữ MinIO & Sao chép chứng từ cùng ngày (Zero Storage Duplication):**
+- Tệp chứng từ mới tải lên được lưu trực tiếp vào MinIO Object Storage (`phuphatcorp-inspections` bucket) thay vì lưu chuỗi Base64 dài trong PostgreSQL. Hỗ trợ tương thích ngược dữ liệu cũ.
+- Tài xế có thể sao chép bộ ảnh chứng từ từ chuyến xe khác cùng ngày (`CopyDocumentsModal`).
+- Cơ chế sao chép chỉ tạo tham chiếu (reference metadata), trỏ chung 1 object key trong MinIO, hoàn toàn không nhân bản file hay tốn dung lượng lưu trữ.
+- Hiển thị huy hiệu `🔗 Từ xe [Biển số]` trên hình ảnh và Lightbox Viewer để phân biệt nguồn gốc chứng từ.
+- Tích hợp kiểm tra quyền Workflow Engine: hoàn thành bước tải ảnh và chuyển trạng thái sang `pending_review`.
+
+**Chia sẻ Ticket & Trang Public View (/shared/invoice-tracking/:token):**
+- Nút "Chia sẻ" trong Chi tiết Ticket tự động tạo token chia sẻ duy nhất và sao chép link công khai vào Clipboard.
+- Người nhận không cần đăng nhập vẫn xem được thông tin chuyến xe và bộ sưu tập chứng từ / hình ảnh đính kèm.
+- Trang Public Viewer hỗ trợ Lightbox Gallery với nút Back/Next và phím điều hướng (← → Esc), xem ảnh full-size, mở PDF trong tab mới và tải tệp về máy.
+
+**API Endpoints:**
+```
+GET    /api/invoice-tracking           → Danh sách tickets (kèm phân trang, lọc status, tìm kiếm)
+GET    /api/invoice-tracking/statistics → Thống kê tổng quan & theo tài xế
+GET    /api/invoice-tracking/:id       → Chi tiết ticket (kèm user_permissions động)
+GET    /api/invoice-tracking/:id/history → Timeline lịch sử thao tác ticket
+GET    /api/invoice-tracking/:id/copyable-tickets → Danh sách chuyến cùng ngày để sao chép
+GET    /api/invoice-tracking/files/:filename → Phục vụ tệp từ MinIO qua presigned URL 24h
+POST   /api/invoice-tracking/:id/share → Tạo / lấy token chia sẻ công khai
+POST   /api/invoice-tracking/:id/copy-documents → Sao chép chứng từ từ chuyến cùng ngày
+POST   /api/invoice-tracking/:id/documents → Tải lên chứng từ mới dạng multipart/form-data lên MinIO
+PUT    /api/invoice-tracking/:id/review    → Duyệt hoàn thành hoặc yêu cầu bổ sung (điều phối)
+GET    /api/public/invoice-tracking/:token → Xem thông tin & chứng từ ticket công khai (Public)
+```
 
 ## 8. Dark/Light Mode
 
@@ -913,26 +992,32 @@ Parent menu group "Thiết lập người dùng" trong sidebar — collapsible a
 - Unsaved changes tracked locally (dirty state với Set objects)
 - Lưu tất cả: loop non-ADMIN roles → PUT /api/permissions/role/:id
 
-### 9.4 Files
+### 9.4 Quản lý phạm vi dữ liệu (/settings/data-scopes)
+
+- Requires: `data_scopes.view` (xem) / `data_scopes.manage` (cấu hình)
+- **Ma trận vai trò:** Cấu hình loại phạm vi dữ liệu (`all`, `owner`, `entity`, `none`) cho từng Role × Feature.
+  - `all`: Xem toàn bộ dữ liệu hệ thống (ADMIN, Kế toán).
+  - `owner`: **Tự động phân quyền dựa trên `user_id` / `driver_id`** của người dùng (Chuyến xe do chính tài xế phụ trách `driver_id = user.userId` hoặc bản ghi do user tạo). Không cần cấu hình gán thủ công!
+  - `entity`: Gán danh sách đối tượng cố định (xe `vehicle` hoặc tài xế `driver`) cho người dùng qua bảng `user_entity_scopes`.
+  - `none`: Khóa xem dữ liệu của tính năng đó.
+- **Thực thi phân quyền dữ liệu:** Tự động lọc ở tầng backend API dựa trên middleware `resolveDataScope(featureCode)` và inject filter vào SQL query. Áp dụng cho Theo dõi hóa đơn (`invoice_tracking`) và mở rộng cho các tính năng trong tương lai.
+
+### 9.5 Files
 
 ```
-backend/src/services/roleService.ts
-backend/src/services/permissionService.ts
-backend/src/controllers/rolesController.ts
-backend/src/controllers/permissionsController.ts
-backend/src/routes/roles.ts
-backend/src/routes/permissions.ts
-backend/src/migrations/004_roles_permissions.sql
+backend/src/services/dataScopeService.ts
+backend/src/controllers/dataScopeController.ts
+backend/src/routes/dataScopes.ts
+backend/src/middleware/dataScope.ts
+backend/src/migrations/049_create_data_scopes.sql
 
-frontend/src/api/rolesApi.ts
-frontend/src/api/permissionsApi.ts
-frontend/src/hooks/useRoles.ts
-frontend/src/hooks/usePermissions.ts
-frontend/src/pages/admin/RoleManagementPage.tsx
-frontend/src/pages/admin/PermissionManagementPage.tsx
-frontend/src/components/admin/CreateRoleModal.tsx
-frontend/src/components/admin/EditRoleModal.tsx
-frontend/src/components/admin/DeactivateRoleDialog.tsx
+frontend/src/api/dataScopeApi.ts
+frontend/src/hooks/useDataScopes.ts
+frontend/src/pages/admin/DataScopeManagementPage.tsx
+frontend/src/components/admin/data-scope/RoleScopeMatrix.tsx
+frontend/src/components/admin/data-scope/UserEntityScopeList.tsx
+frontend/src/components/admin/data-scope/AssignEntityModal.tsx
+frontend/src/components/admin/data-scope/DataScopeBadge.tsx
 ```
 
 ---
@@ -1045,10 +1130,10 @@ frontend/src/pages/route-pricing/PriceMatrixTab.tsx
 
 | Tab | Permission | Nội dung chính |
 |-----|-----------|----------------|
-| Tổng quan (`overview`) | dashboard.view | KPI tháng/quý (tấn giao, số HĐ, số chuyến, chi phí dầu), chart tấn 6 tháng, cảnh báo hết hạn, dispatch hôm nay, job reconcile gần nhất |
+| Tổng quan (`overview`) | dashboard.view | KPI tháng/quý (tấn giao, số HĐ, chi phí dầu), chart tấn 6 tháng, cảnh báo hết hạn, dispatch hôm nay, job reconcile gần nhất |
 | Bảo trì xe (`vehicles`) | vehicle_data.view | Đăng kiểm/bảo hiểm sắp hết hạn (bucket expired/30/60/90 ngày), xe quá hạn thay nhớt, chi phí sửa chữa 12 tháng theo xe |
 | Kế toán - Đối chiếu (`accounting`) | accounting_data.view | Tổng matched/unmatched, chart theo tháng, batch import gần đây, lịch sử reconcile job |
-| Vận tải (`operations`) | transport.view hoặc dispatch.view | KPI + chart chuyến theo ngày (mặc định 30 ngày, filter date_from/date_to), thống kê theo xe, hóa đơn tài xế |
+| Hóa đơn tài xế (`operations`) | transport.view hoặc dispatch.view | Thống kê hóa đơn tài xế (số bản ghi, số hóa đơn) theo khoảng ngày |
 | Nhiên liệu (`fuel`) | fuel.view | KPI + chart chi phí 6 tháng, tiêu thụ theo xe (L/100km), chênh lệch đồng hồ vs GPS |
 
 ### 12.2 Business Rules
