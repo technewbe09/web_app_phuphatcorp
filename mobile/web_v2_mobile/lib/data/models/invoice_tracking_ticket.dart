@@ -1,36 +1,111 @@
 class DocumentFile {
+  final String? filename;
+  final String? originalFilename;
   final String fileName;
   final String mimeType;
   final String fileData;
+  final int? fileSize;
   final String? note;
   final String? uploadedAt;
+  final int? sourceTicketId;
+  final String? sourcePlateNumber;
 
   DocumentFile({
+    this.filename,
+    this.originalFilename,
     required this.fileName,
     required this.mimeType,
-    required this.fileData,
+    this.fileData = '',
+    this.fileSize,
     this.note,
     this.uploadedAt,
+    this.sourceTicketId,
+    this.sourcePlateNumber,
   });
+
+  String get displayName => originalFilename ?? fileName;
+  bool get isMinIO => filename != null && filename!.isNotEmpty;
+  bool get isBase64 => fileData.isNotEmpty;
+  bool get isCopied => sourcePlateNumber != null && sourcePlateNumber!.isNotEmpty;
 
   factory DocumentFile.fromJson(Map<String, dynamic> json) {
     return DocumentFile(
-      fileName: json['file_name'] ?? json['fileName'] ?? '',
+      filename: json['filename'],
+      originalFilename: json['original_filename'],
+      fileName: json['file_name'] ?? json['fileName'] ?? json['original_filename'] ?? json['filename'] ?? '',
       mimeType: json['mime_type'] ?? json['mimeType'] ?? 'image/jpeg',
       fileData: json['file_data'] ?? json['fileData'] ?? '',
+      fileSize: json['file_size'] != null ? int.tryParse(json['file_size'].toString()) : null,
       note: json['note'],
       uploadedAt: json['uploaded_at'] ?? json['uploadedAt'],
+      sourceTicketId: json['source_ticket_id'] != null ? int.tryParse(json['source_ticket_id'].toString()) : null,
+      sourcePlateNumber: json['source_plate_number']?.toString(),
     );
   }
 
   Map<String, dynamic> toJson() {
     return {
+      if (filename != null) 'filename': filename,
+      if (originalFilename != null) 'original_filename': originalFilename,
       'file_name': fileName,
       'mime_type': mimeType,
       'file_data': fileData,
+      if (fileSize != null) 'file_size': fileSize,
       if (note != null) 'note': note,
       if (uploadedAt != null) 'uploaded_at': uploadedAt,
+      if (sourceTicketId != null) 'source_ticket_id': sourceTicketId,
+      if (sourcePlateNumber != null) 'source_plate_number': sourcePlateNumber,
     };
+  }
+}
+
+class CopyableTicket {
+  final int id;
+  final String ngay;
+  final String loaiTuyen;
+  final String loaiXe;
+  final String bienSo;
+  final String? taiXe;
+  final String diemNhan;
+  final String invoiceStatus;
+  final int documentCount;
+  final List<DocumentFile> documents;
+
+  CopyableTicket({
+    required this.id,
+    required this.ngay,
+    required this.loaiTuyen,
+    required this.loaiXe,
+    required this.bienSo,
+    this.taiXe,
+    required this.diemNhan,
+    required this.invoiceStatus,
+    required this.documentCount,
+    this.documents = const [],
+  });
+
+  factory CopyableTicket.fromJson(Map<String, dynamic> json) {
+    var docsList = <DocumentFile>[];
+    if (json['documents'] != null && json['documents'] is List) {
+      docsList = (json['documents'] as List)
+          .map((d) => DocumentFile.fromJson(d as Map<String, dynamic>))
+          .toList();
+    }
+
+    return CopyableTicket(
+      id: json['id'] is int ? json['id'] : int.tryParse(json['id'].toString()) ?? 0,
+      ngay: json['ngay'] ?? '',
+      loaiTuyen: json['loai_tuyen'] ?? '',
+      loaiXe: json['loai_xe'] ?? '',
+      bienSo: json['bien_so'] ?? '',
+      taiXe: json['tai_xe'],
+      diemNhan: json['diem_nhan'] ?? '',
+      invoiceStatus: json['invoice_status'] ?? '',
+      documentCount: json['document_count'] is int
+          ? json['document_count']
+          : int.tryParse(json['document_count']?.toString() ?? '') ?? docsList.length,
+      documents: docsList,
+    );
   }
 }
 

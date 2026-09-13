@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { FileText, ZoomIn } from 'lucide-react';
+import { FileText, ZoomIn, Copy } from 'lucide-react';
 import type { DocumentFile } from '../../api/invoiceTrackingApi';
 import { DocumentViewerModal } from './DocumentViewerModal';
 
@@ -18,19 +18,26 @@ export function DocumentPreview({ documents }: DocumentPreviewProps) {
     <>
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2.5 sm:gap-3">
         {documents.map((doc, idx) => {
-          const isImage = doc.mime_type.startsWith('image/');
+          const isImage = doc.mime_type?.startsWith('image/');
+          const fileName = doc.original_filename || doc.file_name || `Chứng từ #${idx + 1}`;
+          const imgSrc = doc.filename
+            ? `/api/invoice-tracking/files/${doc.filename}`
+            : doc.file_data
+              ? `data:${doc.mime_type};base64,${doc.file_data}`
+              : null;
+
           return (
             <button
               key={idx}
               type="button"
               onClick={() => setSelectedDoc(doc)}
-              className="group relative aspect-square overflow-hidden rounded-xl border border-neutral-200 bg-neutral-100/70 transition hover:border-primary hover:shadow-md dark:border-neutral-700 dark:bg-neutral-800 focus:outline-none focus:ring-2 focus:ring-primary/50 text-left"
+              className="group relative aspect-square overflow-hidden rounded-xl border border-neutral-200 bg-neutral-100/70 transition hover:border-neutral-900 dark:hover:border-neutral-200 hover:shadow-md dark:border-neutral-700 dark:bg-neutral-800 focus:outline-none focus:ring-2 focus:ring-neutral-400 text-left"
             >
-              {isImage && doc.file_data ? (
+              {isImage && imgSrc ? (
                 <>
                   <img
-                    src={`data:${doc.mime_type};base64,${doc.file_data}`}
-                    alt={doc.file_name}
+                    src={imgSrc}
+                    alt={fileName}
                     className="h-full w-full object-cover transition duration-200 group-hover:scale-105"
                     loading="lazy"
                   />
@@ -44,7 +51,7 @@ export function DocumentPreview({ documents }: DocumentPreviewProps) {
                     <ZoomIn className="h-5 w-5 group-hover:scale-110 transition-transform" />
                   </div>
                   <span className="line-clamp-2 text-[11px] font-medium text-neutral-700 dark:text-neutral-300">
-                    {doc.file_name}
+                    {fileName}
                   </span>
                 </div>
               ) : (
@@ -53,7 +60,18 @@ export function DocumentPreview({ documents }: DocumentPreviewProps) {
                     <FileText className="h-5 w-5 group-hover:scale-110 transition-transform" />
                   </div>
                   <span className="line-clamp-2 text-[11px] font-medium text-neutral-700 dark:text-neutral-300">
-                    {doc.file_name}
+                    {fileName}
+                  </span>
+                  <span className="text-[10px] text-rose-600 dark:text-rose-400 font-medium">PDF</span>
+                </div>
+              )}
+
+              {/* Source Badge if copied */}
+              {doc.source_plate_number && (
+                <div className="absolute top-1.5 left-1.5 z-10">
+                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-neutral-900/80 text-white text-[10px] font-medium backdrop-blur-xs shadow-xs">
+                    <Copy className="w-2.5 h-2.5 text-sky-400" />
+                    <span>{doc.source_plate_number}</span>
                   </span>
                 </div>
               )}
@@ -62,7 +80,12 @@ export function DocumentPreview({ documents }: DocumentPreviewProps) {
         })}
       </div>
 
-      <DocumentViewerModal document={selectedDoc} onClose={() => setSelectedDoc(null)} />
+      <DocumentViewerModal
+        document={selectedDoc}
+        documents={documents}
+        onClose={() => setSelectedDoc(null)}
+        onNavigate={(newDoc) => setSelectedDoc(newDoc)}
+      />
     </>
   );
 }

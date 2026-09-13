@@ -52,10 +52,10 @@ class _InspectionFormScreenState extends State<InspectionFormScreen> {
       final ins = widget.inspection!;
       _selectedVehicleId = ins.vehicleId;
       try {
-        _inspectionDate = DateTime.parse(ins.inspectionDate);
+        _inspectionDate = DateTime.parse(ins.inspectionDate).toLocal();
       } catch (_) {}
       try {
-        _expiryDate = DateTime.parse(ins.expiryDate);
+        _expiryDate = DateTime.parse(ins.expiryDate).toLocal();
       } catch (_) {}
       _notesController.text = ins.notes ?? '';
       _existingImages = List.from(ins.images);

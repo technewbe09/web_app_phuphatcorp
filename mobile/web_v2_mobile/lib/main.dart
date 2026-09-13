@@ -3,6 +3,7 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:provider/provider.dart';
 import 'core/theme/app_theme.dart';
 import 'providers/auth_provider.dart';
+import 'providers/dispatch_schedule_provider.dart';
 import 'providers/inspection_provider.dart';
 import 'providers/insurance_provider.dart';
 import 'providers/invoice_tracking_provider.dart';
@@ -23,6 +24,9 @@ void main() async {
       providers: [
         ChangeNotifierProvider(
           create: (_) => AuthProvider()..initializeAuth(),
+        ),
+        ChangeNotifierProvider(
+          create: (_) => DispatchScheduleProvider(),
         ),
         ChangeNotifierProvider(
           create: (_) => InvoiceTrackingProvider(),

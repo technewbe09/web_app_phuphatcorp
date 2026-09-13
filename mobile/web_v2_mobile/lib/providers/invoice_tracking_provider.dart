@@ -115,6 +115,48 @@ class InvoiceTrackingProvider extends ChangeNotifier {
     }
   }
 
+  Future<List<CopyableTicket>> fetchCopyableTickets(int id) async {
+    try {
+      return await _service.fetchCopyableTickets(id);
+    } catch (_) {
+      return [];
+    }
+  }
+
+  Future<bool> copyDocuments({
+    required int id,
+    required int sourceTicketId,
+    String? driverNote,
+  }) async {
+    _isActionSubmitting = true;
+    notifyListeners();
+
+    try {
+      final updatedTicket = await _service.copyDocuments(
+        id: id,
+        sourceTicketId: sourceTicketId,
+        driverNote: driverNote,
+      );
+
+      _selectedTicket = updatedTicket;
+
+      final index = _tickets.indexWhere((t) => t.id == id);
+      if (index != -1) {
+        _tickets[index] = updatedTicket;
+      }
+
+      _history = await _service.getHistory(id);
+
+      _isActionSubmitting = false;
+      notifyListeners();
+      return true;
+    } catch (e) {
+      _isActionSubmitting = false;
+      notifyListeners();
+      rethrow;
+    }
+  }
+
   Future<bool> uploadDocuments({
     required int id,
     required List<DocumentFile> files,

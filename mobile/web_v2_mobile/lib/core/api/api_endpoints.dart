@@ -38,6 +38,9 @@ class ApiEndpoints {
   static String invoiceTrackingHistory(int id) => '/invoice-tracking/$id/history';
   static String invoiceTrackingDocuments(int id) => '/invoice-tracking/$id/documents';
   static String invoiceTrackingReview(int id) => '/invoice-tracking/$id/review';
+  static String invoiceTrackingCopyableTickets(int id) => '/invoice-tracking/$id/copyable-tickets';
+  static String invoiceTrackingCopyDocuments(int id) => '/invoice-tracking/$id/copy-documents';
+  static String invoiceTrackingFile(String filename) => '$baseUrl/invoice-tracking/files/$filename';
 
   // Vehicle Inspection Endpoints
   static const String vehicleInspections = '/vehicle-inspections';
@@ -65,4 +68,8 @@ class ApiEndpoints {
 
   // Vehicle Catalog
   static const String vehicles = '/vehicles';
+
+  // Dispatch Schedules Endpoints
+  static const String dispatchSchedules = '/dispatch-schedules';
+  static String dispatchScheduleDetail(int id) => '/dispatch-schedules/$id';
 }

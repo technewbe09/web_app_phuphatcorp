@@ -330,12 +330,22 @@ Frontend route: `/route-pricing` (sidebar top-level **Giá theo tuyến**)
 
 | Method | Path | Auth | Body/Query | Response |
 |--------|------|------|------------|----------|
-| GET | /invoice-tracking | JWT + invoice_tracking.view | query: `status`, `date_from`, `date_to`, `search`, `page`, `limit` | `{ success, data: { items: InvoiceTrackingTicket[], pagination } }` |
-| GET | /invoice-tracking/statistics | JWT + invoice_tracking.view | query: `date_from`, `date_to`, `bien_so`, `driver_id`, `tai_xe` | `{ success, data: InvoiceTrackingStatisticsResult }` — Thống kê theo tài xế |
+| GET | /invoice-tracking | JWT + invoice_tracking.view | query: `status`, `date_from`, `date_to`, `search`, `ghi_chu`, `page`, `limit` | `{ success, data: { items: InvoiceTrackingTicket[], pagination } }` |
+| GET | /invoice-tracking/statistics | JWT + invoice_tracking.view | query: `date_from`, `date_to`, `bien_so`, `driver_id`, `tai_xe`, `ghi_chu` | `{ success, data: InvoiceTrackingStatisticsResult }` — Thống kê theo tài xế |
 | GET | /invoice-tracking/:id | JWT + invoice_tracking.view | — | `{ success, data: InvoiceTrackingTicket }` |
 | GET | /invoice-tracking/:id/history | JWT + invoice_tracking.view | — | `{ success, data: InvoiceTrackingHistoryItem[] }` — Lịch sử thao tác |
-| POST | /invoice-tracking/:id/documents | JWT + invoice_tracking.view | `{ files: DocumentFile[], driver_note? }` | `{ success, data: InvoiceTrackingTicket }` |
+| GET | /invoice-tracking/:id/copyable-tickets | JWT + invoice_tracking.view | — | `{ success, data: CopyableTicket[] }` — Danh sách chuyến cùng ngày để sao chép |
+| GET | /invoice-tracking/files/:filename | No (Public) | — | Serve tệp từ MinIO bucket (redirect 302 sang presigned URL 24h) |
+| POST | /invoice-tracking/:id/share | JWT + invoice_tracking.view | — | `{ success, data: { share_token } }` — Tạo / lấy mã chia sẻ công khai |
+| POST | /invoice-tracking/:id/copy-documents | JWT + invoice_tracking.view | `{ source_ticket_id, driver_note? }` | `{ success, data: InvoiceTrackingTicket }` — Sao chép chứng từ không nhân bản tệp |
+| POST | /invoice-tracking/:id/documents | JWT + invoice_tracking.view | `multipart/form-data` (files, driver_note) | `{ success, data: InvoiceTrackingTicket }` — Tải tệp lên MinIO |
 | PUT | /invoice-tracking/:id/review | JWT + invoice_tracking.manage | `{ action: 'finish' \| 'request_supplement', supplement_note? }` | `{ success, data: InvoiceTrackingTicket }` |
+
+### Public Endpoints — /public
+
+| Method | Path | Auth | Body/Query | Response |
+|--------|------|------|------------|----------|
+| GET | /public/invoice-tracking/:token | No (Public) | — | `{ success, data: PublicInvoiceTicket }` — Xem thông tin & chứng từ ticket qua liên kết chia sẻ |
 
 ### Customers — /customers
 

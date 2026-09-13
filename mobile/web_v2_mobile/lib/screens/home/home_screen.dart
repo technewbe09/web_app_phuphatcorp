@@ -4,10 +4,7 @@ import '../../core/constants/app_colors.dart';
 import '../../providers/auth_provider.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/custom_button.dart';
-import '../inspection/inspection_list_screen.dart';
-import '../insurance/insurance_list_screen.dart';
-import '../invoice_tracking/invoice_tracking_screen.dart';
-import '../oil_change/oil_change_screen.dart';
+import 'dashboard_hub_tab.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -19,88 +16,42 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   int _currentIndex = 0;
 
+  final List<Widget> _tabs = const [
+    DashboardHubTab(),
+    _ProfileTab(),
+  ];
+
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final authProvider = context.watch<AuthProvider>();
-
-    final List<_NavDestination> destinations = [
-      const _NavDestination(
-        screen: _ProfileTab(),
-        item: BottomNavigationBarItem(
-          icon: Icon(Icons.person_outline),
-          activeIcon: Icon(Icons.person),
-          label: 'Tài khoản',
-        ),
-      ),
-      if (authProvider.hasAnyPermission(['invoice_tracking.view', 'invoice_tracking.manage']))
-        const _NavDestination(
-          screen: InvoiceTrackingScreen(),
-          item: BottomNavigationBarItem(
-            icon: Icon(Icons.receipt_long_outlined),
-            activeIcon: Icon(Icons.receipt_long),
-            label: 'Theo dõi HĐ',
-          ),
-        ),
-      if (authProvider.hasAnyPermission(['vehicle_data.view', 'vehicle_data.manage']))
-        const _NavDestination(
-          screen: InspectionListScreen(),
-          item: BottomNavigationBarItem(
-            icon: Icon(Icons.fact_check_outlined),
-            activeIcon: Icon(Icons.fact_check),
-            label: 'Đăng kiểm',
-          ),
-        ),
-      if (authProvider.hasAnyPermission(['vehicle_data.view', 'vehicle_data.manage']))
-        const _NavDestination(
-          screen: InsuranceListScreen(),
-          item: BottomNavigationBarItem(
-            icon: Icon(Icons.shield_outlined),
-            activeIcon: Icon(Icons.shield),
-            label: 'Bảo hiểm',
-          ),
-        ),
-      if (authProvider.hasAnyPermission(['vehicle_data.view', 'vehicle_data.manage']))
-        const _NavDestination(
-          screen: OilChangeScreen(),
-          item: BottomNavigationBarItem(
-            icon: Icon(Icons.oil_barrel_outlined),
-            activeIcon: Icon(Icons.oil_barrel),
-            label: 'Thay nhớt',
-          ),
-        ),
-    ];
-
-    final activeIndex = _currentIndex < destinations.length ? _currentIndex : 0;
 
     return Scaffold(
-      body: destinations[activeIndex].screen,
-      bottomNavigationBar: destinations.length > 1
-          ? BottomNavigationBar(
-              currentIndex: activeIndex,
-              onTap: (index) => setState(() => _currentIndex = index),
-              backgroundColor: isDark ? AppColors.neutral900 : AppColors.white,
-              selectedItemColor: isDark ? AppColors.neutral100 : AppColors.neutral900,
-              unselectedItemColor: isDark ? AppColors.neutral500 : AppColors.neutral400,
-              selectedLabelStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 10.5),
-              unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.normal, fontSize: 10.5),
-              type: BottomNavigationBarType.fixed,
-              elevation: 8,
-              items: destinations.map((d) => d.item).toList(),
-            )
-          : null,
+      body: _tabs[_currentIndex],
+      bottomNavigationBar: BottomNavigationBar(
+        currentIndex: _currentIndex,
+        onTap: (index) => setState(() => _currentIndex = index),
+        backgroundColor: isDark ? AppColors.neutral900 : AppColors.white,
+        selectedItemColor: isDark ? AppColors.neutral100 : AppColors.neutral900,
+        unselectedItemColor: isDark ? AppColors.neutral500 : AppColors.neutral400,
+        selectedLabelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+        unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.normal, fontSize: 12),
+        type: BottomNavigationBarType.fixed,
+        elevation: 8,
+        items: const [
+          BottomNavigationBarItem(
+            icon: Icon(Icons.grid_view_rounded),
+            activeIcon: Icon(Icons.grid_view_rounded),
+            label: 'Trang chủ',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.person_outline),
+            activeIcon: Icon(Icons.person),
+            label: 'Tài khoản',
+          ),
+        ],
+      ),
     );
   }
-}
-
-class _NavDestination {
-  final Widget screen;
-  final BottomNavigationBarItem item;
-
-  const _NavDestination({
-    required this.screen,
-    required this.item,
-  });
 }
 
 class _ProfileTab extends StatelessWidget {
@@ -116,7 +67,7 @@ class _ProfileTab extends StatelessWidget {
       backgroundColor: isDark ? AppColors.neutral950 : AppColors.neutral50,
       appBar: AppBar(
         title: const Text(
-          'PhuPhatCorp Mobile',
+          'Thông tin tài khoản',
           style: TextStyle(fontWeight: FontWeight.w600, fontSize: 18),
         ),
         backgroundColor: isDark ? AppColors.neutral900 : AppColors.white,

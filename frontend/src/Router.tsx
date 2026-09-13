@@ -33,6 +33,7 @@ import { InsurancePage } from './pages/admin/vehicle-data/InsurancePage';
 import { RepairPage } from './pages/admin/vehicle-data/RepairPage';
 import { RoutePricingPage } from './pages/route-pricing/RoutePricingPage';
 import InvoiceTrackingPage from './pages/invoice-tracking/InvoiceTrackingPage';
+import PublicTicketViewPage from './pages/invoice-tracking/PublicTicketViewPage';
 import { DataScopeManagementPage } from './pages/admin/DataScopeManagementPage';
 import { WorkflowManagementPage } from './pages/admin/WorkflowManagementPage';
 
@@ -50,6 +51,7 @@ export function Router() {
     <BrowserRouter>
       <Routes>
         {/* Public routes */}
+        <Route path="/shared/invoice-tracking/:token" element={<PublicTicketViewPage />} />
         <Route element={<AuthLayout />}>
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />

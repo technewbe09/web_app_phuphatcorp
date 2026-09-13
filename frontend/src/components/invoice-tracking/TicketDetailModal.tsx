@@ -6,11 +6,14 @@ import { InvoiceStatusBadge } from './InvoiceStatusBadge';
 import { DocumentPreview } from './DocumentPreview';
 import { DocumentViewerModal } from './DocumentViewerModal';
 import { UploadDocumentsModal } from './UploadDocumentsModal';
+import { CopyDocumentsModal } from './CopyDocumentsModal';
 import { SupplementNoteDialog } from './SupplementNoteDialog';
 import { ConfirmFinishDialog } from './ConfirmFinishDialog';
-import { useUploadDocuments, useReviewTicket, useInvoiceTrackingHistory, useInvoiceTrackingDetail } from '../../hooks/useInvoiceTracking';
-import type { InvoiceTrackingTicket, DocumentFile } from '../../api/invoiceTrackingApi';
+import { ShareTicketDialog } from './ShareTicketDialog';
+import { useUploadDocuments, useReviewTicket, useInvoiceTrackingHistory, useInvoiceTrackingDetail, useCreateShareLink } from '../../hooks/useInvoiceTracking';
+import { type InvoiceTrackingTicket, type DocumentFile, invoiceTrackingApi } from '../../api/invoiceTrackingApi';
 import { formatDate, formatDateTime } from '../../utils/format';
+import { copyToClipboard } from '../../utils/clipboard';
 import {
   Truck,
   AlertCircle,
@@ -24,6 +27,10 @@ import {
   User,
   Image as ImageIcon,
   ExternalLink,
+  Share2,
+  Check,
+  Copy,
+  Download,
 } from 'lucide-react';
 
 interface TicketDetailModalProps {
@@ -35,9 +42,13 @@ interface TicketDetailModalProps {
 export function TicketDetailModal({ ticket: initialTicket, isOpen, onClose }: TicketDetailModalProps) {
   const { t } = useI18n();
   const [showUpload, setShowUpload] = useState(false);
+  const [showCopyModal, setShowCopyModal] = useState(false);
   const [showSupplement, setShowSupplement] = useState(false);
   const [showConfirmFinish, setShowConfirmFinish] = useState(false);
+  const [showShareDialog, setShowShareDialog] = useState(false);
+  const [shareUrl, setShareUrl] = useState('');
   const [selectedHistoryDoc, setSelectedHistoryDoc] = useState<DocumentFile | null>(null);
+  const [copied, setCopied] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
 
   const { data: detailTicket } = useInvoiceTrackingDetail(isOpen ? initialTicket?.id ?? null : null);
@@ -45,6 +56,7 @@ export function TicketDetailModal({ ticket: initialTicket, isOpen, onClose }: Ti
 
   const uploadMutation = useUploadDocuments();
   const reviewMutation = useReviewTicket();
+  const shareMutation = useCreateShareLink();
   const { data: historyItems, isLoading: isLoadingHistory } = useInvoiceTrackingHistory(ticket?.id ?? null);
 
   // Determine permissions from backend dynamic evaluation
@@ -54,51 +66,23 @@ export function TicketDetailModal({ ticket: initialTicket, isOpen, onClose }: Ti
 
   if (!ticket) return null;
 
-  const handleUpload = async (files: File[], note: string) => {
+  const handleUpload = (files: File[], note: string) => {
     setActionError(null);
-    try {
-      const filePromises = files.map(async (file) => {
-        const base64 = await new Promise<string>((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onload = () => {
-            const result = reader.result as string;
-            if (result.includes(',')) {
-              resolve(result.split(',')[1]);
-            } else {
-              resolve(result);
-            }
-          };
-          reader.onerror = (err) => reject(err);
-          reader.readAsDataURL(file);
-        });
-        return {
-          file_name: file.name,
-          mime_type: file.type,
-          file_data: base64,
-        };
-      });
-
-      const fileData = await Promise.all(filePromises);
-
-      uploadMutation.mutate(
-        { id: ticket.id, data: { files: fileData, driver_note: note || undefined } },
-        {
-          onSuccess: () => {
-            setShowUpload(false);
-            onClose();
-          },
-          onError: (err: unknown) => {
-            const msg =
-              (err as { response?: { data?: { message?: string } } })?.response?.data?.message ||
-              t('invoice_tracking.message.errorUpload');
-            setActionError(msg);
-          },
+    uploadMutation.mutate(
+      { id: ticket.id, data: { files, driver_note: note || undefined } },
+      {
+        onSuccess: () => {
+          setShowUpload(false);
+          onClose();
         },
-      );
-    } catch (e) {
-      console.error('File reading failed:', e);
-      setActionError('Không thể đọc dữ liệu file. Vui lòng thử lại.');
-    }
+        onError: (err: unknown) => {
+          const msg =
+            (err as { response?: { data?: { message?: string } } })?.response?.data?.message ||
+            t('invoice_tracking.message.errorUpload');
+          setActionError(msg);
+        },
+      },
+    );
   };
 
   const handleFinish = () => {
@@ -139,6 +123,35 @@ export function TicketDetailModal({ ticket: initialTicket, isOpen, onClose }: Ti
     );
   };
 
+  const handleShare = async () => {
+    setActionError(null);
+    try {
+      const res = await shareMutation.mutateAsync(ticket.id);
+      const url = `${window.location.origin}/shared/invoice-tracking/${res.share_token}`;
+      setShareUrl(url);
+      setShowShareDialog(true);
+      
+      const copyOk = await copyToClipboard(url);
+      if (copyOk) {
+        setCopied(true);
+        setTimeout(() => setCopied(false), 3000);
+      }
+    } catch (err: unknown) {
+      console.error('Failed to create share link:', err);
+      setActionError('Không thể tạo liên kết chia sẻ. Vui lòng thử lại.');
+    }
+  };
+
+  const handleDownloadAll = () => {
+    if (!ticket?.documents || ticket.documents.length === 0) return;
+
+    ticket.documents.forEach((doc, idx) => {
+      setTimeout(() => {
+        invoiceTrackingApi.downloadDocumentFile(doc, `chung_tu_${ticket.bien_so}_${idx + 1}`);
+      }, idx * 300);
+    });
+  };
+
   return (
     <>
       <Modal isOpen={isOpen} onClose={onClose} title={t('invoice_tracking.detail.title')} size="xl">
@@ -147,6 +160,13 @@ export function TicketDetailModal({ ticket: initialTicket, isOpen, onClose }: Ti
             <div className="flex items-center gap-2 p-3 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 rounded-lg text-sm text-red-700 dark:text-red-300">
               <AlertTriangle className="w-4 h-4 shrink-0 text-red-500" />
               <span>{actionError}</span>
+            </div>
+          )}
+
+          {copied && (
+            <div className="flex items-center gap-2 p-3 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 rounded-lg text-xs sm:text-sm text-emerald-800 dark:text-emerald-300 animate-in fade-in">
+              <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+              <span>Đã sao chép liên kết chia sẻ! Người nhận có thể mở xem trực tiếp mà không cần đăng nhập.</span>
             </div>
           )}
 
@@ -243,10 +263,23 @@ export function TicketDetailModal({ ticket: initialTicket, isOpen, onClose }: Ti
 
           {/* Attached Documents List */}
           <div className="rounded-xl border border-neutral-200 p-3.5 sm:p-4 dark:border-neutral-800">
-            <h3 className="mb-3 text-sm font-semibold text-neutral-900 dark:text-neutral-100 flex items-center gap-1.5">
-              <FileText className="w-4 h-4 text-neutral-500" />
-              {t('invoice_tracking.detail.documents')} ({ticket.documents?.length || 0})
-            </h3>
+            <div className="flex items-center justify-between gap-2 mb-3">
+              <h3 className="text-sm font-semibold text-neutral-900 dark:text-neutral-100 flex items-center gap-1.5">
+                <FileText className="w-4 h-4 text-neutral-500" />
+                {t('invoice_tracking.detail.documents')} ({ticket.documents?.length || 0})
+              </h3>
+              {ticket.documents && ticket.documents.length > 0 && (
+                <button
+                  type="button"
+                  onClick={handleDownloadAll}
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-800 hover:bg-neutral-50 dark:hover:bg-neutral-700 text-xs font-medium text-neutral-700 dark:text-neutral-300 transition shadow-2xs cursor-pointer"
+                  title="Tải về toàn bộ tệp đính kèm của chuyến xe này"
+                >
+                  <Download className="w-3.5 h-3.5 text-neutral-500 dark:text-neutral-400" />
+                  <span>{t('invoice_tracking.detail.downloadAll')} ({ticket.documents.length})</span>
+                </button>
+              )}
+            </div>
             <DocumentPreview documents={ticket.documents || []} />
           </div>
 
@@ -393,41 +426,77 @@ export function TicketDetailModal({ ticket: initialTicket, isOpen, onClose }: Ti
           </div>
 
           {/* Bottom Actions Toolbar */}
-          <div className="pt-2 flex flex-col sm:flex-row sm:justify-end gap-2.5">
-            {canUpload && (
+          <div className="pt-2 flex flex-col sm:flex-row sm:justify-between items-stretch sm:items-center gap-2.5">
+            <div>
               <Button
-                variant="primary"
-                onClick={() => setShowUpload(true)}
+                variant="outline"
+                onClick={handleShare}
+                isLoading={shareMutation.isPending}
+                className="w-full sm:w-auto h-11 sm:h-10 text-sm font-medium"
+                title="Sao chép đường link công khai để chia sẻ cho người khác xem"
+              >
+                {copied ? (
+                  <>
+                    <Check className="w-4 h-4 mr-1.5 text-emerald-600 dark:text-emerald-400" />
+                    <span>{t('invoice_tracking.action.copied')}</span>
+                  </>
+                ) : (
+                  <>
+                    <Share2 className="w-4 h-4 mr-1.5 text-neutral-600 dark:text-neutral-400" />
+                    <span>{t('invoice_tracking.action.share')}</span>
+                  </>
+                )}
+              </Button>
+            </div>
+
+            <div className="flex flex-col sm:flex-row gap-2.5">
+              {canUpload && (
+                <>
+                  <Button
+                    variant="outline"
+                    onClick={() => setShowCopyModal(true)}
+                    className="w-full sm:w-auto h-11 sm:h-10 text-sm font-medium"
+                    title="Sao chép chứng từ từ chuyến xe khác cùng ngày"
+                  >
+                    <Copy className="w-4 h-4 mr-1.5 text-sky-600 dark:text-sky-400" />
+                    <span>Sao chép chứng từ</span>
+                  </Button>
+                  <Button
+                    variant="primary"
+                    onClick={() => setShowUpload(true)}
+                    className="w-full sm:w-auto h-11 sm:h-10 text-sm font-medium"
+                  >
+                    <Upload className="w-4 h-4 mr-1.5" />
+                    <span>{t('invoice_tracking.action.upload')}</span>
+                  </Button>
+                </>
+              )}
+              {canRequestSupplement && (
+                <Button
+                  variant="secondary"
+                  onClick={() => setShowSupplement(true)}
+                  className="w-full sm:w-auto h-11 sm:h-10 text-sm font-medium"
+                >
+                  {t('invoice_tracking.action.requestSupplement')}
+                </Button>
+              )}
+              {canFinish && (
+                <Button
+                  variant="primary"
+                  onClick={() => setShowConfirmFinish(true)}
+                  className="w-full sm:w-auto h-11 sm:h-10 text-sm font-medium"
+                >
+                  {t('invoice_tracking.action.finish')}
+                </Button>
+              )}
+              <Button
+                variant="outline"
+                onClick={onClose}
                 className="w-full sm:w-auto h-11 sm:h-10 text-sm font-medium"
               >
-                {t('invoice_tracking.action.upload')}
+                Đóng
               </Button>
-            )}
-            {canRequestSupplement && (
-              <Button
-                variant="secondary"
-                onClick={() => setShowSupplement(true)}
-                className="w-full sm:w-auto h-11 sm:h-10 text-sm font-medium"
-              >
-                {t('invoice_tracking.action.requestSupplement')}
-              </Button>
-            )}
-            {canFinish && (
-              <Button
-                variant="primary"
-                onClick={() => setShowConfirmFinish(true)}
-                className="w-full sm:w-auto h-11 sm:h-10 text-sm font-medium"
-              >
-                {t('invoice_tracking.action.finish')}
-              </Button>
-            )}
-            <Button
-              variant="outline"
-              onClick={onClose}
-              className="w-full sm:w-auto h-11 sm:h-10 text-sm font-medium"
-            >
-              Đóng
-            </Button>
+            </div>
           </div>
         </div>
       </Modal>
@@ -436,7 +505,15 @@ export function TicketDetailModal({ ticket: initialTicket, isOpen, onClose }: Ti
         isOpen={showUpload}
         onClose={() => setShowUpload(false)}
         onSubmit={handleUpload}
+        onOpenCopyModal={() => setShowCopyModal(true)}
         isLoading={uploadMutation.isPending}
+      />
+      <CopyDocumentsModal
+        ticketId={ticket.id}
+        ticketDate={ticket.ngay}
+        isOpen={showCopyModal}
+        onClose={() => setShowCopyModal(false)}
+        onSuccess={() => onClose()}
       />
       <SupplementNoteDialog
         isOpen={showSupplement}
@@ -455,6 +532,14 @@ export function TicketDetailModal({ ticket: initialTicket, isOpen, onClose }: Ti
       <DocumentViewerModal
         document={selectedHistoryDoc}
         onClose={() => setSelectedHistoryDoc(null)}
+      />
+
+      {/* Share Ticket Dialog */}
+      <ShareTicketDialog
+        isOpen={showShareDialog}
+        onClose={() => setShowShareDialog(false)}
+        shareUrl={shareUrl}
+        plateNumber={ticket.bien_so}
       />
     </>
   );

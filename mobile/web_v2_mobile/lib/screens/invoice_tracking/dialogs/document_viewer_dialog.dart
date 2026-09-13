@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import '../../../core/api/api_endpoints.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../data/models/invoice_tracking_ticket.dart';
 
@@ -30,7 +31,7 @@ class _DocumentViewerDialogState extends State<DocumentViewerDialog> {
       _docList = widget.documents;
       _currentIndex = widget.initialIndex >= 0 && widget.initialIndex < _docList.length
           ? widget.initialIndex
-          : _docList.indexWhere((d) => d.fileName == widget.document.fileName);
+          : _docList.indexWhere((d) => d.displayName == widget.document.displayName);
       if (_currentIndex == -1) _currentIndex = 0;
     } else {
       _docList = [widget.document];
@@ -60,8 +61,28 @@ class _DocumentViewerDialogState extends State<DocumentViewerDialog> {
     final canNext = _currentIndex < _docList.length - 1;
 
     Widget imageWidget;
-    try {
-      if (currentDoc.fileData.isNotEmpty) {
+    if (currentDoc.isMinIO) {
+      final imgUrl = ApiEndpoints.invoiceTrackingFile(currentDoc.filename!);
+      imageWidget = Image.network(
+        imgUrl,
+        fit: BoxFit.contain,
+        loadingBuilder: (_, child, progress) {
+          if (progress == null) return child;
+          return const Center(child: CircularProgressIndicator());
+        },
+        errorBuilder: (_, _, _) => const Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.broken_image_outlined, size: 40, color: AppColors.neutral400),
+              SizedBox(height: 8),
+              Text('Không thể tải hình ảnh này.', style: TextStyle(fontSize: 12, color: AppColors.neutral500)),
+            ],
+          ),
+        ),
+      );
+    } else if (currentDoc.fileData.isNotEmpty) {
+      try {
         final bytes = base64Decode(currentDoc.fileData);
         imageWidget = Image.memory(
           bytes,
@@ -70,14 +91,14 @@ class _DocumentViewerDialogState extends State<DocumentViewerDialog> {
             child: Text('Không thể hiển thị ảnh chứng từ này.'),
           ),
         );
-      } else {
+      } catch (_) {
         imageWidget = const Center(
-          child: Text('Dữ liệu chứng từ trống.'),
+          child: Text('Định dạng hình ảnh không hợp lệ.'),
         );
       }
-    } catch (_) {
+    } else {
       imageWidget = const Center(
-        child: Text('Định dạng hình ảnh không hợp lệ.'),
+        child: Text('Dữ liệu chứng từ trống.'),
       );
     }
 
@@ -113,7 +134,7 @@ class _DocumentViewerDialogState extends State<DocumentViewerDialog> {
                 ],
                 Expanded(
                   child: Text(
-                    currentDoc.fileName,
+                    currentDoc.displayName,
                     style: TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w600,
@@ -157,7 +178,7 @@ class _DocumentViewerDialogState extends State<DocumentViewerDialog> {
                               const Icon(Icons.picture_as_pdf, size: 48, color: AppColors.red600),
                               const SizedBox(height: 12),
                               Text(
-                                currentDoc.fileName,
+                                currentDoc.displayName,
                                 style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
                               ),
                               const SizedBox(height: 4),
@@ -205,18 +226,55 @@ class _DocumentViewerDialogState extends State<DocumentViewerDialog> {
             ),
           ),
 
-          // Footer
-          if (currentDoc.note != null && currentDoc.note!.isNotEmpty) ...[
+          // Footer / Note / Source badge
+          if ((currentDoc.note != null && currentDoc.note!.isNotEmpty) || currentDoc.isCopied) ...[
             const Divider(height: 1),
             Padding(
-              padding: const EdgeInsets.all(12),
-              child: Text(
-                'Ghi chú: ${currentDoc.note}',
-                style: TextStyle(
-                  fontSize: 13,
-                  color: isDark ? AppColors.neutral300 : AppColors.neutral700,
-                  fontStyle: FontStyle.italic,
-                ),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              child: Row(
+                children: [
+                  if (currentDoc.isCopied) ...[
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: isDark ? Colors.blue.withValues(alpha: 0.2) : const Color(0xFFEFF6FF),
+                        borderRadius: BorderRadius.circular(4),
+                        border: Border.all(
+                          color: isDark ? Colors.blue.withValues(alpha: 0.4) : const Color(0xFFBFDBFE),
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.link, size: 12, color: isDark ? Colors.blue[300] : const Color(0xFF2563EB)),
+                          const SizedBox(width: 3),
+                          Text(
+                            'Từ xe ${currentDoc.sourcePlateNumber}',
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                              color: isDark ? Colors.blue[300] : const Color(0xFF1E40AF),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                  ],
+                  if (currentDoc.note != null && currentDoc.note!.isNotEmpty)
+                    Expanded(
+                      child: Text(
+                        'Ghi chú: ${currentDoc.note}',
+                        style: TextStyle(
+                          fontSize: 12.5,
+                          color: isDark ? AppColors.neutral300 : AppColors.neutral700,
+                          fontStyle: FontStyle.italic,
+                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                ],
               ),
             ),
           ],

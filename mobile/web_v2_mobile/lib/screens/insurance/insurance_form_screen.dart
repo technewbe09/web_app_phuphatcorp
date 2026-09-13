@@ -52,10 +52,10 @@ class _InsuranceFormScreenState extends State<InsuranceFormScreen> {
       final ins = widget.insurance!;
       _selectedVehicleId = ins.vehicleId;
       try {
-        _purchaseDate = DateTime.parse(ins.purchaseDate);
+        _purchaseDate = DateTime.parse(ins.purchaseDate).toLocal();
       } catch (_) {}
       try {
-        _expiryDate = DateTime.parse(ins.expiryDate);
+        _expiryDate = DateTime.parse(ins.expiryDate).toLocal();
       } catch (_) {}
       _notesController.text = ins.notes ?? '';
       _existingImages = List.from(ins.images);

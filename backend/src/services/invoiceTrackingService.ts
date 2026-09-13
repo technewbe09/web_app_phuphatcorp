@@ -1,9 +1,41 @@
+import crypto from 'crypto';
 import { pool } from '../config/database';
 import { DispatchSchedule } from './dispatchScheduleService';
 import { DataScope } from '../types/dataScope';
 import { workflowService } from './workflowService';
 import { UserTicketPermissions } from '../types/workflow';
 import { auditService } from './auditService';
+import { storageService } from './storageService';
+
+const SAFE_FILENAME_REGEX = /^[a-zA-Z0-9_\-\.]+$/;
+
+function normalizeDateString(d: unknown): string {
+  if (!d) return '';
+  if (d instanceof Date) {
+    return d.toISOString().slice(0, 10);
+  }
+  const str = String(d).trim();
+  if (str.includes('T')) {
+    return str.split('T')[0];
+  }
+  return str.slice(0, 10);
+}
+
+function parseDocuments(documents: unknown): DocumentFile[] {
+  if (!documents) return [];
+  if (Array.isArray(documents)) {
+    return documents as DocumentFile[];
+  }
+  if (typeof documents === 'string') {
+    try {
+      const parsed = JSON.parse(documents);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }
+  return [];
+}
 
 export class InvoiceTrackingError extends Error {
   constructor(
@@ -17,11 +49,49 @@ export class InvoiceTrackingError extends Error {
 }
 
 export interface DocumentFile {
-  file_name: string;
+  filename?: string;
+  original_filename?: string;
+  file_name?: string;
   mime_type: string;
-  file_data: string;
+  file_data?: string;
+  file_size?: number;
   note?: string;
   uploaded_at?: string;
+  source_ticket_id?: number | null;
+  source_plate_number?: string | null;
+}
+
+export interface CopyableTicket {
+  id: number;
+  ngay: string;
+  loai_tuyen: string;
+  loai_xe: string;
+  bien_so: string;
+  tai_xe: string | null;
+  diem_nhan: string;
+  invoice_status: string;
+  document_count: number;
+  documents: DocumentFile[];
+}
+
+export interface PublicInvoiceTicket {
+  id: number;
+  ngay: string;
+  loai_tuyen: string;
+  loai_xe: string;
+  xe_type: string;
+  bien_so: string;
+  tai_xe: string | null;
+  diem_nhan: string;
+  tan: string | null;
+  can: string | null;
+  ghi_chu: string | null;
+  invoice_status: string;
+  documents: DocumentFile[];
+  driver_note: string | null;
+  reviewed_at: string | null;
+  completed_at: string | null;
+  created_at: string;
 }
 
 export interface InvoiceTrackingFilters {
@@ -29,6 +99,7 @@ export interface InvoiceTrackingFilters {
   date_from?: string;
   date_to?: string;
   search?: string;
+  ghi_chu?: string;
   page?: number;
   limit?: number;
 }
@@ -61,6 +132,7 @@ export interface InvoiceTrackingStatisticsFilters {
   bien_so?: string;
   driver_id?: number;
   tai_xe?: string;
+  ghi_chu?: string;
 }
 
 export interface InvoiceTrackingStatisticsSummary {
@@ -164,9 +236,17 @@ export const invoiceTrackingService = {
 
     if (filters.search && filters.search.trim()) {
       conditions.push(
-        `(bien_so ILIKE $${paramIndex} OR tai_xe ILIKE $${paramIndex} OR diem_nhan ILIKE $${paramIndex})`,
+        `(bien_so ILIKE $${paramIndex} OR tai_xe ILIKE $${paramIndex} OR diem_nhan ILIKE $${paramIndex} OR ghi_chu ILIKE $${paramIndex} OR driver_note ILIKE $${paramIndex} OR supplement_note ILIKE $${paramIndex})`,
       );
       params.push(`%${filters.search.trim()}%`);
+      paramIndex++;
+    }
+
+    if (filters.ghi_chu && filters.ghi_chu.trim()) {
+      conditions.push(
+        `(ghi_chu ILIKE $${paramIndex} OR driver_note ILIKE $${paramIndex} OR supplement_note ILIKE $${paramIndex})`,
+      );
+      params.push(`%${filters.ghi_chu.trim()}%`);
       paramIndex++;
     }
 
@@ -253,7 +333,7 @@ export const invoiceTrackingService = {
               diem_nhan, tan, can, ghi_chu,
               invoice_status, driver_id, dispatcher_id, documents,
               supplement_note, driver_note, reviewed_at, completed_at,
-              created_by, created_at, updated_at
+              share_token, created_by, created_at, updated_at
        FROM dispatch_schedules
        WHERE ${conditions.join(' AND ')}`,
       params,
@@ -284,7 +364,7 @@ export const invoiceTrackingService = {
 
   async uploadDocuments(
     id: number,
-    files: DocumentFile[],
+    files: Array<Express.Multer.File | DocumentFile>,
     driverNote?: string,
     scope?: DataScope,
     currentUser?: { userId: number; role?: string; roleId?: number | null },
@@ -311,7 +391,7 @@ export const invoiceTrackingService = {
       );
     }
 
-    if (files.length === 0) {
+    if (!files || files.length === 0) {
       throw new InvoiceTrackingError('NO_FILES', 'Phải có ít nhất 1 file', 400);
     }
 
@@ -320,32 +400,90 @@ export const invoiceTrackingService = {
     }
 
     const allowedMimes = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
-    for (const file of files) {
-      if (!allowedMimes.includes(file.mime_type)) {
-        throw new InvoiceTrackingError(
-          'INVALID_MIME_TYPE',
-          `File "${file.file_name}" không đúng định dạng (chỉ chấp nhận JPG, PNG, PDF)`,
-          400,
-        );
-      }
+    const processedDocuments: DocumentFile[] = [];
+    const now = new Date().toISOString();
 
-      const sizeInBytes = Buffer.from(file.file_data, 'base64').length;
-      if (sizeInBytes > 5 * 1024 * 1024) {
-        throw new InvoiceTrackingError(
-          'FILE_TOO_LARGE',
-          `File "${file.file_name}" vượt quá kích thước tối đa 5MB`,
-          400,
-        );
+    for (const item of files) {
+      // Case 1: Multer file from multipart/form-data upload
+      if ('buffer' in item && item.buffer) {
+        const file = item as Express.Multer.File;
+        if (!allowedMimes.includes(file.mimetype)) {
+          throw new InvoiceTrackingError(
+            'INVALID_MIME_TYPE',
+            `File "${file.originalname}" không đúng định dạng (chỉ chấp nhận JPG, PNG, PDF)`,
+            400,
+          );
+        }
+
+        if (file.size > 50 * 1024 * 1024) {
+          throw new InvoiceTrackingError(
+            'FILE_TOO_LARGE',
+            `File "${file.originalname}" vượt quá kích thước tối đa 50MB`,
+            400,
+          );
+        }
+
+        const uploadRes = await storageService.upload(file.buffer, file.originalname, file.mimetype);
+        processedDocuments.push({
+          filename: uploadRes.filename,
+          original_filename: file.originalname,
+          file_name: file.originalname,
+          mime_type: file.mimetype,
+          file_size: file.size,
+          note: driverNote || undefined,
+          uploaded_at: now,
+        });
+      }
+      // Case 2: Base64 JSON fallback
+      else if ('file_data' in item && typeof (item as DocumentFile).file_data === 'string' && (item as DocumentFile).file_data) {
+        const doc = item as DocumentFile;
+        if (!allowedMimes.includes(doc.mime_type)) {
+          throw new InvoiceTrackingError(
+            'INVALID_MIME_TYPE',
+            `File "${doc.file_name}" không đúng định dạng (chỉ chấp nhận JPG, PNG, PDF)`,
+            400,
+          );
+        }
+
+        const buf = Buffer.from(doc.file_data as string, 'base64');
+        if (buf.length > 50 * 1024 * 1024) {
+          throw new InvoiceTrackingError(
+            'FILE_TOO_LARGE',
+            `File "${doc.file_name}" vượt quá kích thước tối đa 50MB`,
+            400,
+          );
+        }
+
+        try {
+          const uploadRes = await storageService.upload(buf, doc.file_name || 'document.jpg', doc.mime_type);
+          processedDocuments.push({
+            filename: uploadRes.filename,
+            original_filename: doc.file_name,
+            file_name: doc.file_name,
+            mime_type: doc.mime_type,
+            file_size: buf.length,
+            note: doc.note || driverNote || undefined,
+            uploaded_at: now,
+          });
+        } catch {
+          // Fallback to storing base64 if MinIO temporarily fails
+          processedDocuments.push({
+            ...doc,
+            uploaded_at: now,
+          });
+        }
+      }
+      // Case 3: Already processed reference
+      else if ('filename' in item && (item as DocumentFile).filename) {
+        processedDocuments.push({
+          ...(item as DocumentFile),
+          uploaded_at: now,
+        });
       }
     }
 
-    const documentsWithTimestamp = files.map((f) => ({
-      ...f,
-      uploaded_at: new Date().toISOString(),
-    }));
-
-    const existingDocs: DocumentFile[] = Array.isArray(ticket.documents) ? ticket.documents : [];
-    const newDocuments = [...existingDocs, ...documentsWithTimestamp];
+    const existingDocs = parseDocuments(ticket.documents);
+    const newDocuments = [...existingDocs, ...processedDocuments];
 
     // Determine target status via workflow transition
     const nextStatus = await workflowService.getNextStatus(
@@ -366,7 +504,7 @@ export const invoiceTrackingService = {
                  diem_nhan, tan, can, ghi_chu,
                  invoice_status, driver_id, dispatcher_id, documents,
                  supplement_note, driver_note, reviewed_at, completed_at,
-                 created_by, created_at, updated_at`,
+                 share_token, created_by, created_at, updated_at`,
       [JSON.stringify(newDocuments), driverNote ?? null, nextStatus, id],
     );
 
@@ -385,9 +523,9 @@ export const invoiceTrackingService = {
         details: {
           step: stepName,
           step_code: ticket.invoice_status,
-          file_count: files.length,
-          files: files.map((f) => ({
-            file_name: f.file_name,
+          file_count: processedDocuments.length,
+          files: processedDocuments.map((f) => ({
+            file_name: f.original_filename || f.file_name,
             mime_type: f.mime_type,
             note: f.note || null,
           })),
@@ -399,6 +537,176 @@ export const invoiceTrackingService = {
     }
 
     return updatedTicket;
+  },
+
+  async getCopyableTickets(
+    id: number,
+    scope?: DataScope,
+  ): Promise<CopyableTicket[]> {
+    const target = await this.getById(id, scope);
+
+    const result = await pool.query<DispatchSchedule>(
+      `SELECT id, ngay, loai_tuyen, loai_xe, xe_type, bien_so, tai_xe, vehicle_id,
+              diem_nhan, tan, can, ghi_chu,
+              invoice_status, documents,
+              driver_note, reviewed_at, completed_at, created_at
+       FROM dispatch_schedules
+       WHERE ngay = $1
+         AND id <> $2
+         AND invoice_status <> 'created'
+         AND documents IS NOT NULL
+         AND jsonb_typeof(documents) = 'array'
+         AND jsonb_array_length(documents) > 0
+       ORDER BY bien_so ASC, created_at ASC`,
+      [target.ngay, id],
+    );
+
+    return result.rows.map((row) => {
+      const rawDocs = parseDocuments(row.documents);
+      const previewDocs: DocumentFile[] = rawDocs.map((d) => ({
+        filename: d.filename,
+        original_filename: d.original_filename || d.file_name,
+        file_name: d.original_filename || d.file_name,
+        mime_type: d.mime_type,
+        file_data: d.file_data,
+        file_size: d.file_size,
+        note: d.note,
+        uploaded_at: d.uploaded_at,
+        source_ticket_id: d.source_ticket_id || row.id,
+        source_plate_number: d.source_plate_number || row.bien_so,
+      }));
+
+      return {
+        id: row.id,
+        ngay: row.ngay,
+        loai_tuyen: row.loai_tuyen,
+        loai_xe: row.loai_xe,
+        bien_so: row.bien_so,
+        tai_xe: row.tai_xe,
+        diem_nhan: row.diem_nhan,
+        invoice_status: row.invoice_status,
+        document_count: previewDocs.length,
+        documents: previewDocs,
+      };
+    });
+  },
+
+  async copyDocuments(
+    id: number,
+    sourceTicketId: number,
+    driverNote?: string,
+    scope?: DataScope,
+    currentUser?: { userId: number; role?: string; roleId?: number | null },
+  ): Promise<DispatchSchedule> {
+    const target = await this.getById(id, scope);
+
+    // Validate workflow authorization
+    if (currentUser) {
+      const authResult = await workflowService.authorizeAction(
+        'invoice_tracking',
+        target.invoice_status,
+        'upload_document',
+        currentUser,
+        target,
+      );
+      if (!authResult.authorized) {
+        throw new InvoiceTrackingError('FORBIDDEN', authResult.reason || 'Bạn không có quyền sao chép chứng từ ở bước này', 403);
+      }
+    } else if (target.invoice_status !== 'created' && target.invoice_status !== 'request_supplement') {
+      throw new InvoiceTrackingError('INVALID_STATUS', 'Không thể sao chép chứng từ khi ticket đã hoàn thành hoặc đang chờ duyệt', 400);
+    }
+
+    if (id === sourceTicketId) {
+      throw new InvoiceTrackingError('INVALID_SOURCE', 'Không thể sao chép từ chính chuyến xe này', 400);
+    }
+
+    const source = await this.getById(sourceTicketId);
+    if (normalizeDateString(source.ngay) !== normalizeDateString(target.ngay)) {
+      throw new InvoiceTrackingError('INVALID_DATE', 'Chỉ có thể sao chép chứng từ từ chuyến xe cùng ngày', 400);
+    }
+
+    const sourceDocs = parseDocuments(source.documents);
+    if (sourceDocs.length === 0) {
+      throw new InvoiceTrackingError('NO_DOCUMENTS', 'Chuyến xe nguồn chưa có chứng từ nào để sao chép', 400);
+    }
+
+    const now = new Date().toISOString();
+    const copiedDocs: DocumentFile[] = sourceDocs.map((doc) => ({
+      filename: doc.filename,
+      original_filename: doc.original_filename || doc.file_name,
+      file_name: doc.original_filename || doc.file_name,
+      mime_type: doc.mime_type,
+      file_data: doc.file_data,
+      file_size: doc.file_size,
+      note: doc.note || `Sao chép từ xe ${source.bien_so}`,
+      uploaded_at: now,
+      source_ticket_id: doc.source_ticket_id || source.id,
+      source_plate_number: doc.source_plate_number || source.bien_so,
+    }));
+
+    const existingDocs = parseDocuments(target.documents);
+    const newDocuments = [...existingDocs, ...copiedDocs];
+
+    const nextStatus = await workflowService.getNextStatus(
+      'invoice_tracking',
+      target.invoice_status,
+      'upload_document',
+      'pending_review',
+    );
+
+    const result = await pool.query<DispatchSchedule>(
+      `UPDATE dispatch_schedules
+       SET documents = $1,
+           driver_note = COALESCE($2, driver_note),
+           invoice_status = $3,
+           updated_at = NOW()
+       WHERE id = $4
+       RETURNING id, ngay, loai_tuyen, loai_xe, xe_type, bien_so, tai_xe, vehicle_id,
+                 diem_nhan, tan, can, ghi_chu,
+                 invoice_status, driver_id, dispatcher_id, documents,
+                 supplement_note, driver_note, reviewed_at, completed_at,
+                 share_token, created_by, created_at, updated_at`,
+      [JSON.stringify(newDocuments), driverNote ?? null, nextStatus, id],
+    );
+
+    const updatedTicket = result.rows[0];
+
+    if (currentUser) {
+      const stepName = target.invoice_status === 'request_supplement' ? 'Bổ sung chứng từ (Sao chép)' : 'Sao chép chứng từ';
+      auditService.logAudit({
+        userId: currentUser.userId,
+        username: currentUser.role || 'user',
+        action: 'UPLOAD_DOCUMENTS',
+        entityType: 'dispatch_schedule',
+        entityId: id,
+        entityLabel: `Xe ${target.bien_so} (${target.ngay})`,
+        details: {
+          step: stepName,
+          step_code: target.invoice_status,
+          is_copy: true,
+          source_ticket_id: source.id,
+          source_plate_number: source.bien_so,
+          file_count: copiedDocs.length,
+          files: copiedDocs.map((f) => ({
+            file_name: f.original_filename || f.file_name,
+            mime_type: f.mime_type,
+            note: f.note || null,
+          })),
+          driver_note: driverNote ?? null,
+          prev_status: target.invoice_status,
+          new_status: nextStatus,
+        },
+      });
+    }
+
+    return updatedTicket;
+  },
+
+  async serveFile(filename: string): Promise<string> {
+    if (!filename || typeof filename !== 'string' || !SAFE_FILENAME_REGEX.test(filename) || filename.includes('..')) {
+      throw new InvoiceTrackingError('INVALID_FILENAME', 'Tên tệp không hợp lệ', 400);
+    }
+    return storageService.getPublicUrl(filename);
   },
 
   async review(
@@ -686,6 +994,12 @@ export const invoiceTrackingService = {
       params.push(`%${filters.tai_xe.trim()}%`);
     }
 
+    if (filters.ghi_chu) {
+      conditions.push(`(ds.ghi_chu ILIKE $${paramIndex} OR ds.driver_note ILIKE $${paramIndex} OR ds.supplement_note ILIKE $${paramIndex})`);
+      params.push(`%${filters.ghi_chu.trim()}%`);
+      paramIndex++;
+    }
+
     const whereClause = `WHERE ${conditions.join(' AND ')}`;
 
     // Query aggregated statistics by driver
@@ -762,6 +1076,81 @@ export const invoiceTrackingService = {
         completion_rate: overallRate,
       },
       by_driver,
+    };
+  },
+
+  async getOrCreateShareToken(
+    id: number,
+    currentUser?: { userId: number; role?: string; roleId?: number | null },
+  ): Promise<{ share_token: string }> {
+    const ticket = await this.getById(id);
+
+    if (ticket.share_token) {
+      return { share_token: ticket.share_token };
+    }
+
+    const token = crypto.randomBytes(24).toString('hex');
+    await pool.query(
+      `UPDATE dispatch_schedules SET share_token = $1 WHERE id = $2`,
+      [token, id],
+    );
+
+    if (currentUser) {
+      auditService.logAudit({
+        userId: currentUser.userId,
+        username: currentUser.role || 'user',
+        action: 'SHARE_TICKET',
+        entityType: 'dispatch_schedule',
+        entityId: id,
+        entityLabel: `Xe ${ticket.bien_so} (${ticket.ngay})`,
+        details: { share_token: token },
+      });
+    }
+
+    return { share_token: token };
+  },
+
+  async getByShareToken(token: string): Promise<PublicInvoiceTicket> {
+    if (!token || typeof token !== 'string' || token.trim().length < 10) {
+      throw new InvoiceTrackingError('INVALID_TOKEN', 'Mã chia sẻ không hợp lệ', 400);
+    }
+
+    const result = await pool.query<DispatchSchedule>(
+      `SELECT id, ngay, loai_tuyen, loai_xe, xe_type, bien_so, tai_xe, vehicle_id,
+              diem_nhan, tan, can, ghi_chu,
+              invoice_status, documents,
+              driver_note, reviewed_at, completed_at,
+              created_at
+       FROM dispatch_schedules
+       WHERE share_token = $1`,
+      [token.trim()],
+    );
+
+    if (!result.rows[0]) {
+      throw new InvoiceTrackingError('NOT_FOUND', 'Liên kết chia sẻ không tồn tại hoặc đã hết hạn', 404);
+    }
+
+    const row = result.rows[0];
+    const docs = parseDocuments(row.documents);
+
+    return {
+      id: row.id,
+      ngay: row.ngay,
+      loai_tuyen: row.loai_tuyen,
+      loai_xe: row.loai_xe,
+      xe_type: row.xe_type,
+      bien_so: row.bien_so,
+      tai_xe: row.tai_xe,
+      diem_nhan: row.diem_nhan,
+      tan: row.tan,
+      can: row.can,
+      ghi_chu: row.ghi_chu,
+      invoice_status: row.invoice_status,
+      documents: docs,
+      driver_note: row.driver_note,
+      reviewed_at: row.reviewed_at,
+      completed_at: row.completed_at,
+      created_at: row.created_at,
     };
   },
 };

@@ -22,6 +22,7 @@ import {
   Clock,
   AlertTriangle,
   FileCheck,
+  FileText,
   TrendingUp,
 } from 'lucide-react';
 
@@ -31,6 +32,7 @@ export function InvoiceTrackingStatsTab() {
   const [dateTo, setDateTo] = useState('');
   const [bienSo, setBienSo] = useState('');
   const [taiXe, setTaiXe] = useState('');
+  const [note, setNote] = useState('');
 
   const filters = useMemo(
     () => ({
@@ -38,8 +40,9 @@ export function InvoiceTrackingStatsTab() {
       date_to: dateTo || undefined,
       bien_so: bienSo.trim() || undefined,
       tai_xe: taiXe.trim() || undefined,
+      ghi_chu: note.trim() || undefined,
     }),
-    [dateFrom, dateTo, bienSo, taiXe],
+    [dateFrom, dateTo, bienSo, taiXe, note],
   );
 
   const { data, isLoading, isError, refetch } = useInvoiceTrackingStatistics(filters);
@@ -49,9 +52,10 @@ export function InvoiceTrackingStatsTab() {
     setDateTo('');
     setBienSo('');
     setTaiXe('');
+    setNote('');
   };
 
-  const hasActiveFilters = Boolean(dateFrom || dateTo || bienSo || taiXe);
+  const hasActiveFilters = Boolean(dateFrom || dateTo || bienSo || taiXe || note);
 
   if (isError) {
     return (
@@ -105,7 +109,7 @@ export function InvoiceTrackingStatsTab() {
           </div>
         </CardHeader>
         <CardContent className="p-4 sm:p-5">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3 sm:gap-4">
             <div>
               <label className="block text-xs font-semibold text-neutral-600 dark:text-neutral-400 mb-1 flex items-center gap-1">
                 <Calendar className="w-3.5 h-3.5" />
@@ -151,6 +155,18 @@ export function InvoiceTrackingStatsTab() {
                 placeholder={t('invoice_tracking.stats.filters.driverPlaceholder')}
                 value={taiXe}
                 onChange={(e) => setTaiXe(e.target.value)}
+                className="h-10 text-sm"
+              />
+            </div>
+            <div className="sm:col-span-2 lg:col-span-1">
+              <label className="block text-xs font-semibold text-neutral-600 dark:text-neutral-400 mb-1 flex items-center gap-1">
+                <FileText className="w-3.5 h-3.5" />
+                {t('invoice_tracking.stats.filters.note')}
+              </label>
+              <Input
+                placeholder={t('invoice_tracking.stats.filters.notePlaceholder')}
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
                 className="h-10 text-sm"
               />
             </div>

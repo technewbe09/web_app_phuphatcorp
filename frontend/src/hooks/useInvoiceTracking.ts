@@ -3,7 +3,7 @@ import {
   invoiceTrackingApi,
   type InvoiceTrackingFilters,
   type InvoiceTrackingStatisticsFilters,
-  type UploadDocumentsRequest,
+  type CopyDocumentsRequest,
   type ReviewRequest,
 } from '../api/invoiceTrackingApi';
 
@@ -37,11 +37,32 @@ export function useInvoiceTrackingHistory(id: number | null) {
   });
 }
 
+export function useCopyableTickets(id: number | null) {
+  return useQuery({
+    queryKey: ['invoice-tracking', 'copyable-tickets', id],
+    queryFn: () => invoiceTrackingApi.getCopyableTickets(id!),
+    enabled: id !== null && !isNaN(id),
+  });
+}
+
 export function useUploadDocuments() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, data }: { id: number; data: UploadDocumentsRequest }) =>
+    mutationFn: ({ id, data }: { id: number; data: FormData | { files: File[]; driver_note?: string } }) =>
       invoiceTrackingApi.uploadDocuments(id, data),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['invoice-tracking'] });
+      queryClient.invalidateQueries({ queryKey: ['invoice-tracking', 'detail', variables.id] });
+      queryClient.invalidateQueries({ queryKey: ['invoice-tracking', 'history', variables.id] });
+    },
+  });
+}
+
+export function useCopyDocuments() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, data }: { id: number; data: CopyDocumentsRequest }) =>
+      invoiceTrackingApi.copyDocuments(id, data),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['invoice-tracking'] });
       queryClient.invalidateQueries({ queryKey: ['invoice-tracking', 'detail', variables.id] });
@@ -60,5 +81,24 @@ export function useReviewTicket() {
       queryClient.invalidateQueries({ queryKey: ['invoice-tracking', 'detail', variables.id] });
       queryClient.invalidateQueries({ queryKey: ['invoice-tracking', 'history', variables.id] });
     },
+  });
+}
+
+export function useCreateShareLink() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => invoiceTrackingApi.createShareLink(id),
+    onSuccess: (_, id) => {
+      queryClient.invalidateQueries({ queryKey: ['invoice-tracking', 'detail', id] });
+    },
+  });
+}
+
+export function usePublicTicket(token: string | null | undefined) {
+  return useQuery({
+    queryKey: ['public-ticket', token],
+    queryFn: () => invoiceTrackingApi.getPublicTicket(token!),
+    enabled: !!token && token.trim().length >= 10,
+    retry: 1,
   });
 }

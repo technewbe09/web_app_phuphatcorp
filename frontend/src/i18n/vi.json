@@ -763,9 +763,23 @@
         "platePlaceholder": "Nhập biển số...",
         "driver": "Tên tài xế",
         "driverPlaceholder": "Nhập tên tài xế...",
+        "note": "Ghi chú",
+        "notePlaceholder": "Nhập nội dung ghi chú...",
         "clear": "Xóa bộ lọc"
       },
       "empty": "Không có dữ liệu thống kê cho bộ lọc này."
+    },
+    "copy": {
+      "button": "Sao chép từ chuyến khác",
+      "title": "Sao chép chứng từ cùng ngày",
+      "searchPlaceholder": "Tìm theo biển số xe, tài xế, điểm nhận...",
+      "selectTrip": "Chọn chuyến xe để lấy chứng từ:",
+      "empty": "Chưa có chuyến xe nào khác cùng ngày đã tải lên chứng từ.",
+      "copiedFrom": "Sao chép từ xe {{plate}}",
+      "confirmSubmit": "Xác nhận sao chép",
+      "driverNoteLabel": "Ghi chú tài xế (tùy chọn)",
+      "driverNotePlaceholder": "Ví dụ: Đi chung điểm nhận hàng với xe...",
+      "successMessage": "Đã sao chép chứng từ thành công!"
     },
     "page": {
       "title": "Theo dõi hóa đơn",
@@ -774,7 +788,7 @@
       "retry": "Thử lại"
     },
     "filter": {
-      "searchPlaceholder": "Tìm theo biển số, tài xế, mã chuyến...",
+      "searchPlaceholder": "Tìm theo biển số, tài xế, điểm nhận, ghi chú...",
       "statusAll": "Tất cả trạng thái",
       "statusCreated": "Tạo mới",
       "statusPendingReview": "Chờ duyệt",
@@ -789,6 +803,7 @@
       "maChuyen": "Mã chuyến",
       "diemNhan": "Điểm nhận",
       "diemTra": "Điểm trả",
+      "ghiChu": "Ghi chú",
       "status": "Trạng thái",
       "actions": "Thao tác"
     },
@@ -797,6 +812,7 @@
       "tripInfo": "Thông tin chuyến xe",
       "statusHistory": "Trạng thái & Lịch sử",
       "documents": "Chứng từ",
+      "downloadAll": "Tải tất cả",
       "driverNote": "Ghi chú tài xế",
       "supplementNote": "Yêu cầu bổ sung",
       "reviewedAt": "Duyệt lúc",
@@ -809,6 +825,8 @@
       "finish": "Hoàn thành",
       "requestSupplement": "Yêu cầu bổ sung",
       "view": "Xem",
+      "share": "Chia sẻ",
+      "copied": "Đã chép link!",
       "cancel": "Hủy",
       "submit": "Gửi",
       "confirm": "Xác nhận",

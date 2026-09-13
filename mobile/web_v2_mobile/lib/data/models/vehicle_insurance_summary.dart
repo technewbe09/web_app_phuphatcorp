@@ -57,7 +57,7 @@ class VehicleInsuranceSummary {
   int? get daysLeft {
     if (latestExpiryDate == null || latestExpiryDate!.isEmpty) return null;
     try {
-      final expiry = DateTime.parse(latestExpiryDate!);
+      final expiry = DateTime.parse(latestExpiryDate!).toLocal();
       final today = DateTime.now();
       final todayMidnight = DateTime(today.year, today.month, today.day);
       final expiryMidnight = DateTime(expiry.year, expiry.month, expiry.day);

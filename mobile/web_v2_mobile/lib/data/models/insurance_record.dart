@@ -123,7 +123,7 @@ class InsuranceRecord {
   /// Tính số ngày còn lại đến hạn
   int get daysLeft {
     try {
-      final expiry = DateTime.parse(expiryDate);
+      final expiry = DateTime.parse(expiryDate).toLocal();
       final today = DateTime.now();
       final todayMidnight = DateTime(today.year, today.month, today.day);
       final expiryMidnight = DateTime(expiry.year, expiry.month, expiry.day);

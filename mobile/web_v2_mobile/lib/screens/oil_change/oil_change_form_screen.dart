@@ -47,7 +47,7 @@ class _OilChangeFormScreenState extends State<OilChangeFormScreen> {
       final rec = widget.record!;
       _selectedVehicleId = rec.vehicleId;
       try {
-        _changeDate = DateTime.parse(rec.changeDate);
+        _changeDate = DateTime.parse(rec.changeDate).toLocal();
       } catch (_) {
         _changeDate = DateTime.now();
       }

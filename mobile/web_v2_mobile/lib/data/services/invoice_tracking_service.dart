@@ -100,6 +100,64 @@ class InvoiceTrackingService {
     }
   }
 
+  Future<List<CopyableTicket>> fetchCopyableTickets(int id) async {
+    try {
+      final response = await _apiClient.dio.get(
+        ApiEndpoints.invoiceTrackingCopyableTickets(id),
+      );
+
+      final dynamic body = response.data;
+      if (body is Map && body['success'] == true && body['data'] is List) {
+        return (body['data'] as List)
+            .map((e) => CopyableTicket.fromJson(e as Map<String, dynamic>))
+            .toList();
+      }
+      return [];
+    } on DioException catch (e) {
+      if (e.response?.data is Map) {
+        final msg = e.response?.data['message'];
+        if (msg != null) throw Exception(msg);
+      }
+      throw Exception('Không thể tải danh sách chuyến xe cùng ngày.');
+    } catch (e) {
+      throw Exception(e.toString().replaceAll('Exception: ', ''));
+    }
+  }
+
+  Future<InvoiceTrackingTicket> copyDocuments({
+    required int id,
+    required int sourceTicketId,
+    String? driverNote,
+  }) async {
+    try {
+      final response = await _apiClient.dio.post(
+        ApiEndpoints.invoiceTrackingCopyDocuments(id),
+        data: {
+          'source_ticket_id': sourceTicketId,
+          if (driverNote != null && driverNote.trim().isNotEmpty)
+            'driver_note': driverNote.trim(),
+        },
+      );
+
+      final dynamic body = response.data;
+      if (body is Map && body['success'] == true && body['data'] != null) {
+        return InvoiceTrackingTicket.fromJson(body['data']);
+      } else if (body is Map && body['message'] != null) {
+        throw Exception(body['message']);
+      } else {
+        throw Exception('Sao chép chứng từ thất bại.');
+      }
+    } on DioException catch (e) {
+      if (e.response?.data is Map) {
+        final msg = e.response?.data['message'];
+        if (msg != null) throw Exception(msg);
+      }
+      throw Exception('Lỗi sao chép chứng từ từ máy chủ.');
+    } catch (e) {
+      throw Exception(e.toString().replaceAll('Exception: ', ''));
+    }
+  }
+
   Future<InvoiceTrackingTicket> uploadDocuments({
     required int id,
     required List<DocumentFile> files,
