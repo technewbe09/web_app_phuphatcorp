@@ -16,6 +16,7 @@ import { DriverInvoicesPage } from './pages/admin/accounting-data/DriverInvoices
 import { RiceDeliveryDataPage } from './pages/admin/RiceDeliveryDataPage';
 import { DeliveryImportPage } from './pages/admin/accounting-data/DeliveryImportPage';
 import { InvoiceMatchingPage } from './pages/admin/accounting-data/InvoiceMatchingPage';
+import { BangKeThoPage } from './pages/admin/accounting-data/BangKeThoPage';
 import { VehicleCatalogPage } from './pages/admin/catalog/VehicleCatalogPage';
 import { VehicleDetailPage } from './pages/admin/catalog/VehicleDetailPage';
 import { InnerCityCustomerPage } from './pages/admin/catalog/InnerCityCustomerPage';
@@ -87,6 +88,7 @@ export function Router() {
             <Route path="/accounting-data/customers" element={<CustomersPage />} />
             <Route path="/accounting-data/delivery-import" element={<DeliveryImportPage />} />
             <Route path="/accounting-data/invoice-matching" element={<InvoiceMatchingPage />} />
+            <Route path="/accounting-data/bang-ke-tho" element={<BangKeThoPage />} />
             {/* Jobs */}
             <Route path="/accounting-data/reconcile-jobs" element={<Navigate to="/jobs/reconcile" replace />} />
             <Route path="/jobs/reconcile" element={<ReconcileJobPage />} />

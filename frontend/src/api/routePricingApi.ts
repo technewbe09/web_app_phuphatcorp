@@ -15,7 +15,7 @@ export interface Ward {
 
 export interface DeliveryRoute {
   id: number;
-  supplier_id: number;
+  price_book_id: number;
   province_code: string;
   ward_code: string | null;
   location_text: string | null;
@@ -39,7 +39,7 @@ export interface RouteGroupMember {
 
 export interface RouteGroup {
   id: number;
-  supplier_id: number;
+  price_book_id: number;
   name: string;
   province_code: string;
   tinh: string;
@@ -48,7 +48,7 @@ export interface RouteGroup {
   members: RouteGroupMember[];
 }
 
-export type PricingMode = 'by_weight' | 'by_trips';
+export type PricingMode = 'by_weight' | 'by_trips' | 'by_truck';
 
 export interface AdjustmentPeriod {
   id: number;
@@ -61,11 +61,12 @@ export interface AdjustmentPeriod {
 }
 
 export interface PriceTierInput {
-  range_from: number;
+  range_from?: number;
   range_to?: number | null;
   pricing_unit: 'chuyen' | 'tan';
   price: number;
   min_billable_ton?: number | null;
+  label?: string | null;
 }
 
 export interface RoutePriceVersion {
@@ -110,7 +111,7 @@ export interface PriceMatrixPeriod {
 
 export interface PriceMatrixWeightColumn {
   key: string;
-  kind: 'pallet' | 'weight';
+  kind: 'pallet' | 'weight' | 'truck';
   label: string;
   unit_label: string;
   hint?: string | null;
@@ -150,7 +151,14 @@ export interface PriceMatrixTripsRow {
 export interface PriceMatrixResponse {
   periods: PriceMatrixPeriod[];
   weight_tables: PriceMatrixWeightTable[];
+  truck_tables?: PriceMatrixWeightTable[];
   trips: { rows: PriceMatrixTripsRow[] };
+}
+
+export interface PriceBook {
+  id: number;
+  name: string;
+  status: string;
 }
 
 export const routePricingApi = {
@@ -166,8 +174,27 @@ export const routePricingApi = {
     return res.data.data;
   },
 
+  listPriceBooks: async (): Promise<PriceBook[]> => {
+    const res = await axiosClient.get<{ data: PriceBook[] }>('/route-pricing/price-books');
+    return res.data.data;
+  },
+
+  createPriceBook: async (name: string): Promise<PriceBook> => {
+    const res = await axiosClient.post<{ data: PriceBook }>('/route-pricing/price-books', { name });
+    return res.data.data;
+  },
+
+  updatePriceBook: async (id: number, name: string): Promise<PriceBook> => {
+    const res = await axiosClient.put<{ data: PriceBook }>(`/route-pricing/price-books/${id}`, { name });
+    return res.data.data;
+  },
+
+  deletePriceBook: async (id: number): Promise<void> => {
+    await axiosClient.delete(`/route-pricing/price-books/${id}`);
+  },
+
   listRoutes: async (params: {
-    supplier_id: number;
+    price_book_id: number;
     search?: string;
     province_code?: string;
   }): Promise<DeliveryRoute[]> => {
@@ -176,7 +203,7 @@ export const routePricingApi = {
   },
 
   createRoute: async (body: {
-    supplier_id: number;
+    price_book_id: number;
     province_code: string;
     ward_code?: string | null;
     location_text?: string | null;
@@ -204,7 +231,7 @@ export const routePricingApi = {
   },
 
   listGroups: async (params: {
-    supplier_id: number;
+    price_book_id: number;
     province_code?: string;
     search?: string;
   }): Promise<RouteGroup[]> => {
@@ -213,7 +240,7 @@ export const routePricingApi = {
   },
 
   createGroup: async (body: {
-    supplier_id: number;
+    price_book_id: number;
     province_code: string;
     ward_codes?: string[];
     location_text?: string | null;
@@ -240,7 +267,7 @@ export const routePricingApi = {
   },
 
   listPrices: async (params: {
-    supplier_id: number;
+    price_book_id: number;
     route_group_id?: number;
   }): Promise<RoutePriceConfigSummary[]> => {
     const res = await axiosClient.get<{ data: RoutePriceConfigSummary[] }>('/route-pricing/prices', {
@@ -249,9 +276,9 @@ export const routePricingApi = {
     return res.data.data;
   },
 
-  getPriceMatrix: async (supplier_id: number): Promise<PriceMatrixResponse> => {
+  getPriceMatrix: async (price_book_id: number): Promise<PriceMatrixResponse> => {
     const res = await axiosClient.get<{ data: PriceMatrixResponse }>('/route-pricing/prices/matrix', {
-      params: { supplier_id },
+      params: { price_book_id },
     });
     return res.data.data;
   },

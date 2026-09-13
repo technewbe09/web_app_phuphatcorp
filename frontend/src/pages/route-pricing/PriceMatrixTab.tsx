@@ -107,8 +107,8 @@ function useStickyLeftOffsets(columnCount: number) {
   return { lefts, registerCell };
 }
 
-export function PriceMatrixTab({ supplierId }: { supplierId: number }) {
-  const { data, isLoading, isError, refetch } = usePriceMatrix(supplierId);
+export function PriceMatrixTab({ priceBookId }: { priceBookId: number }) {
+  const { data, isLoading, isError, refetch } = usePriceMatrix(priceBookId);
   const [fromPeriodId, setFromPeriodId] = useState('');
 
   if (isLoading) {
@@ -127,6 +127,7 @@ export function PriceMatrixTab({ supplierId }: { supplierId: number }) {
 
   const periods = data?.periods ?? [];
   const weightTables = data?.weight_tables ?? [];
+  const truckTables = data?.truck_tables ?? [];
   const tripsRows = data?.trips.rows ?? [];
 
   if (periods.length === 0) {
@@ -137,7 +138,7 @@ export function PriceMatrixTab({ supplierId }: { supplierId: number }) {
     );
   }
 
-  if (weightTables.length === 0 && tripsRows.length === 0) {
+  if (weightTables.length === 0 && truckTables.length === 0 && tripsRows.length === 0) {
     return (
       <p className="text-sm text-neutral-500">
         Chưa có nhóm tuyến nào có bảng giá. Tạo giá ở tab Quản lý giá.
@@ -149,6 +150,7 @@ export function PriceMatrixTab({ supplierId }: { supplierId: number }) {
     <PriceMatrixContent
       periods={periods}
       weightTables={weightTables}
+      truckTables={truckTables}
       tripsRows={tripsRows}
       fromPeriodId={fromPeriodId}
       onFromPeriodChange={setFromPeriodId}
@@ -159,12 +161,14 @@ export function PriceMatrixTab({ supplierId }: { supplierId: number }) {
 function PriceMatrixContent({
   periods,
   weightTables,
+  truckTables,
   tripsRows,
   fromPeriodId,
   onFromPeriodChange,
 }: {
   periods: PriceMatrixPeriod[];
   weightTables: PriceMatrixWeightTable[];
+  truckTables: PriceMatrixWeightTable[];
   tripsRows: PriceMatrixTripsRow[];
   fromPeriodId: string;
   onFromPeriodChange: (id: string) => void;
@@ -215,6 +219,21 @@ function PriceMatrixContent({
         </section>
       )}
 
+      {truckTables.length > 0 && (
+        <section className="space-y-6">
+          <h2 className="text-sm font-medium text-neutral-800 dark:text-neutral-200">
+            Theo loại xe
+          </h2>
+          {truckTables.map((table) => (
+            <PriceMatrixWeightTableView
+              key={table.schema_key}
+              periods={visiblePeriods}
+              table={table}
+            />
+          ))}
+        </section>
+      )}
+
       {tripsRows.length > 0 && (
         <section className="space-y-3">
           <h2 className="text-sm font-medium text-neutral-800 dark:text-neutral-200">
@@ -235,10 +254,13 @@ function PriceMatrixWeightTableView({
   table: PriceMatrixWeightTable;
 }) {
   const cols = table.columns;
+  const hideCaption = cols.some((c) => c.kind === 'truck') || !table.schema_label;
   const { lefts, registerCell } = useStickyLeftOffsets(2);
   return (
     <div className="space-y-2">
-      <p className="text-xs text-neutral-500">{table.schema_label}</p>
+      {!hideCaption && (
+        <p className="text-xs text-neutral-500">{table.schema_label}</p>
+      )}
       <div className="overflow-auto rounded-lg border border-neutral-200 dark:border-neutral-700 max-h-[70vh]">
         <table className="min-w-max border-separate border-spacing-0 text-xs">
           <thead>
@@ -274,7 +296,11 @@ function PriceMatrixWeightTableView({
                 cols.map((col) => (
                   <th
                     key={`${p.id}-${col.key}-label`}
-                    className={`border border-neutral-200 dark:border-neutral-700 px-2 py-1 whitespace-pre-line min-w-[88px] ${periodTone(i)}`}
+                    className={`border border-neutral-200 dark:border-neutral-700 px-2 py-1 min-w-[88px] ${
+                      col.kind === 'truck'
+                        ? 'max-w-[10rem] break-words whitespace-normal'
+                        : 'whitespace-pre-line'
+                    } ${periodTone(i)}`}
                   >
                     {col.label}
                     {col.hint ? (
