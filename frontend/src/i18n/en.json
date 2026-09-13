@@ -206,7 +206,12 @@
       "tuyenCu": "Route (Old)",
       "diaChiGiaoHang": "Delivery Address",
       "bocXep": "Loading",
+      "nhaCungCap": "Supplier",
       "actions": "Actions"
+    },
+    "actions": {
+      "edit": "Edit",
+      "delete": "Delete"
     },
     "bocXep": {
       "true": "Yes",

@@ -209,6 +209,10 @@
       "nhaCungCap": "Nhà cung cấp",
       "actions": "Hành động"
     },
+    "actions": {
+      "edit": "Sửa",
+      "delete": "Xóa"
+    },
     "bocXep": {
       "true": "Có",
       "false": "Không"
