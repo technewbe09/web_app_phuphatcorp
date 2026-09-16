@@ -12,6 +12,7 @@ import {
   priceBookDeleteSchema,
   priceBookUpdateSchema,
   priceCreateSchema,
+  priceManualAdjustSchema,
   priceUpdateAbsoluteSchema,
   pricesListSchema,
   pricesMatrixSchema,
@@ -158,6 +159,12 @@ router.put(
   requirePermission('route_pricing.manage'),
   ...validate(priceUpdateAbsoluteSchema),
   routePricingController.updateAbsolutePrice,
+);
+router.put(
+  '/prices/versions/:versionId/manual-adjust',
+  requirePermission('route_pricing.manage'),
+  ...validate(priceManualAdjustSchema),
+  routePricingController.manualAdjustVersion,
 );
 
 router.get(

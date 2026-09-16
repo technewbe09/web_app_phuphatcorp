@@ -774,14 +774,36 @@
       "cancel": "Hủy",
       "save": "Lưu"
     },
+    "manage": {
+      "adjustPrice": "Điều chỉnh giá",
+      "adjustPricePeriod": "Điều chỉnh giá — {date}",
+      "adjustHint": "Chỉ sửa đơn giá. Các kỳ sau sẽ được tính lại theo % của từng kỳ (làm tròn nghìn).",
+      "saveAdjust": "Lưu",
+      "confirmTitle": "Xác nhận điều chỉnh giá",
+      "confirmChanges": "Các ô thay đổi",
+      "confirmLaterPeriods": "Các kỳ sau sẽ được tính lại theo %",
+      "confirmNoLater": "Không có kỳ sau để cascade.",
+      "confirmLoseMark": "sẽ mất dấu đã điều chỉnh trên ô vừa sửa",
+      "confirmSubmit": "Xác nhận",
+      "palletAdjustedToZero": "Pallet được điều chỉnh về 0",
+      "manualMarkTitle": "Đã điều chỉnh",
+      "priceZeroDisplay": "-"
+    },
+    "validation": {
+      "priceRequired": "Nhập đơn giá",
+      "priceMin0": "Giá phải ≥ 0",
+      "priceInvalid": "Giá không hợp lệ"
+    },
     "message": {
       "success": {
         "createBook": "Đã tạo bảng giá",
         "renameBook": "Đã đổi tên bảng giá",
-        "deleteBook": "Đã xóa bảng giá"
+        "deleteBook": "Đã xóa bảng giá",
+        "manualAdjust": "Đã điều chỉnh giá"
       },
       "error": {
-        "deleteBook": "Không xóa được bảng giá"
+        "deleteBook": "Không xóa được bảng giá",
+        "manualAdjust": "Không điều chỉnh được giá"
       }
     }
   },

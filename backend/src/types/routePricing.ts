@@ -71,6 +71,12 @@ export interface RoutePriceTier {
   min_billable_ton?: number | null;
   sort_order?: number;
   label?: string | null;
+  is_manual_adjusted?: boolean;
+}
+
+export interface PriceMatrixCell {
+  value: number | null;
+  manual_adjusted: boolean;
 }
 
 export interface AdjustmentPeriod {
@@ -92,6 +98,7 @@ export interface RoutePriceVersion {
   effective_to: string | null;
   pricing_mode: PricingMode;
   pallet_trip_price: number;
+  pallet_manual_adjusted: boolean;
   /** Derived: period.percent when base_version_id set; else null */
   adjustment_percent: number | null;
   base_version_id: number | null;
@@ -153,7 +160,7 @@ export interface PriceMatrixWeightRow {
   is_residual: boolean;
   province_code: string;
   tinh: string;
-  cells: Record<string, Record<string, number | null>>;
+  cells: Record<string, Record<string, PriceMatrixCell>>;
 }
 
 export interface PriceMatrixWeightTable {
@@ -174,7 +181,7 @@ export interface PriceMatrixTripsRow {
   trips_label: string;
   range_from: number | null;
   range_to: number | null;
-  cells: Record<string, number | null>;
+  cells: Record<string, PriceMatrixCell>;
 }
 
 export interface PriceMatrixResponse {

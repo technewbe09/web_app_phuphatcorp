@@ -1048,12 +1048,14 @@ delivery_routes (… ward_code XOR location_text, note …) + route_group_member
 route_price_configs (id, route_group_id, status, …)
 route_price_versions (
   id, price_config_id, pricing_mode ('by_weight'|'by_trips'|'by_truck'),
-  pallet_trip_price, base_version_id nullable,
+  pallet_trip_price, pallet_manual_adjusted BOOLEAN DEFAULT FALSE,
+  base_version_id nullable,
   adjustment_period_id NOT NULL FK → periods,
   created_by, created_at
 )
 route_price_tiers (
-  id, price_version_id, range_from, range_to, pricing_unit, price, min_billable_ton, sort_order, label
+  id, price_version_id, range_from, range_to, pricing_unit, price, min_billable_ton, sort_order, label,
+  is_manual_adjusted BOOLEAN DEFAULT FALSE
 )
 ```
 
@@ -1064,10 +1066,11 @@ route_price_tiers (
 - BR-004: Nhóm tuyến scoped theo **bảng giá** (`price_books`); đích = Phường/Xã **XOR** Địa điểm text **XOR** Còn lại tỉnh; `note` optional (ảnh hưởng tên + unique). User tạo/đặt tên bảng giá tự do.
 - BR-005: Mỗi nhóm chỉ nhập **bảng giá gốc** 1 lần; bắt buộc chọn `adjustment_period_id` (kỳ gốc); BE cascade tạo version cho mọi kỳ `start > kỳ gốc`.
 - BR-006: Version gắn `adjustment_period_id`; ngày hiệu lực / `%` derive từ kỳ (không lưu trùng trên version). Không có cột `note` trên `route_price_versions` — ghi chú chỉ ở kỳ / nhóm / tuyến.
-- BR-007: Sửa giá gốc → recompute cascade các kỳ sau.
-- BR-008: Tab **Ma trận giá** = ma trận (`GET /prices/matrix?price_book_id=`): weight gom schema exact hoặc tập con (cột = union, ô thiếu trống) + Pallet cuối; `by_truck` = `truck_tables[]` (fingerprint thứ tự nhãn+đơn vị, không merge subset, Pallet cuối); trips = hàng tuyến×bậc (không Pallet), cột = kỳ.
-- BR-009: Tab **Quản lý giá** = CRUD/lịch sử version (badge mode + gốc/điều chỉnh ±%).
+- BR-007: Sửa giá gốc → recompute cascade các kỳ sau (xóa + rebuild; không gắn dấu mới; giữ dấu absolute chỉ khi giá không đổi).
+- BR-008: Tab **Ma trận giá** = ma trận (`GET /prices/matrix?price_book_id=`): weight gom schema exact hoặc tập con (cột = union, ô thiếu trống) + Pallet cuối; `by_truck` = `truck_tables[]` (fingerprint thứ tự nhãn+đơn vị, không merge subset, Pallet cuối); trips = hàng tuyến×bậc (không Pallet), cột = kỳ. Cell = `{ value, manual_adjusted }`; UI hiện `-` khi value=0; highlight khi manual.
+- BR-009: Tab **Quản lý giá** = CRUD/lịch sử version (badge mode + gốc/điều chỉnh ±%) + **bút chì điều chỉnh giá kỳ** (cascade kỳ sau, đánh dấu ô sửa tay).
 - BR-010: `GET /route-pricing/lookup` **deferred** (501 LOOKUP_DEFERRED) — CR riêng.
+- BR-011: Giá bậc và Pallet ≥ 0. Manual adjust: `PUT /prices/versions/:versionId/manual-adjust`; cờ `pallet_manual_adjusted` / `is_manual_adjusted`.
 
 **Flow — sử dụng chính:**
 ```
@@ -1081,6 +1084,7 @@ Chọn Bảng giá
         → by_truck: nhãn text tự do, đơn vị chuyến/tấn, không khoảng số
         → BE cascade versions kỳ sau
       → Sửa giá gốc → recompute cascade
+      → Bút chì trên từng kỳ → sửa đơn giá + confirm → cascade kỳ sau + đánh dấu
   → Tab Ma trận giá: xem ma trận weight_tables[] + truck_tables[] + trips.rows
 ```
 
@@ -1095,6 +1099,7 @@ GET/POST/PUT/DELETE /api/route-pricing/groups
 GET/POST        /api/route-pricing/prices
 GET             /api/route-pricing/prices/matrix?price_book_id=
 PUT             /api/route-pricing/prices/groups/:routeGroupId/absolute
+PUT             /api/route-pricing/prices/versions/:versionId/manual-adjust
 GET             /api/route-pricing/prices/:configId/versions
 GET             /api/route-pricing/lookup   -- 501 LOOKUP_DEFERRED
 ```
@@ -1106,6 +1111,7 @@ backend/src/migrations/041_seed_route_pricing_permissions.sql
 backend/src/migrations/042_route_pricing_adjustment_periods.sql
 backend/src/migrations/044_route_pricing_price_books.sql
 backend/src/migrations/045_route_pricing_by_truck.sql
+backend/src/migrations/046_route_pricing_manual_adjust.sql
 backend/src/services/routePricingService.ts
 backend/src/controllers/routePricingController.ts
 backend/src/routes/routePricing.ts
@@ -1115,10 +1121,12 @@ frontend/src/api/routePricingApi.ts
 frontend/src/hooks/useRoutePricing.ts
 frontend/src/pages/route-pricing/RoutePricingPage.tsx
 frontend/src/pages/route-pricing/PriceMatrixTab.tsx
+frontend/src/pages/route-pricing/PeriodPriceAdjustModal.tsx
+frontend/src/pages/route-pricing/priceDisplay.ts
 ```
 
 **Access:** `route_pricing.view` (xem) / `route_pricing.manage` (CRUD). Route: `/route-pricing`  
-**BA / UI:** `docs/ba/20260911_route-pricing-price-books-cr.md`, `docs/ui/20260911_route-pricing-price-books-cr-ui-spec.md`, `docs/ba/20260711_route-pricing-analysis.md`, `docs/ba/20260731_route-pricing-price-matrix-view-analysis.md`, `docs/ba/20260912_route-pricing-by-truck-analysis.md`, `docs/ui/20260912_route-pricing-by-truck-ui-spec.md`
+**BA / UI:** `docs/ba/20260911_route-pricing-price-books-cr.md`, `docs/ui/20260911_route-pricing-price-books-cr-ui-spec.md`, `docs/ba/20260711_route-pricing-analysis.md`, `docs/ba/20260731_route-pricing-price-matrix-view-analysis.md`, `docs/ba/20260912_route-pricing-by-truck-analysis.md`, `docs/ui/20260912_route-pricing-by-truck-ui-spec.md`, `docs/ba/20260915_route-pricing-period-manual-adjust-analysis.md`, `docs/ui/20260915_route-pricing-period-manual-adjust-ui-spec.md`
 
 ---
 

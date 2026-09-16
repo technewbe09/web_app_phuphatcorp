@@ -287,7 +287,7 @@ describe('CR: by_truck', () => {
     ).rejects.toMatchObject({ code: 'INVALID_TIERS' });
   });
 
-  it('rejects min_billable_ton and non-positive price', async () => {
+  it('rejects min_billable_ton and negative price', async () => {
     await expect(
       routePricingService.createAbsolutePrice(
         {
@@ -316,11 +316,38 @@ describe('CR: by_truck', () => {
           adjustment_period_id: 1,
           pricing_mode: 'by_truck',
           pallet_trip_price: 0,
-          tiers: [{ range_from: 0, range_to: null, label: 'Truck 1,5mt', pricing_unit: 'chuyen', price: 0 }],
+          tiers: [{ range_from: 0, range_to: null, label: 'Truck 1,5mt', pricing_unit: 'chuyen', price: -1 }],
         },
         1,
       ),
     ).rejects.toMatchObject({ code: 'INVALID_TIERS' });
+  });
+
+  it('accepts tier price 0 (validation only — fails later without period fixture)', async () => {
+    mockClient.query
+      .mockResolvedValueOnce({ rows: [] } as never) // BEGIN
+      .mockResolvedValueOnce({ rows: [] } as never) // period missing
+      .mockResolvedValueOnce({ rows: [] } as never); // ROLLBACK
+    await expect(
+      routePricingService.createAbsolutePrice(
+        {
+          route_group_id: 10,
+          adjustment_period_id: 1,
+          pricing_mode: 'by_truck',
+          pallet_trip_price: 0,
+          tiers: [{ range_from: 0, range_to: null, label: 'Truck 1,5mt', pricing_unit: 'chuyen', price: 0 }],
+        },
+        1,
+      ),
+    ).rejects.toMatchObject({ code: 'PERIOD_REQUIRED' });
+  });
+});
+
+describe('Manual adjust cascade math', () => {
+  it('scales with roundToThousands like service cascade', () => {
+    const next = roundToThousands(2_000_000 * (1 + 5 / 100));
+    expect(next).toBe(2_100_000);
+    expect(roundToThousands(1_084_500)).toBe(1_085_000);
   });
 });
 

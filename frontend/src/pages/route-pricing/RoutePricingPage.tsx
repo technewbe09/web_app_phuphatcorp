@@ -12,6 +12,8 @@ import {
   useWards,
 } from '../../hooks/useRoutePricing';
 import { PriceMatrixTab } from './PriceMatrixTab';
+import { PeriodPriceAdjustModal } from './PeriodPriceAdjustModal';
+import { formatPriceDisplay, formatTierRangeLabel } from './priceDisplay';
 import { useAuth } from '../../hooks/useAuth';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
@@ -813,6 +815,9 @@ function PricesTab({
   } = usePriceVersions(configId);
   const [formOpen, setFormOpen] = useState(false);
   const [editAbsolute, setEditAbsolute] = useState(false);
+  const [adjustVersion, setAdjustVersion] = useState<RoutePriceVersion | null>(null);
+  const mutations = useRoutePricingMutations(priceBookId);
+  const { t } = useI18n();
 
   const groupMeta = groups.find((g) => g.id === groupId);
   const absoluteVersion = versions.find(
@@ -889,6 +894,8 @@ function PricesTab({
                   version={v}
                   isCurrent={v.effective_to == null}
                   isOldest={idx === versions.length - 1}
+                  canManage={canManage}
+                  onAdjust={() => setAdjustVersion(v)}
                 />
               ))}
             </div>
@@ -908,6 +915,29 @@ function PricesTab({
           onClose={() => setEditAbsolute(false)}
         />
       )}
+      {adjustVersion && (
+        <PeriodPriceAdjustModal
+          version={adjustVersion}
+          laterVersions={versions.filter(
+            (v) => String(v.effective_from) > String(adjustVersion.effective_from),
+          )}
+          onClose={() => setAdjustVersion(null)}
+          isSubmitting={mutations.manualAdjustVersion.isPending}
+          onConfirm={(body) => {
+            mutations.manualAdjustVersion.mutate(
+              { versionId: adjustVersion.id, ...body },
+              {
+                onSuccess: () => {
+                  toast(t('routePricing.message.success.manualAdjust'));
+                  setAdjustVersion(null);
+                },
+                onError: (e) =>
+                  toast(apiError(e, t('routePricing.message.error.manualAdjust')), true),
+              },
+            );
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -916,12 +946,18 @@ function PriceVersionCard({
   version,
   isCurrent,
   isOldest,
+  canManage,
+  onAdjust,
 }: {
   version: RoutePriceVersion;
   isCurrent: boolean;
   isOldest: boolean;
+  canManage?: boolean;
+  onAdjust?: () => void;
 }) {
-  const showPallet = Number(version.pallet_trip_price) > 0;
+  const { t } = useI18n();
+  const palletManual = Boolean(version.pallet_manual_adjusted);
+  const showPallet = Number(version.pallet_trip_price) > 0 || palletManual;
   const mode: PricingMode = version.pricing_mode ?? 'by_weight';
   const rangeHeader =
     mode === 'by_trips' ? 'Chuyến/xe/ngày' : mode === 'by_truck' ? 'Loại xe' : 'Trọng lượng';
@@ -958,17 +994,43 @@ function PriceVersionCard({
             </Badge>
           )}
         </div>
-        <p className="text-sm text-neutral-600 dark:text-neutral-400">
-          {formatDate(version.effective_from)}
-          {' → '}
-          {version.effective_to ? formatDate(version.effective_to) : 'hiện tại'}
-        </p>
+        {canManage && onAdjust && (
+          <Button
+            variant="outline"
+            size="sm"
+            aria-label={t('routePricing.manage.adjustPrice')}
+            onClick={onAdjust}
+          >
+            <Pencil className="w-4 h-4" aria-hidden="true" />
+          </Button>
+        )}
       </div>
+      <p className="text-sm text-neutral-600 dark:text-neutral-400">
+        {formatDate(version.effective_from)}
+        {' → '}
+        {version.effective_to ? formatDate(version.effective_to) : 'hiện tại'}
+      </p>
 
       {showPallet && (
-        <p className="text-sm">
-          Giá Pallet (chuyến):{' '}
-          <strong>{Number(version.pallet_trip_price).toLocaleString('vi-VN')}</strong>
+        <p className="text-sm flex flex-wrap items-center gap-2">
+          {palletManual && Number(version.pallet_trip_price) === 0 ? (
+            <Badge variant="warning">{t('routePricing.manage.palletAdjustedToZero')}</Badge>
+          ) : (
+            <>
+              Giá Pallet (chuyến):{' '}
+              <strong className="tabular-nums">
+                {formatPriceDisplay(Number(version.pallet_trip_price))}
+              </strong>
+            </>
+          )}
+          {palletManual && Number(version.pallet_trip_price) === 0 && (
+            <span className="tabular-nums font-medium">-</span>
+          )}
+          {palletManual && Number(version.pallet_trip_price) > 0 && (
+            <span title={t('routePricing.manage.manualMarkTitle')} aria-label={t('routePricing.manage.manualMarkTitle')}>
+              *
+            </span>
+          )}
         </p>
       )}
 
@@ -981,17 +1043,28 @@ function PriceVersionCard({
           </tr>
         </thead>
         <tbody>
-          {version.tiers.map((t, i) => (
+          {version.tiers.map((tier, i) => (
             <tr
-              key={i}
+              key={tier.id ?? i}
               className="border-t border-neutral-100 dark:border-neutral-800 align-top"
             >
-              <td className="py-2 pr-3 whitespace-pre-line break-words">{formatTierRangeLabel(mode, t)}</td>
+              <td className="py-2 pr-3 whitespace-pre-line break-words">
+                {formatTierRangeLabel(mode, tier)}
+              </td>
               <td className="py-2 pr-3 text-neutral-700 dark:text-neutral-300">
-                {t.pricing_unit === 'chuyen' ? 'vnđ/chuyến' : 'vnđ/tấn'}
+                {tier.pricing_unit === 'chuyen' ? 'vnđ/chuyến' : 'vnđ/tấn'}
               </td>
               <td className="py-2 text-right font-medium tabular-nums">
-                {Number(t.price).toLocaleString('vi-VN')}
+                {formatPriceDisplay(Number(tier.price))}
+                {tier.is_manual_adjusted ? (
+                  <span
+                    className="ml-1 text-amber-600"
+                    title={t('routePricing.manage.manualMarkTitle')}
+                    aria-label={t('routePricing.manage.manualMarkTitle')}
+                  >
+                    *
+                  </span>
+                ) : null}
               </td>
             </tr>
           ))}
@@ -999,47 +1072,6 @@ function PriceVersionCard({
       </table>
     </div>
   );
-}
-
-function formatTonNumber(n: number): string {
-  return Number.isInteger(n) ? String(n) : String(n);
-}
-
-/** Hiển thị khoảng tấn `(from, to]`: `≤ 2.5 tấn`, `>8-16`, `>16` */
-function formatTonRange(fromTon: number, toTon: number | null | undefined): string {
-  const from = Number(fromTon);
-  if (toTon == null) {
-    return from <= 0 ? 'Mọi trọng lượng' : `>${formatTonNumber(from)}`;
-  }
-  const to = Number(toTon);
-  if (from <= 0) return `≤ ${formatTonNumber(to)} tấn`;
-  return `>${formatTonNumber(from)}-${formatTonNumber(to)}`;
-}
-
-function formatTripsRange(fromTrips: number, toTrips: number | null | undefined): string {
-  const from = Number(fromTrips);
-  if (toTrips == null) return `Áp dụng từ ${formatTonNumber(from)} chuyến trở lên`;
-  const to = Number(toTrips);
-  if (from === to) return `Áp dụng cho ${formatTonNumber(from)} chuyến`;
-  return `Áp dụng từ ${formatTonNumber(from)} đến ${formatTonNumber(to)} chuyến`;
-}
-
-function formatTierRangeLabel(mode: PricingMode, t: PriceTierInput): string {
-  if (mode === 'by_truck') {
-    return (t.label ?? '').trim();
-  }
-  if (mode === 'by_trips') {
-    return formatTripsRange(t.range_from ?? 0, t.range_to ?? null);
-  }
-  let line = formatTonRange(t.range_from ?? 0, t.range_to ?? null);
-  if (
-    t.pricing_unit === 'tan' &&
-    t.min_billable_ton != null &&
-    Number(t.min_billable_ton) > 0
-  ) {
-    line += ` (cước tối thiểu ${formatTonNumber(Number(t.min_billable_ton))} tấn)`;
-  }
-  return line;
 }
 
 function truckTemplate(): PriceTierInput[] {

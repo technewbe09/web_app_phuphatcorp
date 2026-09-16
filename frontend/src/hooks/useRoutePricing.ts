@@ -140,6 +140,17 @@ export function useRoutePricingMutations(priceBookId?: number) {
       }) => routePricingApi.updateAbsolutePrice(routeGroupId, body),
       onSuccess: invalidate,
     }),
+    manualAdjustVersion: useMutation({
+      mutationFn: ({
+        versionId,
+        ...body
+      }: {
+        versionId: number;
+        pallet_trip_price: number;
+        tiers: { id: number; price: number }[];
+      }) => routePricingApi.manualAdjustVersion(versionId, body),
+      onSuccess: invalidate,
+    }),
     createPeriod: useMutation({
       mutationFn: routePricingApi.createAdjustmentPeriod,
       onSuccess: invalidate,

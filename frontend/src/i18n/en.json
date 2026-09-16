@@ -729,14 +729,36 @@
       "cancel": "Cancel",
       "save": "Save"
     },
+    "manage": {
+      "adjustPrice": "Adjust price",
+      "adjustPricePeriod": "Adjust price — {date}",
+      "adjustHint": "Only unit prices. Later periods are recalculated with each period’s % (rounded to thousands).",
+      "saveAdjust": "Save",
+      "confirmTitle": "Confirm price adjustment",
+      "confirmChanges": "Changed cells",
+      "confirmLaterPeriods": "Later periods will be recalculated by %",
+      "confirmNoLater": "No later periods to cascade.",
+      "confirmLoseMark": "will lose the manual-adjust mark on changed cells",
+      "confirmSubmit": "Confirm",
+      "palletAdjustedToZero": "Pallet adjusted to 0",
+      "manualMarkTitle": "Manually adjusted",
+      "priceZeroDisplay": "-"
+    },
+    "validation": {
+      "priceRequired": "Enter a unit price",
+      "priceMin0": "Price must be ≥ 0",
+      "priceInvalid": "Invalid price"
+    },
     "message": {
       "success": {
         "createBook": "Price book created",
         "renameBook": "Price book renamed",
-        "deleteBook": "Price book deleted"
+        "deleteBook": "Price book deleted",
+        "manualAdjust": "Price adjusted"
       },
       "error": {
-        "deleteBook": "Could not delete the price book"
+        "deleteBook": "Could not delete the price book",
+        "manualAdjust": "Could not adjust price"
       }
     }
   },

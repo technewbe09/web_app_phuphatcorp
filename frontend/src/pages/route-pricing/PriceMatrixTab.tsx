@@ -3,12 +3,14 @@ import { formatDate } from '../../utils/format';
 import { Select } from '../../components/ui/Select';
 import { usePriceMatrix } from '../../hooks/useRoutePricing';
 import type {
+  PriceMatrixCell,
   PriceMatrixPeriod,
   PriceMatrixTripsRow,
   PriceMatrixWeightColumn,
   PriceMatrixWeightRow,
   PriceMatrixWeightTable,
 } from '../../api/routePricingApi';
+import { formatPriceDisplay } from './priceDisplay';
 
 function formatPercentLabel(percent: number): string {
   const abs = Math.abs(percent);
@@ -29,9 +31,23 @@ function periodTone(index: number): string {
     : 'bg-lime-50 dark:bg-lime-950/40';
 }
 
-function formatMoney(value: number | null | undefined): string {
-  if (value == null) return '';
-  return Number(value).toLocaleString('vi-VN');
+function readCell(cell: PriceMatrixCell | number | null | undefined): {
+  value: number | null;
+  manual: boolean;
+} {
+  if (cell == null) return { value: null, manual: false };
+  if (typeof cell === 'number') return { value: cell, manual: false };
+  return { value: cell.value, manual: Boolean(cell.manual_adjusted) };
+}
+
+function formatMoneyCell(cell: PriceMatrixCell | number | null | undefined): string {
+  return formatPriceDisplay(readCell(cell).value);
+}
+
+function cellClass(manual: boolean): string {
+  return manual
+    ? 'bg-amber-100 dark:bg-amber-900/40 border border-neutral-200 dark:border-neutral-700 px-2 py-1.5 text-right tabular-nums whitespace-nowrap'
+    : 'bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-700 px-2 py-1.5 text-right tabular-nums whitespace-nowrap';
 }
 
 /** Kỳ đang mở (end_date null); fallback = start_date lớn nhất. */
@@ -369,14 +385,25 @@ function WeightRow({
         <RouteNameCell name={row.group_name} />
       </td>
       {periods.map((p) =>
-        columns.map((col) => (
-          <td
-            key={`${p.id}-${col.key}`}
-            className="bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-700 px-2 py-1.5 text-right tabular-nums whitespace-nowrap"
-          >
-            {formatMoney(row.cells[String(p.id)]?.[col.key] ?? null)}
-          </td>
-        )),
+        columns.map((col) => {
+          const cell = row.cells[String(p.id)]?.[col.key];
+          const { value, manual } = readCell(cell);
+          const title =
+            col.kind === 'pallet' && value === 0 && manual
+              ? 'Pallet được điều chỉnh về 0'
+              : manual
+                ? 'Đã điều chỉnh'
+                : undefined;
+          return (
+            <td
+              key={`${p.id}-${col.key}`}
+              className={cellClass(manual)}
+              title={title}
+            >
+              {formatMoneyCell(cell)}
+            </td>
+          );
+        }),
       )}
     </tr>
   );
@@ -447,14 +474,19 @@ function PriceMatrixTripsTableView({
               >
                 {row.trips_label}
               </td>
-              {periods.map((p) => (
-                <td
-                  key={p.id}
-                  className="bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-700 px-2 py-1.5 text-right tabular-nums whitespace-nowrap"
-                >
-                  {formatMoney(row.cells[String(p.id)] ?? null)}
-                </td>
-              ))}
+              {periods.map((p) => {
+                const cell = row.cells[String(p.id)];
+                const { manual } = readCell(cell);
+                return (
+                  <td
+                    key={p.id}
+                    className={cellClass(manual)}
+                    title={manual ? 'Đã điều chỉnh' : undefined}
+                  >
+                    {formatMoneyCell(cell)}
+                  </td>
+                );
+              })}
             </tr>
           ))}
         </tbody>

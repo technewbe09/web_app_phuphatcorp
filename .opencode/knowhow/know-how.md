@@ -282,15 +282,16 @@ Base URL: `/api`
 | GET/POST/PUT/DELETE | /route-pricing/price-books | view/manage | Master bảng giá (tên tự do, unique active) |
 | GET/POST/PUT/DELETE | /route-pricing/routes | view/manage | Scoped `price_book_id`; `ward_code` XOR `location_text`; `note` |
 | GET/POST/PUT/DELETE | /route-pricing/groups | view/manage | Scoped `price_book_id`; `ward_codes[]` XOR `location_text` XOR residual |
-| GET/POST | /route-pricing/prices | view/manage | Absolute: `adjustment_period_id` + cascade kỳ sau; `pricing_mode` `by_weight`\|`by_trips`\|`by_truck`; truck tiers dùng `label` |
-| GET | /route-pricing/prices/matrix | view | Ma trận theo `price_book_id`: weight_tables[] + truck_tables[] + trips.rows |
+| GET/POST | /route-pricing/prices | view/manage | Absolute: `adjustment_period_id` + cascade kỳ sau; `pricing_mode` `by_weight`\|`by_trips`\|`by_truck`; truck tiers dùng `label`; giá bậc ≥ 0 |
+| GET | /route-pricing/prices/matrix | view | Ma trận theo `price_book_id`: weight_tables[] + truck_tables[] + trips.rows; cell `{ value, manual_adjusted }` |
 | PUT | /route-pricing/prices/groups/:routeGroupId/absolute | manage | Sửa giá gốc + recompute cascade |
+| PUT | /route-pricing/prices/versions/:versionId/manual-adjust | manage | Sửa đơn giá kỳ bất kỳ + cascade kỳ sau + cờ manual |
 | GET | /route-pricing/lookup | view | **Deferred** (501 LOOKUP_DEFERRED) — CR riêng sau |
 
-**FE:** Tab Kỳ điều chỉnh / Nhóm tuyến / Bảng giá. Bỏ nút Điều chỉnh % riêng. Không sửa kỳ — muốn đổi thì xóa rồi tạo lại.
+**FE:** Tab Kỳ điều chỉnh / Nhóm tuyến / Quản lý giá / Ma trận. Bút chì điều chỉnh giá trên card kỳ. Bỏ nút Điều chỉnh % riêng. Không sửa kỳ — muốn đổi thì xóa rồi tạo lại.
 
-BA: `docs/ba/20260711_route-pricing-analysis.md`  
-UI: `docs/ui/20260731_route-pricing-adjustment-periods-cr-ui-spec.md`
+BA: `docs/ba/20260711_route-pricing-analysis.md`, `docs/ba/20260915_route-pricing-period-manual-adjust-analysis.md`  
+UI: `docs/ui/20260731_route-pricing-adjustment-periods-cr-ui-spec.md`, `docs/ui/20260915_route-pricing-period-manual-adjust-ui-spec.md`
 
 ### Dashboard — /dashboard
 

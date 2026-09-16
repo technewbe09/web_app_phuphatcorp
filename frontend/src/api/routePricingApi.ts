@@ -61,12 +61,14 @@ export interface AdjustmentPeriod {
 }
 
 export interface PriceTierInput {
+  id?: number;
   range_from?: number;
   range_to?: number | null;
   pricing_unit: 'chuyen' | 'tan';
   price: number;
   min_billable_ton?: number | null;
   label?: string | null;
+  is_manual_adjusted?: boolean;
 }
 
 export interface RoutePriceVersion {
@@ -76,6 +78,7 @@ export interface RoutePriceVersion {
   effective_to: string | null;
   pricing_mode: PricingMode;
   pallet_trip_price: number;
+  pallet_manual_adjusted?: boolean;
   adjustment_percent: number | null;
   base_version_id?: number | null;
   adjustment_period_id: number;
@@ -117,6 +120,11 @@ export interface PriceMatrixWeightColumn {
   hint?: string | null;
 }
 
+export interface PriceMatrixCell {
+  value: number | null;
+  manual_adjusted: boolean;
+}
+
 export interface PriceMatrixWeightRow {
   stt: number;
   route_group_id: number;
@@ -124,7 +132,7 @@ export interface PriceMatrixWeightRow {
   is_residual: boolean;
   province_code: string;
   tinh: string;
-  cells: Record<string, Record<string, number | null>>;
+  cells: Record<string, Record<string, PriceMatrixCell>>;
 }
 
 export interface PriceMatrixWeightTable {
@@ -145,7 +153,7 @@ export interface PriceMatrixTripsRow {
   trips_label: string;
   range_from: number | null;
   range_to: number | null;
-  cells: Record<string, number | null>;
+  cells: Record<string, PriceMatrixCell>;
 }
 
 export interface PriceMatrixResponse {
@@ -311,6 +319,20 @@ export const routePricingApi = {
   ): Promise<RoutePriceVersion> => {
     const res = await axiosClient.put<{ data: RoutePriceVersion }>(
       `/route-pricing/prices/groups/${routeGroupId}/absolute`,
+      body,
+    );
+    return res.data.data;
+  },
+
+  manualAdjustVersion: async (
+    versionId: number,
+    body: {
+      pallet_trip_price: number;
+      tiers: { id: number; price: number }[];
+    },
+  ): Promise<RoutePriceVersion> => {
+    const res = await axiosClient.put<{ data: RoutePriceVersion }>(
+      `/route-pricing/prices/versions/${versionId}/manual-adjust`,
       body,
     );
     return res.data.data;

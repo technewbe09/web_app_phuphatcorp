@@ -133,7 +133,7 @@ export const priceCreateSchema: ValidationChain[] = [
     .custom((v) => v == null || (typeof v === 'number' ? !Number.isNaN(v) : !Number.isNaN(parseFloat(String(v)))))
     .withMessage('range_to phải là số hoặc null'),
   body('tiers.*.pricing_unit').isIn(['chuyen', 'tan']),
-  body('tiers.*.price').isFloat({ gt: 0 }),
+  body('tiers.*.price').isFloat({ min: 0 }).withMessage('Giá phải ≥ 0'),
   body('tiers.*.min_billable_ton')
     .optional({ nullable: true })
     .customSanitizer((v) => {
@@ -157,7 +157,7 @@ export const priceUpdateAbsoluteSchema: ValidationChain[] = [
     .custom((v) => v == null || (typeof v === 'number' ? !Number.isNaN(v) : !Number.isNaN(parseFloat(String(v)))))
     .withMessage('range_to phải là số hoặc null'),
   body('tiers.*.pricing_unit').isIn(['chuyen', 'tan']),
-  body('tiers.*.price').isFloat({ gt: 0 }),
+  body('tiers.*.price').isFloat({ min: 0 }).withMessage('Giá phải ≥ 0'),
   body('tiers.*.min_billable_ton')
     .optional({ nullable: true })
     .customSanitizer((v) => {
@@ -166,6 +166,14 @@ export const priceUpdateAbsoluteSchema: ValidationChain[] = [
     })
     .custom((v) => v == null || (typeof v === 'number' ? v > 0 : parseFloat(String(v)) > 0))
     .withMessage('min_billable_ton phải > 0 hoặc để trống'),
+];
+
+export const priceManualAdjustSchema: ValidationChain[] = [
+  param('versionId').isInt({ min: 1 }),
+  body('pallet_trip_price').isFloat({ min: 0 }).withMessage('Giá Pallet phải ≥ 0'),
+  body('tiers').isArray({ min: 1 }),
+  body('tiers.*.id').isInt({ min: 1 }),
+  body('tiers.*.price').isFloat({ min: 0 }).withMessage('Giá phải ≥ 0'),
 ];
 
 export const periodCreateSchema: ValidationChain[] = [
@@ -411,6 +419,26 @@ export const routePricingController = {
       sendSuccess(res, data, 'Đã cập nhật bảng giá gốc');
     } catch (err) {
       handleServiceError(res, err, 'Không cập nhật được bảng giá gốc');
+    }
+  },
+
+  async manualAdjustVersion(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      const versionId = parseInt(req.params.versionId, 10);
+      const data = await routePricingService.manualAdjustVersion(
+        versionId,
+        {
+          pallet_trip_price: Number(req.body.pallet_trip_price),
+          tiers: (req.body.tiers as { id: number; price: number }[]).map((t) => ({
+            id: Number(t.id),
+            price: Number(t.price),
+          })),
+        },
+        req.user!.userId,
+      );
+      sendSuccess(res, data, 'Đã điều chỉnh giá');
+    } catch (err) {
+      handleServiceError(res, err, 'Không điều chỉnh được giá');
     }
   },
 

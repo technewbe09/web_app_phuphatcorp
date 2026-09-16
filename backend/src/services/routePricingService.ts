@@ -3,7 +3,7 @@ import { pool } from '../config/database';
 import {
   AdjustmentPeriod, DeliveryRoute, LookupResult, PriceBook, PricingMode, Province, RouteGroup, RouteGroupMember,
   RoutePriceConfigSummary, RoutePriceTier, RoutePriceVersion, Ward,
-  PriceMatrixResponse, PriceMatrixTripsRow, PriceMatrixWeightColumn, PriceMatrixWeightTable,
+  PriceMatrixResponse, PriceMatrixTripsRow, PriceMatrixWeightColumn, PriceMatrixWeightTable, PriceMatrixCell,
   noteKey, normalizeLocation, roundToThousands,
 } from '../types/routePricing';
 
@@ -64,7 +64,9 @@ function validateTiers(mode: PricingMode, tiers: RoutePriceTier[]): void {
       if (tier.pricing_unit !== 'chuyen' && tier.pricing_unit !== 'tan') {
         throw err('INVALID_TIERS', 'pricing_unit không hợp lệ');
       }
-      if (!(num(tier.price) > 0)) throw err('INVALID_TIERS', 'Giá phải > 0');
+      if (!(num(tier.price) >= 0) || Number.isNaN(num(tier.price))) {
+        throw err('INVALID_TIERS', 'Giá phải ≥ 0');
+      }
       const label = truckLabel(tier);
       if (!label) throw err('INVALID_TIERS', 'Nhãn loại xe không được trống');
       if (label.length > 255) throw err('INVALID_TIERS', 'Nhãn loại xe tối đa 255 ký tự');
@@ -87,7 +89,9 @@ function validateTiers(mode: PricingMode, tiers: RoutePriceTier[]): void {
     if (tier.pricing_unit !== 'chuyen' && tier.pricing_unit !== 'tan') {
       throw err('INVALID_TIERS', 'pricing_unit không hợp lệ');
     }
-    if (!(num(tier.price) > 0)) throw err('INVALID_TIERS', 'Giá phải > 0');
+    if (!(num(tier.price) >= 0) || Number.isNaN(num(tier.price))) {
+      throw err('INVALID_TIERS', 'Giá phải ≥ 0');
+    }
     const from = num(tier.range_from);
     const to = nullableNumber(tier.range_to);
 
@@ -203,6 +207,7 @@ function mapVersionRow(row: Record<string, unknown>, tiers: RoutePriceTier[]): R
     effective_to: toDateOnlyOrNull(row.period_end_date),
     pricing_mode: parsePricingMode(row.pricing_mode ?? 'by_weight'),
     pallet_trip_price: num(row.pallet_trip_price),
+    pallet_manual_adjusted: Boolean(row.pallet_manual_adjusted),
     adjustment_percent: baseVersionId == null ? null : num(row.period_percent),
     base_version_id: baseVersionId,
     adjustment_period_id: num(row.adjustment_period_id),
@@ -232,8 +237,9 @@ async function insertTiers(
   for (const [sort, tier] of tiers.entries()) {
     const isTruck = mode === 'by_truck';
     await client.query(
-      `INSERT INTO route_price_tiers (price_version_id,range_from,range_to,pricing_unit,price,min_billable_ton,sort_order,label)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+      `INSERT INTO route_price_tiers
+        (price_version_id,range_from,range_to,pricing_unit,price,min_billable_ton,sort_order,label,is_manual_adjusted)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
       [
         versionId,
         isTruck ? 0 : tier.range_from,
@@ -245,9 +251,28 @@ async function insertTiers(
           : null,
         sort,
         isTruck ? truckLabel(tier) : null,
+        Boolean(tier.is_manual_adjusted),
       ],
     );
   }
+}
+
+function matrixCell(value: number | null, manualAdjusted = false): PriceMatrixCell {
+  return { value, manual_adjusted: value == null ? false : Boolean(manualAdjusted) };
+}
+
+function tierFingerprint(mode: PricingMode, tier: RoutePriceTier): string {
+  if (mode === 'by_truck') return truckTierColumnKey(tier);
+  if (mode === 'by_trips') {
+    const to = nullableNumber(tier.range_to);
+    return `trips:${num(tier.range_from)}-${to == null ? 'inf' : String(to)}`;
+  }
+  return weightTierColumnKey({
+    range_from: num(tier.range_from),
+    range_to: nullableNumber(tier.range_to),
+    pricing_unit: tier.pricing_unit,
+    min_billable_ton: nullableNumber(tier.min_billable_ton),
+  });
 }
 
 function scaleTiers(tiers: RoutePriceTier[], percent: number): RoutePriceTier[] {
@@ -569,19 +594,23 @@ async function getWard(code: string): Promise<Ward | null> {
   const result = await pool.query<Ward>('SELECT code, name, full_name, province_code FROM wards WHERE code = $1', [code]);
   return result.rows[0] ?? null;
 }
-async function loadTiers(versionId: number): Promise<RoutePriceTier[]> {
-  const result = await pool.query<RoutePriceTier>(
-    `SELECT id, range_from, range_to, pricing_unit, price, min_billable_ton, sort_order, label
+async function loadTiers(versionId: number, client?: PoolClient): Promise<RoutePriceTier[]> {
+  const q = client ?? pool;
+  const result = await q.query(
+    `SELECT id, range_from, range_to, pricing_unit, price, min_billable_ton, sort_order, label, is_manual_adjusted
      FROM route_price_tiers WHERE price_version_id = $1 ORDER BY sort_order, range_from`,
     [versionId],
   );
   return result.rows.map((tier) => ({
-    ...tier,
+    id: num(tier.id),
     range_from: num(tier.range_from),
     range_to: nullableNumber(tier.range_to),
+    pricing_unit: tier.pricing_unit,
     price: num(tier.price),
     min_billable_ton: nullableNumber(tier.min_billable_ton),
+    sort_order: num(tier.sort_order),
     label: tier.label == null || String(tier.label).trim() === '' ? null : String(tier.label),
+    is_manual_adjusted: Boolean(tier.is_manual_adjusted),
   }));
 }
 async function loadMembers(groupId: number): Promise<RouteGroupMember[]> {
@@ -1122,8 +1151,17 @@ export const routePricingService = {
       is_residual: boolean;
       province_code: string;
       tinh: string;
-      absolute: { id: number; pricing_mode: PricingMode; pallet_trip_price: number; tiers: RoutePriceTier[] } | null;
-      byPeriod: Map<number, { pallet_trip_price: number; tiers: RoutePriceTier[] }>;
+      absolute: {
+        id: number;
+        pricing_mode: PricingMode;
+        pallet_trip_price: number;
+        pallet_manual_adjusted: boolean;
+        tiers: RoutePriceTier[];
+      } | null;
+      byPeriod: Map<
+        number,
+        { pallet_trip_price: number; pallet_manual_adjusted: boolean; tiers: RoutePriceTier[] }
+      >;
     };
 
     const bundles: GroupBundle[] = [];
@@ -1147,12 +1185,18 @@ export const routePricingService = {
           const tiers = await loadTiers(num(version.id));
           const periodId = num(version.adjustment_period_id);
           const pallet = num(version.pallet_trip_price);
-          bundle.byPeriod.set(periodId, { pallet_trip_price: pallet, tiers });
+          const palletManual = Boolean(version.pallet_manual_adjusted);
+          bundle.byPeriod.set(periodId, {
+            pallet_trip_price: pallet,
+            pallet_manual_adjusted: palletManual,
+            tiers,
+          });
           if (version.base_version_id == null) {
             bundle.absolute = {
               id: num(version.id),
               pricing_mode: parsePricingMode(version.pricing_mode ?? 'by_weight'),
               pallet_trip_price: pallet,
+              pallet_manual_adjusted: palletManual,
               tiers,
             };
           }
@@ -1193,17 +1237,19 @@ export const routePricingService = {
           a.tinh === b.tinh ? a.name.localeCompare(b.name, 'vi') : a.tinh.localeCompare(b.tinh, 'vi'),
         );
         const rows = sortedGroups.map((bundle, index) => {
-          const cells: Record<string, Record<string, number | null>> = {};
+          const cells: Record<string, Record<string, PriceMatrixCell>> = {};
           for (const period of periods) {
             const version = bundle.byPeriod.get(period.id);
-            const periodCells: Record<string, number | null> = {};
+            const periodCells: Record<string, PriceMatrixCell> = {};
             for (const col of columns) {
               if (col.kind === 'pallet') {
-                periodCells[col.key] = version ? version.pallet_trip_price : null;
+                periodCells[col.key] = version
+                  ? matrixCell(version.pallet_trip_price, version.pallet_manual_adjusted)
+                  : matrixCell(null);
                 continue;
               }
               if (!version) {
-                periodCells[col.key] = null;
+                periodCells[col.key] = matrixCell(null);
                 continue;
               }
               const tier = version.tiers.find(
@@ -1215,7 +1261,9 @@ export const routePricingService = {
                     min_billable_ton: nullableNumber(t.min_billable_ton),
                   }) === col.key,
               );
-              periodCells[col.key] = tier ? num(tier.price) : null;
+              periodCells[col.key] = tier
+                ? matrixCell(num(tier.price), Boolean(tier.is_manual_adjusted))
+                : matrixCell(null);
             }
             cells[String(period.id)] = periodCells;
           }
@@ -1252,21 +1300,25 @@ export const routePricingService = {
       const columns = buildUnionTruckColumns(truckGroups.map((g) => g.absolute!.tiers));
       const schema_key = columns.filter((c) => c.kind === 'truck').map((c) => c.key).join('|');
       const rows = truckGroups.map((bundle, index) => {
-        const cells: Record<string, Record<string, number | null>> = {};
+        const cells: Record<string, Record<string, PriceMatrixCell>> = {};
         for (const period of periods) {
           const version = bundle.byPeriod.get(period.id);
-          const periodCells: Record<string, number | null> = {};
+          const periodCells: Record<string, PriceMatrixCell> = {};
           for (const col of columns) {
             if (col.kind === 'pallet') {
-              periodCells[col.key] = version ? version.pallet_trip_price : null;
+              periodCells[col.key] = version
+                ? matrixCell(version.pallet_trip_price, version.pallet_manual_adjusted)
+                : matrixCell(null);
               continue;
             }
             if (!version) {
-              periodCells[col.key] = null;
+              periodCells[col.key] = matrixCell(null);
               continue;
             }
             const tier = version.tiers.find((t) => truckTierColumnKey(t) === col.key);
-            periodCells[col.key] = tier ? num(tier.price) : null;
+            periodCells[col.key] = tier
+              ? matrixCell(num(tier.price), Boolean(tier.is_manual_adjusted))
+              : matrixCell(null);
           }
           cells[String(period.id)] = periodCells;
         }
@@ -1301,11 +1353,11 @@ export const routePricingService = {
       const tierRows = [...abs.tiers].sort((a, b) => num(a.range_from) - num(b.range_from));
       for (const tier of tierRows) {
         tripsStt += 1;
-        const cells: Record<string, number | null> = {};
+        const cells: Record<string, PriceMatrixCell> = {};
         for (const period of periods) {
           const version = bundle.byPeriod.get(period.id);
           if (!version) {
-            cells[String(period.id)] = null;
+            cells[String(period.id)] = matrixCell(null);
             continue;
           }
           const matched = version.tiers.find(
@@ -1313,7 +1365,9 @@ export const routePricingService = {
               num(t.range_from) === num(tier.range_from) &&
               nullableNumber(t.range_to) === nullableNumber(tier.range_to),
           );
-          cells[String(period.id)] = matched ? num(matched.price) : null;
+          cells[String(period.id)] = matched
+            ? matrixCell(num(matched.price), Boolean(matched.is_manual_adjusted))
+            : matrixCell(null);
         }
         tripsRows.push({
           stt: tripsStt,
@@ -1457,15 +1511,43 @@ export const routePricingService = {
       const absoluteId = absolute.rows[0].id;
       const basePeriodId = absolute.rows[0].adjustment_period_id;
       const baseStart = toDateOnly(absolute.rows[0].period_start_date);
+      const oldMode = parsePricingMode(absolute.rows[0].pricing_mode ?? 'by_weight');
+      const oldPallet = num(absolute.rows[0].pallet_trip_price);
+      const oldPalletManual = Boolean(absolute.rows[0].pallet_manual_adjusted);
+      const oldTiers = await loadTiers(absoluteId, client);
+      const oldByKey = new Map(
+        oldTiers.map((t) => [
+          tierFingerprint(oldMode, t),
+          { price: num(t.price), is_manual_adjusted: Boolean(t.is_manual_adjusted) },
+        ]),
+      );
 
       await client.query(
         `UPDATE route_price_versions
-         SET pricing_mode=$1, pallet_trip_price=$2
-         WHERE id=$3`,
-        [mode, data.pallet_trip_price, absoluteId],
+         SET pricing_mode=$1, pallet_trip_price=$2,
+             pallet_manual_adjusted=$3
+         WHERE id=$4`,
+        [
+          mode,
+          data.pallet_trip_price,
+          num(oldPallet) === num(data.pallet_trip_price) ? oldPalletManual : false,
+          absoluteId,
+        ],
       );
       await client.query(`DELETE FROM route_price_tiers WHERE price_version_id=$1`, [absoluteId]);
       await insertTiers(client, absoluteId, mode, data.tiers);
+
+      const insertedTiers = await loadTiers(absoluteId, client);
+      for (const tier of insertedTiers) {
+        const prev = oldByKey.get(tierFingerprint(mode, tier));
+        const keep =
+          prev != null && num(prev.price) === num(tier.price) && Boolean(prev.is_manual_adjusted);
+        if (keep) {
+          await client.query(`UPDATE route_price_tiers SET is_manual_adjusted=TRUE WHERE id=$1`, [
+            tier.id,
+          ]);
+        }
+      }
 
       const later = await client.query(
         `SELECT v.id FROM route_price_versions v
@@ -1485,15 +1567,18 @@ export const routePricingService = {
         );
         let prevId = absoluteId;
         let prevPallet = data.pallet_trip_price;
-        let prevTiers = data.tiers.map((t) => ({ ...t }));
+        let prevTiers = data.tiers.map((t) => ({ ...t, is_manual_adjusted: false }));
         for (const period of laterPeriods.rows) {
           const percent = num(period.percent);
-          const scaledTiers = scaleTiers(prevTiers, percent);
+          const scaledTiers = scaleTiers(prevTiers, percent).map((t) => ({
+            ...t,
+            is_manual_adjusted: false,
+          }));
           const scaledPallet = roundToThousands(num(prevPallet) * (1 + percent / 100));
           const version = await client.query(
             `INSERT INTO route_price_versions
-              (price_config_id,pricing_mode,pallet_trip_price,base_version_id,adjustment_period_id,created_by)
-             VALUES ($1,$2,$3,$4,$5,$6) RETURNING id`,
+              (price_config_id,pricing_mode,pallet_trip_price,base_version_id,adjustment_period_id,created_by,pallet_manual_adjusted)
+             VALUES ($1,$2,$3,$4,$5,$6,FALSE) RETURNING id`,
             [
               config.rows[0].id,
               mode,
@@ -1512,6 +1597,158 @@ export const routePricingService = {
 
       await client.query('COMMIT');
       return mapVersionRow(await loadVersionRow(absoluteId), await loadTiers(absoluteId));
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  },
+
+  async manualAdjustVersion(
+    versionId: number,
+    data: {
+      pallet_trip_price: number;
+      tiers: { id: number; price: number }[];
+    },
+    _userId: number,
+  ): Promise<RoutePriceVersion> {
+    if (!(num(data.pallet_trip_price) >= 0) || Number.isNaN(num(data.pallet_trip_price))) {
+      throw err('INVALID_TIERS', 'Giá Pallet phải ≥ 0');
+    }
+    for (const tier of data.tiers) {
+      if (!(num(tier.price) >= 0) || Number.isNaN(num(tier.price))) {
+        throw err('INVALID_TIERS', 'Giá phải ≥ 0');
+      }
+    }
+
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      const versionRes = await client.query(
+        `${VERSION_SELECT} ${VERSION_JOIN} WHERE v.id=$1 FOR UPDATE OF v`,
+        [versionId],
+      );
+      if (!versionRes.rows[0]) throw err('NOT_FOUND');
+      const row = versionRes.rows[0];
+      const mode = parsePricingMode(row.pricing_mode ?? 'by_weight');
+      const configId = num(row.price_config_id);
+      const baseStart = toDateOnly(row.period_start_date);
+      const existingTiers = await loadTiers(versionId, client);
+
+      if (data.tiers.length !== existingTiers.length) {
+        throw err('INVALID_TIERS', 'Danh sách bậc không khớp');
+      }
+      const byId = new Map(existingTiers.map((t) => [num(t.id), t]));
+      const seen = new Set<number>();
+      for (const incoming of data.tiers) {
+        const id = num(incoming.id);
+        if (!byId.has(id)) throw err('INVALID_TIERS', 'Bậc không thuộc phiên bản này');
+        if (seen.has(id)) throw err('INVALID_TIERS', 'Bậc trùng id');
+        seen.add(id);
+      }
+
+      const palletChanged = num(row.pallet_trip_price) !== num(data.pallet_trip_price);
+      const changedKeys = new Set<string>();
+      if (palletChanged) changedKeys.add('pallet');
+
+      const nextTierPrices = new Map<number, number>();
+      for (const incoming of data.tiers) {
+        const id = num(incoming.id);
+        const old = byId.get(id)!;
+        nextTierPrices.set(id, num(incoming.price));
+        if (num(old.price) !== num(incoming.price)) {
+          changedKeys.add(tierFingerprint(mode, old));
+        }
+      }
+
+      await client.query(
+        `UPDATE route_price_versions
+         SET pallet_trip_price=$1,
+             pallet_manual_adjusted = CASE WHEN $2 THEN TRUE ELSE pallet_manual_adjusted END
+         WHERE id=$3`,
+        [data.pallet_trip_price, palletChanged, versionId],
+      );
+
+      for (const incoming of data.tiers) {
+        const id = num(incoming.id);
+        const old = byId.get(id)!;
+        const priceChanged = num(old.price) !== num(incoming.price);
+        await client.query(
+          `UPDATE route_price_tiers
+           SET price=$1,
+               is_manual_adjusted = CASE WHEN $2 THEN TRUE ELSE is_manual_adjusted END
+           WHERE id=$3`,
+          [incoming.price, priceChanged, id],
+        );
+      }
+
+      if (changedKeys.size > 0) {
+        const laterPeriods = await client.query(
+          `SELECT p.* FROM route_pricing_adjustment_periods p
+           WHERE p.start_date > $1::date
+           ORDER BY p.start_date ASC`,
+          [baseStart],
+        );
+
+        let prevPallet = num(data.pallet_trip_price);
+        let prevTierByKey = new Map(
+          existingTiers.map((t) => {
+            const key = tierFingerprint(mode, t);
+            const price = nextTierPrices.get(num(t.id)) ?? num(t.price);
+            return [key, price] as const;
+          }),
+        );
+
+        for (const period of laterPeriods.rows) {
+          const percent = num(period.percent);
+          const laterVersion = await client.query(
+            `SELECT v.* FROM route_price_versions v
+             WHERE v.price_config_id=$1 AND v.adjustment_period_id=$2
+             FOR UPDATE`,
+            [configId, period.id],
+          );
+          if (!laterVersion.rows[0]) continue;
+          const laterId = num(laterVersion.rows[0].id);
+          const laterTiers = await loadTiers(laterId, client);
+          const nextPrevTier = new Map(prevTierByKey);
+
+          if (changedKeys.has('pallet')) {
+            const scaledPallet = roundToThousands(prevPallet * (1 + percent / 100));
+            await client.query(
+              `UPDATE route_price_versions
+               SET pallet_trip_price=$1, pallet_manual_adjusted=FALSE
+               WHERE id=$2`,
+              [scaledPallet, laterId],
+            );
+            prevPallet = scaledPallet;
+          } else {
+            prevPallet = num(laterVersion.rows[0].pallet_trip_price);
+          }
+
+          for (const laterTier of laterTiers) {
+            const key = tierFingerprint(mode, laterTier);
+            if (!changedKeys.has(key)) {
+              nextPrevTier.set(key, num(laterTier.price));
+              continue;
+            }
+            const prevPrice = prevTierByKey.get(key);
+            if (prevPrice == null) continue;
+            const scaled = roundToThousands(prevPrice * (1 + percent / 100));
+            await client.query(
+              `UPDATE route_price_tiers
+               SET price=$1, is_manual_adjusted=FALSE
+               WHERE id=$2`,
+              [scaled, laterTier.id],
+            );
+            nextPrevTier.set(key, scaled);
+          }
+          prevTierByKey = nextPrevTier;
+        }
+      }
+
+      await client.query('COMMIT');
+      return mapVersionRow(await loadVersionRow(versionId), await loadTiers(versionId));
     } catch (error) {
       await client.query('ROLLBACK');
       throw error;
