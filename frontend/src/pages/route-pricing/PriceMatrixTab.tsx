@@ -10,6 +10,7 @@ import type {
   PriceMatrixWeightRow,
   PriceMatrixWeightTable,
 } from '../../api/routePricingApi';
+import { useI18n } from '../../i18n/useI18n';
 import { formatPriceDisplay } from './priceDisplay';
 
 function formatPercentLabel(percent: number): string {
@@ -124,71 +125,56 @@ function useStickyLeftOffsets(columnCount: number) {
 }
 
 export function PriceMatrixTab({ priceBookId }: { priceBookId: number }) {
+  const { t } = useI18n();
   const { data, isLoading, isError, refetch } = usePriceMatrix(priceBookId);
   const [fromPeriodId, setFromPeriodId] = useState('');
 
   if (isLoading) {
-    return <p className="text-sm text-neutral-500">Đang tải bảng giá…</p>;
+    return <p className="text-sm text-neutral-500">{t('routePricing.priceSet.loading')}</p>;
   }
   if (isError) {
     return (
       <p className="text-sm text-red-600">
-        Không tải được bảng giá.{' '}
+        {t('routePricing.matrix.loadError')}{' '}
         <button type="button" className="underline" onClick={() => void refetch()}>
-          Thử lại
+          {t('routePricing.priceSet.retry')}
         </button>
       </p>
     );
   }
 
   const periods = data?.periods ?? [];
-  const weightTables = data?.weight_tables ?? [];
-  const truckTables = data?.truck_tables ?? [];
-  const tripsRows = data?.trips.rows ?? [];
+  const setTables = data?.set_tables ?? [];
 
   if (periods.length === 0) {
-    return (
-      <p className="text-sm text-neutral-500">
-        Chưa có kỳ điều chỉnh — vào tab Kỳ điều chỉnh để tạo.
-      </p>
-    );
+    return <p className="text-sm text-neutral-500">{t('routePricing.matrix.noPeriods')}</p>;
   }
 
-  if (weightTables.length === 0 && truckTables.length === 0 && tripsRows.length === 0) {
-    return (
-      <p className="text-sm text-neutral-500">
-        Chưa có nhóm tuyến nào có bảng giá. Tạo giá ở tab Quản lý giá.
-      </p>
-    );
+  if (setTables.length === 0) {
+    return <p className="text-sm text-neutral-500">{t('routePricing.matrix.emptyBook')}</p>;
   }
 
   return (
     <PriceMatrixContent
       periods={periods}
-      weightTables={weightTables}
-      truckTables={truckTables}
-      tripsRows={tripsRows}
+      setTables={setTables}
       fromPeriodId={fromPeriodId}
       onFromPeriodChange={setFromPeriodId}
     />
   );
 }
-
 function PriceMatrixContent({
   periods,
-  weightTables,
-  truckTables,
-  tripsRows,
+  setTables,
   fromPeriodId,
   onFromPeriodChange,
 }: {
   periods: PriceMatrixPeriod[];
-  weightTables: PriceMatrixWeightTable[];
-  truckTables: PriceMatrixWeightTable[];
-  tripsRows: PriceMatrixTripsRow[];
+  setTables: PriceMatrixWeightTable[];
   fromPeriodId: string;
   onFromPeriodChange: (id: string) => void;
 }) {
+  const { t } = useI18n();
   const currentPeriod = useMemo(() => resolveCurrentPeriod(periods), [periods]);
   const currentPeriodId = currentPeriod ? String(currentPeriod.id) : '';
   const effectiveFromId = fromPeriodId || currentPeriodId;
@@ -210,58 +196,25 @@ function PriceMatrixContent({
       <div className="max-w-md">
         <Select
           id="matrix-from-period"
-          label="Từ kỳ"
+          label={t('routePricing.matrix.fromPeriod')}
           value={effectiveFromId}
           onChange={(e) => onFromPeriodChange(e.target.value)}
           options={periodOptions}
         />
-        <p className="mt-1 text-xs text-neutral-500">
-          Hiện giá từ kỳ đã chọn đến kỳ hiện tại. Mặc định chỉ kỳ hiện tại.
-        </p>
+        <p className="mt-1 text-xs text-neutral-500">{t('routePricing.matrix.fromPeriodHint')}</p>
       </div>
 
-      {weightTables.length > 0 && (
-        <section className="space-y-6">
+      {setTables.map((table) => (
+        <section key={table.schema_key} className="space-y-3">
           <h2 className="text-sm font-medium text-neutral-800 dark:text-neutral-200">
-            Theo trọng lượng
+            {table.schema_label}
           </h2>
-          {weightTables.map((table) => (
-            <PriceMatrixWeightTableView
-              key={table.schema_key}
-              periods={visiblePeriods}
-              table={table}
-            />
-          ))}
+          <PriceMatrixWeightTableView periods={visiblePeriods} table={table} />
         </section>
-      )}
-
-      {truckTables.length > 0 && (
-        <section className="space-y-6">
-          <h2 className="text-sm font-medium text-neutral-800 dark:text-neutral-200">
-            Theo loại xe
-          </h2>
-          {truckTables.map((table) => (
-            <PriceMatrixWeightTableView
-              key={table.schema_key}
-              periods={visiblePeriods}
-              table={table}
-            />
-          ))}
-        </section>
-      )}
-
-      {tripsRows.length > 0 && (
-        <section className="space-y-3">
-          <h2 className="text-sm font-medium text-neutral-800 dark:text-neutral-200">
-            Theo chuyến / xe / ngày
-          </h2>
-          <PriceMatrixTripsTableView periods={visiblePeriods} rows={tripsRows} />
-        </section>
-      )}
+      ))}
     </div>
   );
 }
-
 function PriceMatrixWeightTableView({
   periods,
   table,
@@ -350,6 +303,7 @@ function PriceMatrixWeightTableView({
                 periods={periods}
                 columns={cols}
                 stickyLefts={lefts}
+                virtualize={table.rows.length > 50}
               />
             ))}
           </tbody>
@@ -364,14 +318,19 @@ function WeightRow({
   periods,
   columns,
   stickyLefts,
+  virtualize,
 }: {
   row: PriceMatrixWeightRow;
   periods: PriceMatrixPeriod[];
   columns: PriceMatrixWeightColumn[];
   stickyLefts: number[];
+  virtualize: boolean;
 }) {
   return (
-    <tr className="hover:bg-neutral-50 dark:hover:bg-neutral-800/50">
+    <tr
+      className="hover:bg-neutral-50 dark:hover:bg-neutral-800/50"
+      style={virtualize ? { contentVisibility: 'auto' } : undefined}
+    >
       <td
         style={{ left: stickyLefts[0] }}
         className={`${stickyCellClass()} border border-neutral-200 dark:border-neutral-700 px-2 py-1.5 text-center`}
@@ -384,23 +343,17 @@ function WeightRow({
       >
         <RouteNameCell name={row.group_name} />
       </td>
-      {periods.map((p) =>
+            {periods.map((p) =>
         columns.map((col) => {
           const cell = row.cells[String(p.id)]?.[col.key];
           const { value, manual } = readCell(cell);
-          const title =
-            col.kind === 'pallet' && value === 0 && manual
-              ? 'Pallet được điều chỉnh về 0'
-              : manual
-                ? 'Đã điều chỉnh'
-                : undefined;
           return (
             <td
               key={`${p.id}-${col.key}`}
               className={cellClass(manual)}
-              title={title}
+              title={manual ? 'Đã điều chỉnh' : undefined}
             >
-              {formatMoneyCell(cell)}
+              {value == null ? '-' : formatMoneyCell(cell)}
             </td>
           );
         }),

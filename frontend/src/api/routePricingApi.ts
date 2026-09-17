@@ -60,8 +60,38 @@ export interface AdjustmentPeriod {
   updated_at?: string;
 }
 
+export interface PriceSetTier {
+  id: number;
+  price_set_id: number;
+  sort_order: number;
+  range_from: number | null;
+  range_to: number | null;
+  pricing_unit: 'chuyen' | 'tan';
+  min_billable_ton: number | null;
+  label: string | null;
+}
+
+export interface PriceSet {
+  id: number;
+  name: string;
+  pricing_mode: PricingMode;
+  has_pallet: boolean;
+  status: 'active' | 'deactive';
+  tiers: PriceSetTier[];
+  group_count: number;
+}
+
+export interface PriceSetTierInput {
+  range_from?: number | null;
+  range_to?: number | null;
+  pricing_unit: 'chuyen' | 'tan';
+  min_billable_ton?: number | null;
+  label?: string | null;
+}
+
 export interface PriceTierInput {
   id?: number;
+  price_set_tier_id?: number;
   range_from?: number;
   range_to?: number | null;
   pricing_unit: 'chuyen' | 'tan';
@@ -77,7 +107,7 @@ export interface RoutePriceVersion {
   effective_from: string;
   effective_to: string | null;
   pricing_mode: PricingMode;
-  pallet_trip_price: number;
+  pallet_trip_price: number | null;
   pallet_manual_adjusted?: boolean;
   adjustment_percent: number | null;
   base_version_id?: number | null;
@@ -93,6 +123,8 @@ export interface RoutePriceConfigSummary {
   is_residual: boolean;
   province_code: string;
   tinh: string;
+  price_set_id: number | null;
+  price_set_name: string | null;
   current_version: RoutePriceVersion | null;
   version_count: number;
 }
@@ -138,6 +170,8 @@ export interface PriceMatrixWeightRow {
 export interface PriceMatrixWeightTable {
   schema_key: string;
   schema_label: string;
+  price_set_id?: number;
+  pricing_mode?: PricingMode;
   columns: PriceMatrixWeightColumn[];
   rows: PriceMatrixWeightRow[];
 }
@@ -158,6 +192,7 @@ export interface PriceMatrixTripsRow {
 
 export interface PriceMatrixResponse {
   periods: PriceMatrixPeriod[];
+  set_tables: PriceMatrixWeightTable[];
   weight_tables: PriceMatrixWeightTable[];
   truck_tables?: PriceMatrixWeightTable[];
   trips: { rows: PriceMatrixTripsRow[] };
@@ -301,9 +336,9 @@ export const routePricingApi = {
   createPrice: async (body: {
     route_group_id: number;
     adjustment_period_id: number;
-    pricing_mode: PricingMode;
-    pallet_trip_price: number;
-    tiers: PriceTierInput[];
+    price_set_id: number;
+    pallet_trip_price?: number | null;
+    tiers: { price_set_tier_id: number; price: number }[];
   }): Promise<RoutePriceVersion> => {
     const res = await axiosClient.post<{ data: RoutePriceVersion }>('/route-pricing/prices', body);
     return res.data.data;
@@ -312,9 +347,9 @@ export const routePricingApi = {
   updateAbsolutePrice: async (
     routeGroupId: number,
     body: {
-      pricing_mode: PricingMode;
-      pallet_trip_price: number;
-      tiers: PriceTierInput[];
+      price_set_id?: number;
+      pallet_trip_price?: number | null;
+      tiers: { price_set_tier_id: number; price: number }[];
     },
   ): Promise<RoutePriceVersion> => {
     const res = await axiosClient.put<{ data: RoutePriceVersion }>(
@@ -324,11 +359,53 @@ export const routePricingApi = {
     return res.data.data;
   },
 
+  deleteGroupPrices: async (routeGroupId: number): Promise<void> => {
+    await axiosClient.delete(`/route-pricing/prices/groups/${routeGroupId}`);
+  },
+
+  listPriceSets: async (): Promise<PriceSet[]> => {
+    const res = await axiosClient.get<{ data: PriceSet[] }>('/route-pricing/price-sets');
+    return res.data.data;
+  },
+
+  createPriceSet: async (body: {
+    name: string;
+    pricing_mode: PricingMode;
+    has_pallet: boolean;
+    tiers: PriceSetTierInput[];
+  }): Promise<PriceSet> => {
+    const res = await axiosClient.post<{ data: PriceSet }>('/route-pricing/price-sets', body);
+    return res.data.data;
+  },
+
+  renamePriceSet: async (id: number, name: string): Promise<PriceSet> => {
+    const res = await axiosClient.put<{ data: PriceSet }>(`/route-pricing/price-sets/${id}`, { name });
+    return res.data.data;
+  },
+
+  replacePriceSet: async (
+    id: number,
+    body: { has_pallet: boolean; tiers: PriceSetTierInput[] },
+  ): Promise<PriceSet> => {
+    const res = await axiosClient.put<{ data: PriceSet }>(`/route-pricing/price-sets/${id}`, body);
+    return res.data.data;
+  },
+
+  addPriceSetTier: async (id: number, body: PriceSetTierInput): Promise<PriceSet> => {
+    const res = await axiosClient.post<{ data: PriceSet }>(`/route-pricing/price-sets/${id}/tiers`, body);
+    return res.data.data;
+  },
+
+  deactivatePriceSet: async (id: number): Promise<void> => {
+    await axiosClient.delete(`/route-pricing/price-sets/${id}`);
+  },
+
   manualAdjustVersion: async (
     versionId: number,
     body: {
-      pallet_trip_price: number;
+      pallet_trip_price?: number | null;
       tiers: { id: number; price: number }[];
+      added_tiers?: { price_set_tier_id: number; price: number }[];
     },
   ): Promise<RoutePriceVersion> => {
     const res = await axiosClient.put<{ data: RoutePriceVersion }>(

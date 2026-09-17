@@ -49,12 +49,12 @@ const SIDEBAR_PERMISSION_STRUCTURE: MenuGroupDefinition[] = [
     id: 'route_pricing',
     icon: MapPinned,
     titleKey: 'permissions.groups.route_pricing',
-    defaultTitle: 'Giá theo tuyến',
+    defaultTitle: 'Quản lý giá cước vận tải',
     subMenus: [
       {
         id: 'route_pricing_matrix',
         titleKey: 'permissions.subMenus.route_pricing',
-        defaultTitle: 'Giá theo tuyến',
+        defaultTitle: 'Kỳ điều chỉnh, Bộ giá, Quản lý tuyến, Bảng giá',
         permCodes: ['route_pricing.view', 'route_pricing.manage'],
       },
     ],

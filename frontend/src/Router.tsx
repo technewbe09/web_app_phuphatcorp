@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useSearchParams } from 'react-router-dom';
 import { AuthLayout } from './layouts/AuthLayout';
 import { MainLayout } from './layouts/MainLayout';
 import { ProtectedRoute } from './components/ProtectedRoute';
@@ -37,6 +37,24 @@ import InvoiceTrackingPage from './pages/invoice-tracking/InvoiceTrackingPage';
 import PublicTicketViewPage from './pages/invoice-tracking/PublicTicketViewPage';
 import { DataScopeManagementPage } from './pages/admin/DataScopeManagementPage';
 import { WorkflowManagementPage } from './pages/admin/WorkflowManagementPage';
+
+function RoutePricingRedirect() {
+  const [params] = useSearchParams();
+  const tab = params.get('tab');
+  const next = new URLSearchParams(params);
+  next.delete('tab');
+  const qs = next.toString();
+  const suffix = qs ? `?${qs}` : '';
+  const path =
+    tab === 'sets'
+      ? '/route-pricing/sets'
+      : tab === 'prices'
+        ? '/route-pricing/matrix'
+        : tab === 'groups' || tab === 'manage'
+          ? '/route-pricing/routes'
+          : '/route-pricing/periods';
+  return <Navigate to={`${path}${suffix}`} replace />;
+}
 
 function PlaceholderPage({ title }: { title: string }) {
   return (
@@ -103,7 +121,11 @@ export function Router() {
             <Route path="/catalog/promo-items" element={<PromoItemCatalogPage />} />
             <Route path="/catalog/delivery-points" element={<DeliveryPointCatalogPage />} />
             <Route path="/catalog/drivers" element={<DriverCatalogPage />} />
-            <Route path="/route-pricing" element={<RoutePricingPage />} />
+            <Route path="/route-pricing" element={<RoutePricingRedirect />} />
+            <Route path="/route-pricing/periods" element={<RoutePricingPage />} />
+            <Route path="/route-pricing/sets" element={<RoutePricingPage />} />
+            <Route path="/route-pricing/routes" element={<RoutePricingPage />} />
+            <Route path="/route-pricing/matrix" element={<RoutePricingPage />} />
           </Route>
         </Route>
 

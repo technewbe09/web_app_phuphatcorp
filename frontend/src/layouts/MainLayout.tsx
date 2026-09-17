@@ -49,6 +49,7 @@ const ACCOUNTING_DATA_ROUTES = ['/accounting-data'];
 const DELIVERY_DATA_ROUTES = ['/delivery-data'];
 const CATALOG_ROUTES = ['/catalog'];
 const JOBS_ROUTES = ['/jobs'];
+const ROUTE_PRICING_ROUTES = ['/route-pricing'];
 
 export function MainLayout() {
   const { user, logout, hasPermission, hasAnyPermission } = useAuth();
@@ -77,6 +78,9 @@ export function MainLayout() {
   );
   const [jobsOpen, setJobsOpen] = useState(
     JOBS_ROUTES.some((p) => location.pathname.startsWith(p)),
+  );
+  const [routePricingOpen, setRoutePricingOpen] = useState(
+    ROUTE_PRICING_ROUTES.some((p) => location.pathname.startsWith(p)),
   );
 
   // Close mobile drawer on route change
@@ -156,9 +160,14 @@ export function MainLayout() {
   const showRoutePricing = hasAnyPermission(['route_pricing.view', 'route_pricing.manage'])
     || user?.role === 'ADMIN';
 
-  if (showRoutePricing) {
-    baseNavItems.push({ to: '/route-pricing', icon: MapPinned, label: 'Giá theo tuyến' });
-  }
+  const priceBookId = new URLSearchParams(location.search).get('priceBookId');
+  const priceBookQuery = priceBookId ? `?priceBookId=${encodeURIComponent(priceBookId)}` : '';
+  const routePricingSubItems = [
+    { to: `/route-pricing/periods${priceBookQuery}`, icon: CalendarRange, label: t('routePricing.nav.periods') },
+    { to: `/route-pricing/sets${priceBookQuery}`, icon: BookOpen, label: t('routePricing.nav.sets') },
+    { to: `/route-pricing/routes${priceBookQuery}`, icon: MapPinned, label: t('routePricing.nav.routes') },
+    { to: `/route-pricing/matrix${priceBookQuery}`, icon: FileSpreadsheet, label: t('routePricing.nav.matrix') },
+  ];
 
   const userSettingsSubItems = [
     hasPermission('users.view') || user?.role === 'ADMIN'
@@ -412,6 +421,16 @@ export function MainLayout() {
               {(!isCollapsed || mobileDrawerOpen) && item.label}
             </NavLink>
           ))}
+
+          {showRoutePricing &&
+            renderSubGroup(
+              t('routePricing.nav.title'),
+              MapPinned,
+              routePricingSubItems,
+              routePricingOpen,
+              () => setRoutePricingOpen((o) => !o),
+              location.pathname.startsWith('/route-pricing'),
+            )}
 
           {/* Delivery Data collapsible group */}
           {showDeliveryData &&

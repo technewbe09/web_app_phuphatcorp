@@ -9,6 +9,8 @@
 **UI Spec:** `docs/ui/20260915_route-pricing-period-manual-adjust-ui-spec.md`  
 **Nguồn:** Grill 2026-09-14/15 (shared understanding đã confirm)
 
+**Thay bởi 2026-09-17:** Giá mới phải `> 0`. Ô trống không sinh record. Không điều chỉnh Pallet về `0`. Sửa giá gốc có confirm recascade. Bậc bộ chưa có trên kỳ dùng `added_tiers`. Chi tiết: `docs/ba/20260917_route-pricing-price-sets-analysis.md`. Các mục dưới mô tả CR 2026-09-15, không còn là luật lưu giá hiện tại ở chỗ mâu thuẫn.
+
 ---
 
 ## 1. Mô tả yêu cầu

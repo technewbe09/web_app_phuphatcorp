@@ -62,8 +62,40 @@ export interface RouteGroup {
   updated_at: string;
 }
 
+export interface PriceSetTier {
+  id: number;
+  price_set_id: number;
+  sort_order: number;
+  range_from: number | null;
+  range_to: number | null;
+  pricing_unit: PricingUnit;
+  min_billable_ton: number | null;
+  label: string | null;
+}
+
+export interface PriceSet {
+  id: number;
+  name: string;
+  pricing_mode: PricingMode;
+  has_pallet: boolean;
+  status: 'active' | 'deactive';
+  tiers: PriceSetTier[];
+  group_count: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PriceSetTierInput {
+  range_from?: number | null;
+  range_to?: number | null;
+  pricing_unit: PricingUnit;
+  min_billable_ton?: number | null;
+  label?: string | null;
+}
+
 export interface RoutePriceTier {
   id?: number;
+  price_set_tier_id?: number;
   range_from: number;
   range_to: number | null;
   pricing_unit: PricingUnit;
@@ -97,7 +129,7 @@ export interface RoutePriceVersion {
   /** Derived from adjustment period.end_date */
   effective_to: string | null;
   pricing_mode: PricingMode;
-  pallet_trip_price: number;
+  pallet_trip_price: number | null;
   pallet_manual_adjusted: boolean;
   /** Derived: period.percent when base_version_id set; else null */
   adjustment_percent: number | null;
@@ -114,6 +146,8 @@ export interface RoutePriceConfigSummary {
   is_residual: boolean;
   province_code: string;
   tinh: string;
+  price_set_id: number | null;
+  price_set_name: string | null;
   current_version: RoutePriceVersion | null;
   version_count: number;
 }
@@ -166,6 +200,8 @@ export interface PriceMatrixWeightRow {
 export interface PriceMatrixWeightTable {
   schema_key: string;
   schema_label: string;
+  price_set_id?: number;
+  pricing_mode?: PricingMode;
   columns: PriceMatrixWeightColumn[];
   rows: PriceMatrixWeightRow[];
 }
@@ -186,6 +222,8 @@ export interface PriceMatrixTripsRow {
 
 export interface PriceMatrixResponse {
   periods: PriceMatrixPeriod[];
+  /** One table per price set used in the book. Canonical matrix. */
+  set_tables: PriceMatrixWeightTable[];
   weight_tables: PriceMatrixWeightTable[];
   truck_tables: PriceMatrixWeightTable[];
   trips: { rows: PriceMatrixTripsRow[] };

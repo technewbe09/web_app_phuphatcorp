@@ -1024,11 +1024,11 @@ frontend/src/components/admin/data-scope/DataScopeBadge.tsx
 
 ## 11. Giá theo tuyến (`route_pricing`)
 
-Menu sidebar top-level **Giá theo tuyến** — không nằm trong accordion.
+Menu sidebar accordion **Quản lý giá cước vận tải** (không phải mục top-level). Bốn route: `/route-pricing/periods`, `/sets`, `/routes`, `/matrix`. `/route-pricing` redirect theo `?tab=` cũ.
 
-### 11.1 Giá theo tuyến (/route-pricing)
+### 11.1 Giá theo tuyến
 
-**Mục đích:** Quản lý kỳ điều chỉnh giá, nhóm tuyến theo **bảng giá**, bảng giá gốc / điều chỉnh theo kỳ, xem ma trận giá. Lookup Delivery Import **chưa** gắn (501 LOOKUP_DEFERRED).
+**Mục đích:** Catalog **bộ giá** (khung, không chứa số), kỳ điều chỉnh global, nhóm tuyến theo **bảng giá**, giá gốc / điều chỉnh theo kỳ, ma trận theo bộ. Lookup Delivery Import **chưa** gắn (501 LOOKUP_DEFERRED).
 
 **Data model — bảng chính:**
 ```sql
@@ -1044,18 +1044,27 @@ route_groups (
   note TEXT, status, created_by, updated_by, ...
 )
 delivery_routes (… ward_code XOR location_text, note …) + route_group_members
-```
-route_price_configs (id, route_group_id, status, …)
+price_sets (
+  id, name, pricing_mode, has_pallet, fingerprint TEXT, status active|deactive, audit…
+  UNIQUE lower(trim(name)) WHERE active; UNIQUE fingerprint WHERE active
+)
+price_set_tiers (
+  id, price_set_id, sort_order, range_from, range_to, pricing_unit, min_billable_ton, label
+)
+route_price_configs (id, route_group_id, price_set_id NULL FK, status, …)
 route_price_versions (
   id, price_config_id, pricing_mode ('by_weight'|'by_trips'|'by_truck'),
-  pallet_trip_price, pallet_manual_adjusted BOOLEAN DEFAULT FALSE,
+  pallet_trip_price NUMERIC NULL,  -- NULL = không có pallet; cấm 0 mới
+  pallet_manual_adjusted BOOLEAN DEFAULT FALSE,
   base_version_id nullable,
   adjustment_period_id NOT NULL FK → periods,
   created_by, created_at
 )
 route_price_tiers (
-  id, price_version_id, range_from, range_to, pricing_unit, price, min_billable_ton, sort_order, label,
+  id, price_version_id, price_set_tier_id NOT NULL FK,
+  range_from, range_to, pricing_unit, price, min_billable_ton, sort_order, label,
   is_manual_adjusted BOOLEAN DEFAULT FALSE
+  -- range/label copy từ bộ; nguồn sự thật là price_set_tiers
 )
 ```
 
@@ -1067,25 +1076,29 @@ route_price_tiers (
 - BR-005: Mỗi nhóm chỉ nhập **bảng giá gốc** 1 lần; bắt buộc chọn `adjustment_period_id` (kỳ gốc); BE cascade tạo version cho mọi kỳ `start > kỳ gốc`.
 - BR-006: Version gắn `adjustment_period_id`; ngày hiệu lực / `%` derive từ kỳ (không lưu trùng trên version). Không có cột `note` trên `route_price_versions` — ghi chú chỉ ở kỳ / nhóm / tuyến.
 - BR-007: Sửa giá gốc → recompute cascade các kỳ sau (xóa + rebuild; không gắn dấu mới; giữ dấu absolute chỉ khi giá không đổi).
-- BR-008: Tab **Ma trận giá** = ma trận (`GET /prices/matrix?price_book_id=`): weight gom schema exact hoặc tập con (cột = union, ô thiếu trống) + Pallet cuối; `by_truck` = `truck_tables[]` (fingerprint thứ tự nhãn+đơn vị, không merge subset, Pallet cuối); trips = hàng tuyến×bậc (không Pallet), cột = kỳ. Cell = `{ value, manual_adjusted }`; UI hiện `-` khi value=0; highlight khi manual.
-- BR-009: Tab **Quản lý giá** = CRUD/lịch sử version (badge mode + gốc/điều chỉnh ±%) + **bút chì điều chỉnh giá kỳ** (cascade kỳ sau, đánh dấu ô sửa tay).
+- BR-008: **Bảng giá** (`/route-pricing/matrix`) = `GET /prices/matrix?price_book_id=`. Một `set_tables[]` entry mỗi bộ có nhóm trong book (thứ tự weight, truck, trips, rồi tên). Cột = bậc (và pallet cuối nếu có nhóm có số). Ô thiếu `null`, UI hiện `-`. Không gom fingerprint / tập con. `weight_tables` / `truck_tables` là filter của `set_tables`. `trips.rows` luôn rỗng. Highlight khi `manual_adjusted`.
+- BR-009: **Quản lý tuyến → Quản lý giá** = lịch sử version (badge mode + gốc/điều chỉnh ±%) + tên bộ + bút chì điều chỉnh kỳ. **Bộ giá** là catalog riêng (`/route-pricing/sets`), không scope bảng giá.
 - BR-010: `GET /route-pricing/lookup` **deferred** (501 LOOKUP_DEFERRED) — CR riêng.
-- BR-011: Giá bậc và Pallet ≥ 0. Manual adjust: `PUT /prices/versions/:versionId/manual-adjust`; cờ `pallet_manual_adjusted` / `is_manual_adjusted`.
+- BR-011: Giá đã lưu phải `> 0`. Ô không gửi = không record. Pallet chỉ khi bộ `has_pallet`; không gửi = NULL. Không lưu `0` mới. Manual adjust: sửa bậc đã có, `added_tiers` cho bậc chưa có, không xóa bậc trên kỳ lẻ. Cờ `pallet_manual_adjusted` / `is_manual_adjusted`. Card vẫn hiện badge “Pallet được điều chỉnh về 0” nếu dữ liệu cũ có giá 0.
 
 **Flow — sử dụng chính:**
 ```
-Tab Kỳ điều chỉnh (global, không cần chọn bảng giá)
+Kỳ điều chỉnh (global, không cần chọn bảng giá)
   → Thêm kỳ (start_date, %, note?) → BE đóng kỳ trước + apply % mọi version mở
   → Chỉ xóa được kỳ gần nhất (= rollback)
 
-Chọn Bảng giá
-  → Tab Nhóm tuyến: tạo/sửa nhóm (phường XOR location XOR residual + note)
-  → Tab Quản lý giá: Thêm bảng giá gốc (kỳ gốc + by_weight|by_trips|by_truck + tiers + pallet)
-        → by_truck: nhãn text tự do, đơn vị chuyến/tấn, không khoảng số
-        → BE cascade versions kỳ sau
-      → Sửa giá gốc → recompute cascade
-      → Bút chì trên từng kỳ → sửa đơn giá + confirm → cascade kỳ sau + đánh dấu
-  → Tab Ma trận giá: xem ma trận weight_tables[] + truck_tables[] + trips.rows
+Bộ giá (catalog global)
+  → Tạo khung (tên + mode + bậc + cờ pallet). Cấm trùng / tập con.
+  → Bộ đang gắn nhóm: chỉ đổi tên hoặc thêm bậc. Muốn sửa cấu trúc / ngừng dùng: chưa ai gắn.
+
+Chọn Bảng giá → Quản lý tuyến
+  → Tab Tuyến: tạo/sửa nhóm (phường XOR location XOR residual + note)
+  → Tab Quản lý giá: chọn bộ + nhập số các bậc cần dùng (không tự thêm bậc)
+        → BE gắn price_set_id + cascade chỉ bậc có số
+      → Sửa giá gốc → confirm recascade (kỳ sau tạo lại, mất chỉnh tay)
+      → Xóa giá → gỡ bộ, giữ nhóm, nhập lại bộ khác
+      → Bút chì kỳ → sửa bậc đã có; thêm bậc/pallet chưa có từ kỳ đó, kỳ sau scale %
+Bảng giá (ma trận): một bảng mỗi bộ trong book, cột đã lọc
 ```
 
 **API Endpoints:**
@@ -1096,9 +1109,14 @@ GET             /api/route-pricing/geo/provinces
 GET             /api/route-pricing/geo/wards?province_code=
 GET/POST/PUT/DELETE /api/route-pricing/routes
 GET/POST/PUT/DELETE /api/route-pricing/groups
+GET/POST        /api/route-pricing/price-sets
+PUT             /api/route-pricing/price-sets/:id
+POST            /api/route-pricing/price-sets/:id/tiers
+DELETE          /api/route-pricing/price-sets/:id
 GET/POST        /api/route-pricing/prices
 GET             /api/route-pricing/prices/matrix?price_book_id=
 PUT             /api/route-pricing/prices/groups/:routeGroupId/absolute
+DELETE          /api/route-pricing/prices/groups/:routeGroupId
 PUT             /api/route-pricing/prices/versions/:versionId/manual-adjust
 GET             /api/route-pricing/prices/:configId/versions
 GET             /api/route-pricing/lookup   -- 501 LOOKUP_DEFERRED
@@ -1112,21 +1130,27 @@ backend/src/migrations/042_route_pricing_adjustment_periods.sql
 backend/src/migrations/044_route_pricing_price_books.sql
 backend/src/migrations/045_route_pricing_by_truck.sql
 backend/src/migrations/046_route_pricing_manual_adjust.sql
+backend/src/migrations/055_route_pricing_price_sets.sql
 backend/src/services/routePricingService.ts
+backend/src/services/priceSetService.ts
 backend/src/controllers/routePricingController.ts
 backend/src/routes/routePricing.ts
 backend/src/types/routePricing.ts
 backend/src/__tests__/routePricingService.test.ts
+backend/src/__tests__/priceSetService.test.ts
 frontend/src/api/routePricingApi.ts
 frontend/src/hooks/useRoutePricing.ts
 frontend/src/pages/route-pricing/RoutePricingPage.tsx
+frontend/src/pages/route-pricing/PriceSetsTab.tsx
+frontend/src/pages/route-pricing/PriceSetFormModal.tsx
+frontend/src/pages/route-pricing/PriceFormModal.tsx
 frontend/src/pages/route-pricing/PriceMatrixTab.tsx
 frontend/src/pages/route-pricing/PeriodPriceAdjustModal.tsx
 frontend/src/pages/route-pricing/priceDisplay.ts
 ```
 
-**Access:** `route_pricing.view` (xem) / `route_pricing.manage` (CRUD). Route: `/route-pricing`  
-**BA / UI:** `docs/ba/20260911_route-pricing-price-books-cr.md`, `docs/ui/20260911_route-pricing-price-books-cr-ui-spec.md`, `docs/ba/20260711_route-pricing-analysis.md`, `docs/ba/20260731_route-pricing-price-matrix-view-analysis.md`, `docs/ba/20260912_route-pricing-by-truck-analysis.md`, `docs/ui/20260912_route-pricing-by-truck-ui-spec.md`, `docs/ba/20260915_route-pricing-period-manual-adjust-analysis.md`, `docs/ui/20260915_route-pricing-period-manual-adjust-ui-spec.md`
+**Access:** `route_pricing.view` (xem) / `route_pricing.manage` (CRUD).  
+**BA / UI (hiện tại):** `docs/ba/20260917_route-pricing-price-sets-analysis.md`, `docs/ui/20260917_route-pricing-price-sets-ui-spec.md`. Spec 2026-07-11 và 2026-09-15 là lịch sử; phần giá `0` / tự thêm bậc đã bị bộ giá thay.
 
 ---
 
