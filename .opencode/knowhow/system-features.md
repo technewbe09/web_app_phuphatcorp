@@ -794,6 +794,62 @@ frontend/src/components/accounting-data/InvoiceNumbersPopup.tsx
 
 ---
 
+### 11.4 Lên bảng kê thô 5 nhà & Xử lý ND-MCC (/accounting-data/bang-ke-tho)
+
+**Mục đích:** Lưu trữ các đợt file Excel sau bước xử lý dữ liệu giao hàng 5 nhà (chứa sheet `Processed`), tự động bóc tách và sinh bảng kê thô 8 sheets cho 2 nhà cung cấp ND-MCC (MCC `2000000007` & NDFC `2000000008`) kèm tra cứu khách hàng, giá cước và biểu phụ phí.
+
+**Data model:**
+- `bang_ke_tho_batches`: Quản lý đợt upload (file gốc lưu tại MinIO `batches/{batch_id}/input.xlsx`).
+- `bang_ke_tho_outputs`: Trạng thái bảng kê theo nhà (`nd_mcc`, `clv`, `calofic`). Trạng thái: `pending` | `ready` | `failed`. File output lưu tại `batches/{batch_id}/outputs/{house_code}.xlsx`.
+
+**Quy tắc sinh 8 sheets ND-MCC:**
+- **Toàn vẹn Workbook Output:** File output chỉ giữ lại 3 sheets cơ sở là `NCC`, `Sheet1` và `Processed` từ file input (tự động xóa bỏ các sheets không thuộc scope như `VFM`, `CLV`, `STHI`, `Process 1-8`, `Sheet31-8`, v.v.), và sinh thêm 8 sheets bảng kê nghiệp vụ ND-MCC (tổng cộng 11 sheets theo thứ tự chuẩn):
+1. `MCC (goc)`: Chi tiết từng dòng sản phẩm MCC (68 cột, công thức Excel chuẩn: Hóa đơn, Round MT, Tấn/Hóa đơn, Tấn/Chuyến, Đơn giá vận chuyển, Phụ phí, Thành tiền check, Thành tiền hóa đơn, 5 nhà).
+2. `MCC-clv`: Tổng hợp 1 dòng/hóa đơn nhánh kho Hiệp Phước (Slot `CALOFIC HP`).
+3. `MCC (uni)`: Tổng hợp 1 dòng/hóa đơn nhánh kho Unidepot (Slot `WH Unidepot`, Site `UNI-MCC`).
+4. `MCC (tt)`: Tổng hợp 1 dòng/hóa đơn nhánh tiếp thị / chuyển tải (Slot `UNI 1`).
+5. `NDFC (goc)`: Chi tiết từng dòng sản phẩm NDFC (68 cột).
+6. `NDFC-clv`: Tổng hợp nhánh kho Hiệp Phước (Slot `CALOFIC HP`).
+7. `NDFC (uni)`: Tổng hợp nhánh kho Unidepot (Slot `UNI 3`, Site `UNI-NDFC`).
+8. `NDFC (tt)`: Tổng hợp nhánh tiếp thị / chuyển tải (Slot `UNI 1`).
+
+**Lookup Rules:**
+- Khách hàng: Tra cứu `customers` theo cặp `(ten_khach_hang, dia_chi_giao_hang)` lấy `diem_tra_hang` (Đại lý), `tuyen_phuong` (Điểm giao hàng thực tế), `diem_giao_hang_tinh_phi` (Điểm tính phí).
+- Giá cước: Tra cứu `route_pricing` theo Điểm tính phí, Khung giá (`≤2.5 tấn`, `>8-16 tấn`, `>16-23 tấn`, `>23 tấn`), Ngày hóa đơn, ưu tiên Price Book theo nhà và slot. Để trống (`null`) nếu không tìm thấy.
+- Phụ phí: Tra cứu `customer_surcharge_rules` lấy phí bốc xếp, chuyển tải, ghép điểm. Để trống (`null`) nếu không tìm thấy.
+
+**API Endpoints:**
+```
+GET    /api/bang-ke-tho/batches                     → Danh sách đợt (accounting_data.view)
+POST   /api/bang-ke-tho/batches                     → Upload đợt mới (accounting_data.manage)
+GET    /api/bang-ke-tho/batches/:id/files/input     → Tải file input gốc (accounting_data.view)
+POST   /api/bang-ke-tho/batches/:id/process-nd-mcc  → Kích hoạt xử lý bảng kê ND-MCC (accounting_data.manage)
+GET    /api/bang-ke-tho/batches/:id/files/:houseCode→ Tải file output nhà (accounting_data.view)
+DELETE /api/bang-ke-tho/batches/:id                 → Xóa đợt (accounting_data.manage)
+```
+
+**Files:**
+```
+backend/src/constants/bangKeTho.ts
+backend/src/services/bangKeThoPricingLookup.ts
+backend/src/services/bangKeThoNdMccEngine.ts
+backend/src/services/bangKeThoService.ts
+backend/src/controllers/bangKeThoController.ts
+backend/src/routes/bangKeTho.ts
+backend/src/__tests__/bangKeThoNdMccEngine.test.ts
+backend/src/__tests__/bangKeThoService.test.ts
+frontend/src/api/bangKeThoApi.ts
+frontend/src/hooks/useBangKeTho.ts
+frontend/src/components/bang-ke-tho/BangKeThoHouseCell.tsx
+frontend/src/components/bang-ke-tho/BangKeThoTable.tsx
+frontend/src/pages/admin/accounting-data/BangKeThoPage.tsx
+```
+
+**Access:** Route `/accounting-data/bang-ke-tho`, sidebar menu "Dữ liệu kế toán" → "Lên bảng kê thô 5 nhà".  
+**Permissions:** `accounting_data.view` (xem/tải), `accounting_data.manage` (upload/xử lý/xóa).
+
+---
+
 - [ ] Trang Sổ kế toán (/accounting) — CRUD phiếu thu/chi, nhật ký chứng từ
 - [ ] Trang Báo cáo (/reports) — báo cáo tài chính, biểu đồ doanh thu
 - [ ] Trang Cài đặt (/settings) — quản lý tài khoản, đổi mật khẩu

@@ -145,4 +145,28 @@ export const bangKeThoController = {
       handleServiceError(res, err, 'Không tìm thấy file');
     }
   },
+
+  async processNdMcc(req: AuthRequest, res: Response): Promise<void> {
+    const userId = req.user?.userId;
+    if (!userId) {
+      sendError(res, 'Unauthorized', 401);
+      return;
+    }
+    const batchId = req.params.id;
+    try {
+      const result = await bangKeThoService.processNdMcc(batchId, userId);
+      sendSuccess(res, result, 'Xử lý bảng kê thô ND-MCC thành công');
+      auditService.logAudit({
+        userId,
+        username: req.user!.email,
+        action: 'UPDATE',
+        entityType: 'bang_ke_tho_nd_mcc',
+        entityLabel: result.download_filename,
+        ipAddress: req.ip,
+        details: { batchId, stats: result.stats },
+      });
+    } catch (err) {
+      handleServiceError(res, err, 'Xử lý bảng kê ND-MCC thất bại');
+    }
+  },
 };

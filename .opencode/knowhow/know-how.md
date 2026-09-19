@@ -247,6 +247,35 @@ VITE_API_URL=http://localhost:3021/api
 **Populate:** Auto-populated khi import `delivery_data` (match `ten_kh` → `customers.ten_khach_hang`, `ma_ncc` → `suppliers.supplier_code`)
 **Migration:** `019_create_customer_suppliers.sql`
 
+### bang_ke_tho_batches
+| Column | Type | Constraints |
+|--------|------|-------------|
+| id | UUID | PRIMARY KEY, DEFAULT gen_random_uuid() |
+| original_filename | VARCHAR(255) | NOT NULL |
+| filename_key | VARCHAR(255) | UNIQUE, NOT NULL |
+| input_object_key | TEXT | NOT NULL |
+| input_size_bytes | INTEGER | NOT NULL |
+| uploaded_by | INTEGER | NOT NULL, FK → users(id) |
+| uploaded_at | TIMESTAMPTZ | DEFAULT NOW() |
+| created_at | TIMESTAMPTZ | DEFAULT NOW() |
+| updated_at | TIMESTAMPTZ | DEFAULT NOW() |
+
+### bang_ke_tho_outputs
+| Column | Type | Constraints |
+|--------|------|-------------|
+| id | UUID | PRIMARY KEY, DEFAULT gen_random_uuid() |
+| batch_id | UUID | NOT NULL, FK → bang_ke_tho_batches(id) ON DELETE CASCADE |
+| house_code | VARCHAR(32) | NOT NULL, CHECK in ('nd_mcc', 'clv', 'calofic') |
+| status | VARCHAR(16) | NOT NULL, CHECK in ('pending', 'ready', 'failed'), DEFAULT 'pending' |
+| download_filename | VARCHAR(255) | NOT NULL |
+| object_key | TEXT | NULL |
+| error_message | TEXT | NULL |
+| generated_at | TIMESTAMPTZ | NULL |
+| updated_at | TIMESTAMPTZ | DEFAULT NOW() |
+
+**Constraints:** UNIQUE(batch_id, house_code)
+**Migration:** `046_create_bang_ke_tho.sql`
+
 **Roles:** `ADMIN`, `ACCOUNTANT`, `VIEWER`
 
 **Admin account:**
@@ -373,6 +402,17 @@ Frontend: accordion **Quản lý giá cước vận tải** → `/route-pricing/
 | Method | Path | Auth | Body/Query | Response |
 |--------|------|------|------------|----------|
 | GET | /public/invoice-tracking/:token | No (Public) | — | `{ success, data: PublicInvoiceTicket }` — Xem thông tin & chứng từ ticket qua liên kết chia sẻ |
+
+### Bang Kê Thô 5 Nhà — /bang-ke-tho
+
+| Method | Path | Auth | Body/Query | Response |
+|--------|------|------|------------|----------|
+| GET | /bang-ke-tho/batches | JWT + accounting_data.view | query: `page`, `limit`, `q` | `{ success, data: PaginatedBangKe }` |
+| POST | /bang-ke-tho/batches | JWT + accounting_data.manage | `multipart/form-data` (`file`), query: `overwrite` | `{ success, data: BangKeBatch }` |
+| GET | /bang-ke-tho/batches/:id/files/input | JWT + accounting_data.view | — | Stream binary file `.xlsx` gốc |
+| POST | /bang-ke-tho/batches/:id/process-nd-mcc | JWT + accounting_data.manage | — | `{ success, data: { batch_id, house_code, status, download_filename, generated_at, stats } }` |
+| GET | /bang-ke-tho/batches/:id/files/:houseCode | JWT + accounting_data.view | — | Stream binary file `.xlsx` output của nhà (`nd_mcc`, `clv`, `calofic`) |
+| DELETE | /bang-ke-tho/batches/:id | JWT + accounting_data.manage | — | `{ success, data: { id } }` |
 
 ### Customers — /customers
 
