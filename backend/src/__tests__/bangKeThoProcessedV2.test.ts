@@ -508,6 +508,43 @@ describe('bangKeThoProcessedV2', () => {
       expect((r3Kg.fill as any)?.fgColor?.argb).toBe('FFFFE599');
       expect(r3Kg.note).toBe('>8-16 tấn');
     });
+
+    it('safely handles shared formulas when saving workbook (regression U508)', async () => {
+      const wb = new ExcelJS.Workbook();
+      const ws = wb.addWorksheet(PROCESSED_SHEET_NAME);
+      ws.addRow([
+        'Mã NCC', 'Số HĐ', 'Ngày HĐ', 'Số tàu', 'Mã KH',
+        'Tên KH', 'Địa chỉ', 'Khung giá', 'ĐVT', 'Mã HH',
+        'Tên HH Vie', 'Tên HH En', 'Mã LH', 'Mã DVT',
+        'Số lượng', 'SP Net', 'HĐ Net', 'Round(MT)',
+        'CLF', 'VFM', 'MCC', 'CLV', 'NDFC', '5 nhà'
+      ]);
+      ws.addRow([
+        '2000000007', 'HD1', '2026-07-01', '51C', 'KH1',
+        'A', 'B', '1', 'Tấn', 'H1',
+        'V', 'E', 'L', 'D',
+        '10', '1', '1', '1',
+        1, 0, 0, 0, 0, 1
+      ]);
+      ws.addRow([
+        '', '', '', '', '',
+        '', '', '', '', '',
+        '', '', '', '',
+        '', '', '', 1,
+        '', '', '', '', '', 1
+      ]);
+      ws.getCell('S3').value = { formula: 'SUM(S2:S2)', result: 1, shareType: 'shared', ref: 'S3:W3' } as any;
+      ws.getCell('T3').value = { sharedFormula: 'S3' } as any;
+      ws.getCell('U3').value = { sharedFormula: 'S3', result: 0 } as any;
+      ws.getCell('V3').value = { sharedFormula: 'S3' } as any;
+      ws.getCell('W3').value = { sharedFormula: 'S3' } as any;
+
+      const v2Ws = generateProcessedV2Sheet(wb);
+      expect(v2Ws).toBeDefined();
+
+      // Serialization to buffer must not throw "Shared Formula master must exist above and or left of clone"
+      await expect(wb.xlsx.writeBuffer()).resolves.toBeDefined();
+    });
   });
 
   describe('determineKhungGia', () => {

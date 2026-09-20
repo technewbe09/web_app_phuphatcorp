@@ -16,8 +16,13 @@ export function parseCellToNumber(val: any): number | null {
   if (typeof val === 'number') {
     return isNaN(val) ? null : val;
   }
-  if (typeof val === 'object' && val !== null && 'result' in val) {
-    return parseCellToNumber((val as any).result);
+  if (typeof val === 'object' && val !== null) {
+    if ('result' in val) {
+      return parseCellToNumber((val as any).result);
+    }
+    if ('sharedFormula' in val || 'formula' in val) {
+      return null;
+    }
   }
   if (typeof val === 'string') {
     const trimmed = val.trim();
@@ -53,6 +58,30 @@ export function parseCellToNumber(val: any): number | null {
     return isNaN(num) ? null : num;
   }
   return null;
+}
+
+/**
+ * Extracts raw primitive value from an ExcelJS cell value.
+ * If the cell contains a formula or shared formula object, extracts the pre-calculated `result`
+ * (or null if no result exists), avoiding orphan sharedFormula clones when columns/rows are moved.
+ */
+export function extractCellValue(val: any): any {
+  if (val === null || val === undefined) return null;
+  if (typeof val === 'object') {
+    if ('result' in val) {
+      return val.result !== undefined ? val.result : null;
+    }
+    if ('sharedFormula' in val || 'formula' in val) {
+      return null;
+    }
+    if ('richText' in val && Array.isArray(val.richText)) {
+      return val.richText.map((t: any) => t.text || '').join('');
+    }
+    if ('text' in val) {
+      return val.text;
+    }
+  }
+  return val;
 }
 
 export interface ProcessedV2ColIndices {
@@ -335,7 +364,7 @@ export function generateProcessedV2Sheet(workbook: ExcelJS.Workbook): ExcelJS.Wo
       // Rows before header (e.g. title or empty): direct copy
       srcRow.eachCell({ includeEmpty: true }, (cell, c) => {
         const dstCell = dstRow.getCell(c);
-        dstCell.value = cell.value;
+        dstCell.value = extractCellValue(cell.value);
         if (cell.style) dstCell.style = cloneStyle(cell.style);
       });
       continue;
@@ -348,7 +377,7 @@ export function generateProcessedV2Sheet(workbook: ExcelJS.Workbook): ExcelJS.Wo
         if (sCol) {
           const srcCell = srcRow.getCell(sCol);
           if (srcCell.style) dstCell.style = cloneStyle(srcCell.style);
-          dstCell.value = srcCell.value;
+          dstCell.value = extractCellValue(srcCell.value);
         }
 
         // Standardize headers
@@ -407,7 +436,7 @@ export function generateProcessedV2Sheet(workbook: ExcelJS.Workbook): ExcelJS.Wo
       let srcVal: any = null;
       if (sCol) {
         const srcCell = srcRow.getCell(sCol);
-        srcVal = srcCell.value;
+        srcVal = extractCellValue(srcCell.value);
         if (srcCell.style) dstCell.style = cloneStyle(srcCell.style);
         if (srcCell.note) dstCell.note = srcCell.note;
       } else {
@@ -424,7 +453,7 @@ export function generateProcessedV2Sheet(workbook: ExcelJS.Workbook): ExcelJS.Wo
           dstCell.value = numVal;
           dstCell.numFmt = NUM_FMT_QTY;
         } else {
-          dstCell.value = srcVal;
+          dstCell.value = srcVal !== null && srcVal !== undefined ? srcVal : '';
         }
       } else if (dCol === 16 || dCol === 17 || dCol === 18) {
         // Col P (SP Net), Col Q (HD Net), Col R (Round MT)
@@ -433,7 +462,7 @@ export function generateProcessedV2Sheet(workbook: ExcelJS.Workbook): ExcelJS.Wo
           dstCell.value = numVal;
           dstCell.numFmt = NUM_FMT_WEIGHT;
         } else {
-          dstCell.value = srcVal;
+          dstCell.value = srcVal !== null && srcVal !== undefined ? srcVal : '';
         }
       } else if (dCol >= 19 && dCol <= 25) {
         // 5 nhà, CLF, VFM, MCC, CLV, NDFC, Gạo
@@ -442,12 +471,12 @@ export function generateProcessedV2Sheet(workbook: ExcelJS.Workbook): ExcelJS.Wo
           dstCell.value = numVal;
           dstCell.numFmt = NUM_FMT_WEIGHT;
         } else {
-          dstCell.value = srcVal ? srcVal : '';
+          dstCell.value = '';
           dstCell.numFmt = NUM_FMT_WEIGHT;
         }
       } else {
         // Other columns: direct value
-        dstCell.value = srcVal;
+        dstCell.value = srcVal !== null && srcVal !== undefined ? srcVal : '';
       }
     }
 
