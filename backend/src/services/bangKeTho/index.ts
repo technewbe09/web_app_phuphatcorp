@@ -193,7 +193,7 @@ async function insertBatchWithOutputs(params: {
 
 async function removeMinioKeys(keys: string[]): Promise<void> {
   await Promise.all(
-    keys.map((key) => storageService.deleteObject(env.minio.bangKeBucket, key)),
+    keys.map((key) => storageService.delete(key, env.minio.bangKeBucket)),
   );
 }
 
@@ -248,12 +248,13 @@ export const bangKeThoService = {
       params.mimetype ||
       'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
 
-    await storageService.putObject({
-      bucket: env.minio.bangKeBucket,
-      objectKey,
-      buffer: params.buffer,
+    await storageService.upload(
+      params.buffer,
+      originalFilename,
       mimetype,
-    });
+      env.minio.bangKeBucket,
+      objectKey,
+    );
 
     try {
       await insertBatchWithOutputs({
@@ -265,7 +266,7 @@ export const bangKeThoService = {
         userId: params.userId,
       });
     } catch (err) {
-      await storageService.deleteObject(env.minio.bangKeBucket, objectKey);
+      await storageService.delete(objectKey, env.minio.bangKeBucket);
       const pg = err as { code?: string };
       if (pg.code === '23505') {
         throw new BangKeError(
@@ -398,9 +399,9 @@ export const bangKeThoService = {
     if (!rows[0]) {
       throw new BangKeError('Không tìm thấy đợt', 404, 'NOT_FOUND');
     }
-    const { stream, stat } = await storageService.getObjectStream(
-      env.minio.bangKeBucket,
+    const { stream, stat } = await storageService.getStream(
       rows[0].input_object_key,
+      env.minio.bangKeBucket,
     );
     return {
       stream,
@@ -454,9 +455,9 @@ export const bangKeThoService = {
     if (!rows[0].object_key) {
       throw new BangKeError('Không tìm thấy file output', 404, 'NOT_FOUND');
     }
-    const { stream, stat } = await storageService.getObjectStream(
-      env.minio.bangKeBucket,
+    const { stream, stat } = await storageService.getStream(
       rows[0].object_key,
+      env.minio.bangKeBucket,
     );
     return {
       stream,
@@ -495,9 +496,9 @@ export const bangKeThoService = {
 
     let inputBuffer: Buffer;
     try {
-      const { stream } = await storageService.getObjectStream(
-        env.minio.bangKeBucket,
+      const { stream } = await storageService.getStream(
         inputKey,
+        env.minio.bangKeBucket,
       );
       inputBuffer = await streamToBuffer(stream);
     } catch {
@@ -507,12 +508,13 @@ export const bangKeThoService = {
     try {
       const result = await processNdMccWorkbook(inputBuffer);
 
-      await storageService.putObject({
-        bucket: env.minio.bangKeBucket,
-        objectKey: outputKey,
-        buffer: result.buffer,
-        mimetype: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-      });
+      await storageService.upload(
+        result.buffer,
+        targetFilename,
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        env.minio.bangKeBucket,
+        outputKey,
+      );
 
       const { rows: updatedRows } = await pool.query<{
         generated_at: string;

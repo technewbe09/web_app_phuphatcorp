@@ -53,9 +53,10 @@ description: Ghi lại các bài học kinh nghiệm, bug đã fix, và pitfalls
 - **Giải pháp:**
   - Cập nhật `env.ts` nạp `env.minio.ticketAttachmentsBucket` từ `MINIO_BUCKET_TICKET_ATTACHEMENTS` (kèm fallback `MINIO_BUCKET_TICKET_ATTACHMENTS` / `MINIO_BUCKET`).
   - Nâng cấp `storageService` hỗ trợ tham số `bucketLocation` tùy biến: tự động phân tách `bucketName` và `prefix`, đảm bảo khởi tạo bucket (`ensureBucket`), tải lên (`upload`), phát sinh URL (`getPublicUrl`), lấy stream (`getStream`), xóa tệp (`delete`) vào đúng vị trí chỉ định.
+  - Chuẩn hóa bộ API lưu trữ đồng nhất trên toàn hệ thống (loại bỏ các hàm phân mảnh `putObject`, `getObjectStream`, `deleteObject`), hỗ trợ tham số `customKey` trong `upload` để phục vụ linh hoạt cả tệp chứng từ (sinh tên tự động) lẫn batch cố định (Bảng kê thô).
   - Cập nhật `invoiceTrackingService.uploadDocuments` và `invoiceTrackingService.serveFile` truyền `env.minio.ticketAttachmentsBucket`.
   - Cập nhật `server.ts` tự động `ensureBucket` cho bucket tệp đính kèm khi ứng dụng khởi động.
-- **Files sửa:** `backend/src/config/env.ts`, `backend/src/services/storageService.ts`, `backend/src/services/invoiceTrackingService.ts`, `backend/src/server.ts`.
+- **Files sửa:** `backend/src/config/env.ts`, `backend/src/services/storageService.ts`, `backend/src/services/invoiceTrackingService.ts`, `backend/src/services/bangKeTho/index.ts`, `backend/src/server.ts`.
 
 ---
 ## Feature: "Download All" Attached Documents in TicketDetailModal

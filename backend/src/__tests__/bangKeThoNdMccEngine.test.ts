@@ -9,9 +9,9 @@ import { processNdMccWorkbook } from '../services/bangKeTho/ndMccEngine';
 
 jest.mock('../services/storageService', () => ({
   storageService: {
-    putObject: jest.fn().mockResolvedValue(undefined),
-    deleteObject: jest.fn().mockResolvedValue(undefined),
-    getObjectStream: jest.fn(),
+    upload: jest.fn().mockResolvedValue({ filename: 'out.xlsx', objectKey: 'phuphatcorp-bang-ke-tho/batches/x/outputs/nd_mcc.xlsx' }),
+    delete: jest.fn().mockResolvedValue(undefined),
+    getStream: jest.fn(),
   },
 }));
 
@@ -501,7 +501,7 @@ describe('bangKeThoService.processNdMcc', () => {
     // Readable stream mock
     const { Readable } = await import('stream');
     const stream = Readable.from(inputBuf);
-    mockStorage.getObjectStream.mockResolvedValue({
+    mockStorage.getStream.mockResolvedValue({
       stream: stream as any,
       stat: { size: inputBuf.length } as any,
     });
@@ -513,10 +513,12 @@ describe('bangKeThoService.processNdMcc', () => {
     expect(result.status).toBe('ready');
     expect(result.download_filename).toBe('ND-MCC 1-8.7.xlsx');
     expect(result.stats.mcc_rows).toBe(1);
-    expect(mockStorage.putObject).toHaveBeenCalledWith(
-      expect.objectContaining({
-        objectKey: 'batches/11111111-1111-1111-1111-111111111111/outputs/nd_mcc.xlsx',
-      })
+    expect(mockStorage.upload).toHaveBeenCalledWith(
+      expect.any(Buffer),
+      'ND-MCC 1-8.7.xlsx',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'phuphatcorp-bang-ke-tho',
+      'batches/11111111-1111-1111-1111-111111111111/outputs/nd_mcc.xlsx',
     );
   });
 
