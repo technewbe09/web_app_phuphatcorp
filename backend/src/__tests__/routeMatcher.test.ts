@@ -123,4 +123,60 @@ describe('routeMatcher', () => {
       expect(res.matched).toBe(false);
     });
   });
+
+  describe('Lâm Đồng - Lâm Viên - Đà Lạt / Xuân Hương - Đà Lạt / Đơn Dương matching', () => {
+    const dbCluster = 'Lâm Đồng - Lâm Viên - Đà Lạt/ Xuân Hương - Đà Lạt/ Đơn Dương';
+    const dbSingleLamVien = 'Lâm Đồng - Lâm Viên - Đà Lạt';
+    const dbSingleXuanHuong = 'Lâm Đồng - Xuân Hương - Đà Lạt';
+    const dbSingleDonDuong = 'Lâm Đồng - Đơn Dương';
+
+    it('matches exact full cluster regardless of hyphen spacing', () => {
+      const input = 'Lâm Đồng - Lâm Viên-Đà Lạt/ Xuân Hương-Đà Lạt/ Đơn Dương';
+      const res = matchRouteScore(input, dbCluster);
+      expect(res.matched).toBe(true);
+      expect(res.reason).toBe('exact_full_match');
+    });
+
+    it('matches sub-routes with province prefix to the cluster', () => {
+      expect(matchRouteScore('Lâm Đồng - Lâm Viên-Đà Lạt', dbCluster).matched).toBe(true);
+      expect(matchRouteScore('Lâm Đồng - Xuân Hương-Đà Lạt', dbCluster).matched).toBe(true);
+      expect(matchRouteScore('Lâm Đồng - Đơn Dương', dbCluster).matched).toBe(true);
+    });
+
+    it('matches sub-routes without province prefix to the cluster', () => {
+      expect(matchRouteScore('Xuân Hương-Đà Lạt', dbCluster).matched).toBe(true);
+      expect(matchRouteScore('Lâm Viên-Đà Lạt', dbCluster).matched).toBe(true);
+      expect(matchRouteScore('Đơn Dương', dbCluster).matched).toBe(true);
+      expect(matchRouteScore('Lâm Viên - Đà Lạt', dbCluster).matched).toBe(true);
+      expect(matchRouteScore('Xuân Hương - Đà Lạt', dbCluster).matched).toBe(true);
+    });
+
+    it('matches locations with administrative prefixes', () => {
+      expect(matchRouteScore('Phường Lâm Viên - TP. Đà Lạt', dbCluster).matched).toBe(true);
+      expect(matchRouteScore('Phường Xuân Hương - Đà Lạt', dbCluster).matched).toBe(true);
+      expect(matchRouteScore('Xã Đơn Dương', dbCluster).matched).toBe(true);
+    });
+
+    it('ranks cluster correctly when input is sub-route without province', () => {
+      const candidates = [
+        { route_name: 'Hồ Chí Minh - Quận 1' },
+        { route_name: 'Đồng Nai - Long Thành' },
+        { route_name: dbCluster },
+      ];
+      const ranked = rankRouteMatches('Xuân Hương-Đà Lạt', candidates);
+      expect(ranked.length).toBe(1);
+      expect(ranked[0].item.route_name).toBe(dbCluster);
+    });
+
+    it('prefers single-point route over cluster if single-point route exists in candidate pool', () => {
+      const candidates = [
+        { route_name: dbCluster },
+        { route_name: dbSingleXuanHuong },
+      ];
+      const ranked = rankRouteMatches('Xuân Hương-Đà Lạt', candidates);
+      expect(ranked.length).toBe(2);
+      expect(ranked[0].item.route_name).toBe(dbSingleXuanHuong);
+      expect(ranked[1].item.route_name).toBe(dbCluster);
+    });
+  });
 });

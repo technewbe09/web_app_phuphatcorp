@@ -5,6 +5,23 @@ description: Ghi lại các bài học kinh nghiệm, bug đã fix, và pitfalls
 # Lessons Learned — PhuPhatCorp
 
 ---
+## Lesson / Feature: Xử lý Bảng Kê Thô ND-MCC — Chuẩn hóa số liệu, tính toán công thức Excel và Smart Address Matching
+- **Ngày:** 2026-09-20
+- **Severity:** Low / Best Practice
+- **Feature liên quan:** Xử lý Bảng kê thô 5 nhà & ND-MCC (`bangKeTho`, `ndMccEngine`, `processedV2`, `addressMatcher`)
+- **Vấn đề & Bài học:**
+  1. **Công thức SUM chia đôi `=SUM(...)/2` vs `=SUM(...)`:**
+     - Tại **Bảng A** (>2.5 tấn), các dòng hóa đơn được nhóm theo từng chuyến xe và có dòng chèn `Tổng cộng` của từng xe. Khi tính `TỔNG CỘNG A` của toàn bảng, nếu lấy dải từ dòng đầu đến dòng cuối thì giá trị mỗi dòng bị tính 2 lần (1 lần ở dòng chi tiết hóa đơn, 1 lần ở dòng tổng xe). Kế toán giải quyết bằng công thức chia đôi `=SUM(start:end)/2`.
+     - Tuy nhiên, tại **Bảng B** (≤2.5 tấn), các hóa đơn xếp liên tục và không có dòng tổng chuyến xe trung gian. Do đó dòng `TỔNG CỘNG B` phải dùng công thức `=SUM(start:end)` trực tiếp, tuyệt đối không chia 2.
+  2. **Chuẩn hóa số liệu kiểu chuỗi trong Excel input (`Processed v2`):**
+     - File input kế toán thường có các cột số lượng và trọng lượng dạng text có dấu phẩy ngăn cách hàng nghìn (ví dụ `"1,200"` hay `"12,500.25"`). Khi Excel thực thi công thức `=ROUND(...)` hoặc tra cứu tính toán sẽ dễ bị lỗi `#VALUE!` hoặc không nhận dạng được kiểu số.
+     - Tạo sheet `Processed v2` nhân bản và chuẩn hóa sạch kiểu `number` (`parseCellToNumber`), đồng thời tính lại `Khung giá` theo tải trọng thực của chuyến xe (từ cột `5 nhà`) giúp toàn bộ công thức trên các sub-sheets chạy ổn định và chính xác.
+  3. **So khớp địa chỉ linh hoạt (`addressMatcher`):**
+     - Địa chỉ khách hàng trong thực tế có rất nhiều biến thể (ví dụ có/không có "thửa đất số ...", dấu cách, dấu gạch nối). Việc chỉ so khớp chính xác (`===`) sẽ bỏ sót nhiều khách hàng đã có trong cơ sở dữ liệu.
+     - Kết hợp chuẩn hóa dấu + loại bỏ tiền tố thửa đất + substring containment + token overlap (ngưỡng 75%), đồng thời tô màu cảnh báo `#FFF2CC` kèm Note trên ô địa chỉ khi khớp dạng partial match giúp kế toán kiểm soát 100% độ chính xác mà không tốn công nhập liệu lại.
+- **Files liên quan:** `backend/src/services/bangKeTho/`, `backend/src/utils/addressMatcher.ts`, `backend/src/utils/routeMatcher.ts`.
+
+---
 ## Bug: Nút xóa phụ phí bị mất do lọt ra ngoài vùng hiển thị trong bảng phụ phí
 - **Ngày:** 2026-09-18
 - **Severity:** Medium

@@ -1,13 +1,24 @@
-import { pool } from '../config/database';
-import { customerSurchargeService } from './customerSurchargeService';
-import { SurchargeZone, VehicleClass } from '../types/customerSurcharge';
-import { rankRouteMatches } from '../utils/routeMatcher';
+import { pool } from '../../config/database';
+import { customerSurchargeService } from '../customerSurchargeService';
+import { SurchargeZone, VehicleClass } from '../../types/customerSurcharge';
+import { rankRouteMatches } from '../../utils/routeMatcher';
+import {
+  evaluateAddressMatch,
+  cleanAddressForComparison,
+  stripThuaDat,
+  normalizeAddressKey,
+  type AddressMatchCheck,
+} from '../../utils/addressMatcher';
+
+export { evaluateAddressMatch, cleanAddressForComparison, stripThuaDat, type AddressMatchCheck };
 
 export interface CustomerLookupResult {
   diem_tra_hang: string;
   tuyen_phuong: string;
   diem_giao_hang_tinh_phi: string;
   customer_id: number | null;
+  is_partial_match: boolean;
+  matched_address: string;
 }
 
 export interface PricingLookupResult {
@@ -17,13 +28,46 @@ export interface PricingLookupResult {
   phi_ghep_diem: number | null;
 }
 
+export interface ResolveTargetBookParams {
+  supplierCode?: string;
+  slot?: string;
+  hasNdfcInTrip?: boolean;
+}
+
+/**
+ * Standardizes price book resolution for MCC and NDFC based on warehouse slot and trip composition.
+ */
+export function resolveTargetBook(params: ResolveTargetBookParams): string | undefined {
+  const { supplierCode, slot, hasNdfcInTrip } = params;
+  const isMcc = supplierCode === '2000000007';
+  const isNdfc = supplierCode === '2000000008';
+  const slotUpper = (slot || '').toUpperCase().trim();
+
+  if (isMcc) {
+    if (slotUpper.includes('CALOFIC HP') || slotUpper === 'CLV') {
+      return 'CLV';
+    }
+    if (slotUpper.includes('WH UNIDEPOT') || slotUpper === 'UNI') {
+      return 'MCC GH';
+    }
+    if (slotUpper.includes('UNI 1') || slotUpper === 'TT') {
+      return hasNdfcInTrip ? 'MCC (tt) GHÉP ND' : 'MCC (tt)';
+    }
+    return 'CLV';
+  }
+
+  if (isNdfc) {
+    if (slotUpper.includes('UNI 1') || slotUpper === 'TT') {
+      return 'NDFC (TT)';
+    }
+    return 'NDFC-naic';
+  }
+
+  return undefined;
+}
+
 function normalizeKey(str: string | null | undefined): string {
-  if (!str) return '';
-  return str
-    .toLowerCase()
-    .replace(/\s+/g, ' ')
-    .replace(/\s*([-/–—,])\s*/g, '$1')
-    .trim();
+  return normalizeAddressKey(str);
 }
 
 export class BangKeThoPricingLookupService {
@@ -38,6 +82,10 @@ export class BangKeThoPricingLookupService {
     normTen: string;
     normDiaChi: string;
   }> | null = null;
+
+  clearCache(): void {
+    this.customersCache = null;
+  }
 
   async initCache(): Promise<void> {
     const { rows } = await pool.query<{
@@ -72,52 +120,76 @@ export class BangKeThoPricingLookupService {
       await this.initCache();
     }
     const normTen = normalizeKey(params.tenKhachHang);
-    const normDiaChi = normalizeKey(params.diaChiGiaoHang);
+    const inputAddr = params.diaChiGiaoHang || '';
 
-    if (!normTen || !normDiaChi) return null;
+    if (!normTen || !inputAddr.trim()) return null;
 
-    let matches = this.customersCache!.filter(
-      (c) => c.normTen === normTen && c.normDiaChi === normDiaChi
-    );
+    const sameNameCusts = this.customersCache!.filter((c) => c.normTen === normTen);
+    if (sameNameCusts.length === 0) return null;
 
-    if (matches.length === 0) {
-      // Partial fallback: address starts with or contains
-      matches = this.customersCache!.filter(
-        (c) =>
-          c.normTen === normTen &&
-          (c.normDiaChi.includes(normDiaChi) || normDiaChi.includes(c.normDiaChi))
-      );
-    }
+    const candidates: Array<{
+      cust: (typeof sameNameCusts)[0];
+      match: AddressMatchCheck;
+    }> = [];
 
-    if (matches.length > 1 && params.supplierCode) {
-      const suppMatches = matches.filter(
-        (c) => c.supplier_code && c.supplier_code.trim() === params.supplierCode?.trim()
-      );
-      if (suppMatches.length > 0) {
-        matches = suppMatches;
+    for (const c of sameNameCusts) {
+      const match = evaluateAddressMatch(inputAddr, c.dia_chi_giao_hang || '');
+      if (match.isMatch) {
+        candidates.push({ cust: c, match });
       }
     }
 
-    if (matches.length === 0) return null;
-    const hit = matches[0];
+    if (candidates.length === 0) return null;
+
+    let selected = candidates;
+    if (selected.length > 1 && params.supplierCode) {
+      const suppMatches = selected.filter(
+        (c) => c.cust.supplier_code && c.cust.supplier_code.trim() === params.supplierCode?.trim()
+      );
+      if (suppMatches.length > 0) {
+        selected = suppMatches;
+      }
+    }
+
+    selected.sort((a, b) => {
+      if (a.match.isPartial !== b.match.isPartial) {
+        return a.match.isPartial ? 1 : -1;
+      }
+      return b.match.score - a.match.score;
+    });
+
+    const hit = selected[0].cust;
+    const isPartial = selected[0].match.isPartial;
+
     return {
       diem_tra_hang: hit.diem_tra_hang || '',
       tuyen_phuong: hit.tuyen_phuong || '',
       diem_giao_hang_tinh_phi: hit.diem_giao_hang_tinh_phi || '',
       customer_id: hit.id,
+      is_partial_match: isPartial,
+      matched_address: hit.dia_chi_giao_hang || '',
     };
   }
 
   mapKhungGiaToVehicleClass(khungGia: string | null | undefined): VehicleClass {
     const k = (khungGia || '').toLowerCase();
-    if (k.includes('≤2.5') || k.includes('<=2.5') || k.includes('2.5') || k.includes('2,5')) {
+    if (k.includes('pallet') && !k.includes('8-16') && !k.includes('16-23') && !k.includes('2.5') && !k.includes('2,5') && !k.includes('23')) {
+      return 'pallet';
+    }
+    if ((k.includes('≤2.5') || k.includes('<=2.5') || k.includes('2.5') || k.includes('2,5')) && !k.includes('2.5-8') && !k.includes('2.5 - 8') && !k.includes('2,5-8')) {
       return 'le_2_5';
     }
-    if (k.includes('8-16') || k.includes('8 - 16')) {
+    if (k.includes('2.5-8') || k.includes('2.5 - 8') || k.includes('2,5-8') || k.includes('8-16') || k.includes('8 - 16')) {
       return 'gt_8_16';
     }
     if (k.includes('16-23') || k.includes('16 - 23')) {
       return 'gt_16_23';
+    }
+    if (k.includes('>23') || k.includes('>=23') || k.includes('23')) {
+      return 'gt_16_23';
+    }
+    if (k.includes('pallet')) {
+      return 'pallet';
     }
     return 'gt_8_16'; // default fallback
   }
@@ -139,7 +211,6 @@ export class BangKeThoPricingLookupService {
   }): Promise<number | null> {
     if (!params.diemTinhPhi || !params.invoiceDateIso) return null;
 
-    const normDest = normalizeKey(params.diemTinhPhi);
     const kGia = (params.khungGia || '').toLowerCase();
 
     // Query candidate route groups matching the name
@@ -180,9 +251,12 @@ export class BangKeThoPricingLookupService {
       const to = r.range_to ? parseFloat(r.range_to) : null;
       const lbl = (r.tier_label || r.set_label || '').toLowerCase();
 
-      if (kGia.includes('≤2.5') || kGia.includes('<=2.5')) {
+      if ((kGia.includes('≤2.5') || kGia.includes('<=2.5')) && !kGia.includes('2.5-8')) {
         if (to !== null && to <= 2.5) return true;
         if (lbl.includes('2,5') || lbl.includes('2.5')) return true;
+      } else if (kGia.includes('2.5-8') || kGia.includes('2.5 - 8') || kGia.includes('2,5-8')) {
+        if (from >= 2.5 && (to === null || to <= 8)) return true;
+        if (lbl.includes('2.5') && lbl.includes('8')) return true;
       } else if (kGia.includes('8-16') || kGia.includes('8 - 16')) {
         if (from >= 8 && (to === null || to <= 16)) return true;
         if (lbl.includes('8<') || (lbl.includes('8') && lbl.includes('16'))) return true;
@@ -191,7 +265,7 @@ export class BangKeThoPricingLookupService {
         if (lbl.includes('16<') || (lbl.includes('16') && lbl.includes('23'))) return true;
       } else if (kGia.includes('>23') || kGia.includes('>=23')) {
         if (from >= 23) return true;
-        if (lbl.includes('>23')) return true;
+        if (lbl.includes('>23') || lbl.includes('23')) return true;
       }
       return false;
     };
@@ -206,27 +280,17 @@ export class BangKeThoPricingLookupService {
     if (tierMatches.length === 0) return null;
 
     let targetBook = params.targetBook;
+    if (!targetBook) {
+      targetBook = resolveTargetBook({
+        supplierCode: params.supplierCode,
+        slot: params.slot,
+        hasNdfcInTrip: params.hasNdfcInTrip,
+      });
+    }
+
     const isMcc = params.supplierCode === '2000000007';
     const isNdfc = params.supplierCode === '2000000008';
     const slotUpper = (params.slot || '').toUpperCase().trim();
-
-    if (!targetBook) {
-      if (isMcc) {
-        if (slotUpper.includes('CALOFIC HP') || slotUpper === 'CLV') {
-          targetBook = 'CLV';
-        } else if (slotUpper.includes('WH UNIDEPOT') || slotUpper === 'UNI') {
-          targetBook = 'MCC GH';
-        } else if (slotUpper.includes('UNI 1') || slotUpper === 'TT') {
-          targetBook = params.hasNdfcInTrip ? 'MCC (tt) GHÉP ND' : 'MCC (tt)';
-        }
-      } else if (isNdfc) {
-        if (slotUpper.includes('UNI 1') || slotUpper === 'TT') {
-          targetBook = 'NDFC (TT)';
-        } else {
-          targetBook = 'NDFC-naic';
-        }
-      }
-    }
 
     const normTarget = targetBook ? normalizeKey(targetBook) : '';
 

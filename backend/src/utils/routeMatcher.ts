@@ -71,8 +71,69 @@ export const PROVINCE_ALIASES: Record<string, string> = {
   'tỉnh cà mau': 'cà mau',
 
   'an giang': 'an giang',
-  'tỉnh an giang': 'an giang',
+  'tp. đồng nai': 'đồng nai',
+  'tp đồng nai': 'đồng nai',
+  'thành phố đồng nai': 'đồng nai',
+  'brvt': 'bà rịa - vũng tàu',
+  'bà rịa vũng tàu': 'bà rịa - vũng tàu',
+  'bà rịa - vũng tàu': 'bà rịa - vũng tàu',
+  'tỉnh bà rịa - vũng tàu': 'bà rịa - vũng tàu',
+  'bình thuận': 'bình thuận',
+  'tỉnh bình thuận': 'bình thuận',
+  'bình phước': 'bình phước',
+  'tỉnh bình phước': 'bình phước',
+  'bình định': 'bình định',
+  'tỉnh bình định': 'bình định',
+  'tiền giang': 'tiền giang',
+  'tỉnh tiền giang': 'tiền giang',
+  'bến tre': 'bến tre',
+  'tỉnh bến tre': 'bến tre',
+  'kiên giang': 'kiên giang',
+  'tỉnh kiên giang': 'kiên giang',
+  'hậu giang': 'hậu giang',
+  'tỉnh hậu giang': 'hậu giang',
+  'sóc trăng': 'sóc trăng',
+  'tỉnh sóc trăng': 'sóc trăng',
+  'bạc liêu': 'bạc liêu',
+  'tỉnh bạc liêu': 'bạc liêu',
+  'trà vinh': 'trà vinh',
+  'tỉnh trà vinh': 'trà vinh',
+  'quảng ngãi': 'quảng ngãi',
+  'tỉnh quảng ngãi': 'quảng ngãi',
+  'quảng nam': 'quảng nam',
+  'tỉnh quảng nam': 'quảng nam',
+  'quảng bình': 'quảng bình',
+  'tỉnh quảng bình': 'quảng bình',
+  'quảng trị': 'quảng trị',
+  'tỉnh quảng trị': 'quảng trị',
+  'thừa thiên huế': 'huế',
+  'tỉnh thừa thiên huế': 'huế',
+  'tp huế': 'huế',
+  'thành phố huế': 'huế',
+  'huế': 'huế',
+  'phú yên': 'phú yên',
+  'tỉnh phú yên': 'phú yên',
+  'ninh thuận': 'ninh thuận',
+  'tỉnh ninh thuận': 'ninh thuận',
+  'kon tum': 'kon tum',
+  'tỉnh kon tum': 'kon tum',
+  'đắk nông': 'đắk nông',
+  'dak nong': 'đắk nông',
+  'tỉnh đắk nông': 'đắk nông',
 };
+
+export const CANONICAL_PROVINCES = new Set([
+  'an giang', 'bà rịa - vũng tàu', 'bạc liêu', 'bắc giang', 'bắc kạn', 'bắc ninh',
+  'bến tre', 'bình định', 'bình dương', 'bình phước', 'bình thuận', 'cà mau',
+  'cao bằng', 'cần thơ', 'đà nẵng', 'đắk lắk', 'đắk nông', 'điện biên', 'đồng nai',
+  'đồng tháp', 'gia lai', 'hà giang', 'hà nam', 'hà nội', 'hà tĩnh', 'hải dương',
+  'hải phòng', 'hậu giang', 'hòa bình', 'hồ chí minh', 'hưng yên', 'khánh hòa',
+  'kiên giang', 'kon tum', 'lai châu', 'lạng sơn', 'lào cai', 'lâm đồng', 'long an',
+  'nam định', 'nghệ an', 'ninh bình', 'ninh thuận', 'phú thọ', 'phú yên', 'quảng bình',
+  'quảng nam', 'quảng ngãi', 'quảng ninh', 'quảng trị', 'sóc trăng', 'sơn la', 'tây ninh',
+  'thái bình', 'thái nguyên', 'thanh hóa', 'huế', 'tiền giang', 'trà vinh',
+  'tuyên quang', 'vĩnh long', 'vĩnh phúc', 'yên bái'
+]);
 
 export function normalizeKey(str: string | null | undefined): string {
   if (!str) return '';
@@ -83,24 +144,27 @@ export function normalizeKey(str: string | null | undefined): string {
     .trim();
 }
 
-export function normalizeProvince(str: string | null | undefined): string {
-  if (!str) return '';
-  const cleaned = str
-    .toLowerCase()
+export function normalizeProvince(str: string | null | undefined): string | null {
+  if (!str) return null;
+  const rawKey = str.toLowerCase().trim();
+  if (PROVINCE_ALIASES[rawKey]) return PROVINCE_ALIASES[rawKey];
+  if (CANONICAL_PROVINCES.has(rawKey)) return rawKey;
+
+  const cleaned = rawKey
     .replace(/^tỉnh\s+/i, '')
     .replace(/^thành phố\s+/i, '')
     .replace(/^tp\.?\s*/i, '')
     .replace(/\s+/g, ' ')
     .trim();
 
-  const key = str.toLowerCase().trim();
-  if (PROVINCE_ALIASES[key]) return PROVINCE_ALIASES[key];
   if (PROVINCE_ALIASES[cleaned]) return PROVINCE_ALIASES[cleaned];
+  if (CANONICAL_PROVINCES.has(cleaned)) return cleaned;
 
-  return cleaned;
+  return null;
 }
 
 const ADMIN_PREFIX_REGEX = /^(phường|xã|thị trấn|thị xã|tx\.?|thành phố|tp\.?|quận|huyện|q\.?|h\.?)\s+/i;
+const ADMIN_WORD_REGEX = /\s+(phường|xã|thị trấn|thị xã|tx\.?|thành phố|tp\.?|quận|huyện|q\.?|h\.?)\s+/gi;
 
 export function normalizeLocationItem(str: string | null | undefined): string {
   if (!str) return '';
@@ -111,6 +175,7 @@ export function normalizeLocationItem(str: string | null | undefined): string {
     .trim();
 
   s = s.replace(ADMIN_PREFIX_REGEX, '').trim();
+  s = s.replace(ADMIN_WORD_REGEX, ' ').replace(/\s+/g, ' ').trim();
   return s;
 }
 
@@ -142,6 +207,14 @@ export function parseRoute(routeName: string): ParsedRoute {
         break;
       }
     }
+    if (!prov) {
+      for (const canonical of CANONICAL_PROVINCES) {
+        if (normalizedFull.includes(canonical)) {
+          prov = canonical;
+          break;
+        }
+      }
+    }
     return {
       raw,
       normalizedFull,
@@ -159,34 +232,49 @@ export function parseRoute(routeName: string): ParsedRoute {
     const destinationsPart = dashMatch[2].trim();
 
     const prov = normalizeProvince(provincePart);
-    const rawPoints = destinationsPart
-      .split('/')
-      .map((p) => p.trim())
-      .filter(Boolean);
+    if (prov) {
+      const rawPoints = destinationsPart
+        .split('/')
+        .map((p) => p.trim())
+        .filter(Boolean);
 
-    const points = Array.from(
-      new Set(rawPoints.map(normalizeLocationItem).filter(Boolean))
-    );
+      const points = Array.from(
+        new Set(rawPoints.map(normalizeLocationItem).filter(Boolean))
+      );
 
+      return {
+        raw,
+        normalizedFull,
+        province: prov,
+        points,
+        rawPoints,
+        isResidual: false,
+      };
+    }
+  }
+
+  // No province prefix dash or prefix was not a valid province
+  // Check if the entire raw string is a province name
+  const wholeProv = normalizeProvince(raw);
+  if (wholeProv) {
     return {
       raw,
       normalizedFull,
-      province: prov || normalizeKey(provincePart),
-      points,
-      rawPoints,
+      province: wholeProv,
+      points: [],
+      rawPoints: [raw],
       isResidual: false,
     };
   }
 
-  // No dash: could be single point or slash list
+  // Otherwise, it's a point or list of points without province prefix
   const rawPoints = raw.split('/').map((p) => p.trim()).filter(Boolean);
   const points = Array.from(new Set(rawPoints.map(normalizeLocationItem).filter(Boolean)));
-  const prov = normalizeProvince(raw);
 
   return {
     raw,
     normalizedFull,
-    province: prov || null,
+    province: null,
     points,
     rawPoints,
     isResidual: false,

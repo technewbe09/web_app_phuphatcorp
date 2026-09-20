@@ -2,7 +2,7 @@ import { pipeline } from 'stream/promises';
 import { query, param, ValidationChain } from 'express-validator';
 import { Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
-import { bangKeThoService, BangKeError } from '../services/bangKeThoService';
+import { bangKeThoService, BangKeError } from '../services/bangKeTho';
 import { sendSuccess, sendError } from '../utils/response';
 import { auditService } from '../services/auditService';
 

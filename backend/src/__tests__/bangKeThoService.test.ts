@@ -1,6 +1,6 @@
 import * as XLSX from 'xlsx';
 import { pool } from '../config/database';
-import { bangKeThoService } from '../services/bangKeThoService';
+import { bangKeThoService } from '../services/bangKeTho';
 import { storageService } from '../services/storageService';
 import {
   downloadFilename,

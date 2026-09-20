@@ -51,3 +51,7 @@ backups/
 
 .cursor/
 graphify-out/
+
+.agents/
+.agy/
+AGENTS.md

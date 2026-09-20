@@ -1,5 +1,6 @@
 import ExcelJS from 'exceljs';
-import { bangKeThoPricingLookup } from './bangKeThoPricingLookup';
+import { bangKeThoPricingLookup, resolveTargetBook } from './pricingLookup';
+import { generateProcessedV2Sheet } from './processedV2';
 
 export interface NdMccStats {
   mcc_rows: number;
@@ -70,6 +71,19 @@ interface ProcessedRow {
   feeGhepDiem: number | null;
   site: string;
   khuVuc: string;
+  isPartialMatch?: boolean;
+  matchedAddress?: string;
+  tripSummary?: TripFiveHousesSummary;
+}
+
+export interface TripFiveHousesSummary {
+  clf: number | null;
+  vfm: number | null;
+  mcc: number | null;
+  clv: number | null;
+  ndfc: number | null;
+  gao: number | null;
+  total5Nha: number | null;
 }
 
 function excelSerialToIso(serial: number): string {
@@ -140,6 +154,7 @@ export const ORDERED_SHEET_NAMES = [
   'NCC',
   'Sheet1',
   'Processed',
+  'Processed v2',
   'MCC (goc)',
   'MCC-clv',
   'MCC (uni)',
@@ -149,6 +164,14 @@ export const ORDERED_SHEET_NAMES = [
   'NDFC (uni)',
   'NDFC (tt)',
 ] as const;
+
+export const PARTIAL_MATCH_FILL: ExcelJS.Fill = {
+  type: 'pattern',
+  pattern: 'solid',
+  fgColor: { argb: 'FFFFEB9C' }, // Soft warning yellow
+};
+
+export const PARTIAL_MATCH_NOTE = 'Không khớp hoàn toàn với cơ sở dữ liệu';
 
 function setSheetNameSafely(ws: ExcelJS.Worksheet, targetName: string): void {
   if (ws.name === targetName) return;
@@ -173,12 +196,15 @@ export async function processNdMccWorkbook(
     throw new Error('MISSING_PROCESSED_SHEET');
   }
 
-  // Find column mapping from header row (row 1 or 2)
+  // Generate Processed v2 sheet early so that all data reading uses the clean, standardized sheet
+  const processedV2Sheet = generateProcessedV2Sheet(workbook);
+
+  // Find column mapping from header row (row 1 or 2) in Processed v2
   let headerRowIdx = 1;
   const colMap = new Map<string, number>();
 
   for (let r = 1; r <= 3; r++) {
-    const row = processedSheet.getRow(r);
+    const row = processedV2Sheet.getRow(r);
     let foundHeaders = 0;
     row.eachCell((cell, colNumber) => {
       const txt = String(cell.value || '').trim();
@@ -221,11 +247,14 @@ export async function processNdMccWorkbook(
 
   const allRows: ProcessedRow[] = [];
 
-  for (let r = headerRowIdx + 1; r <= processedSheet.rowCount; r++) {
-    const row = processedSheet.getRow(r);
+  const parseProcessedRow = (
+    r: number,
+    row: ExcelJS.Row,
+    tripSummary: TripFiveHousesSummary
+  ): ProcessedRow | null => {
     const supplierCode = getCellStr(row, 'Mã nhà cung cấp', 1);
     if (!supplierCode || (supplierCode !== '2000000007' && supplierCode !== '2000000008')) {
-      continue;
+      return null;
     }
 
     const invoiceNo = getCellStr(row, 'Số hóa đơn', 2);
@@ -247,12 +276,12 @@ export async function processNdMccWorkbook(
     const hdNetWeight = getCellNum(row, 'HĐ Trọng lượng (Net)', 17);
     const roundMt = hdNetWeight ? Math.round((hdNetWeight / 1000) * 1000) / 1000 : 0;
 
-    const clf = getCellNum(row, 'CLF', 19) || null;
-    const vfm = getCellNum(row, 'VFM', 20) || null;
-    const mcc = getCellNum(row, 'MCC', 21) || null;
-    const clv = getCellNum(row, 'CLV', 22) || null;
-    const ndfc = getCellNum(row, 'NDFC', 23) || null;
-    const gao = getCellNum(row, 'GẠO', 24) || null;
+    const clf = tripSummary.clf;
+    const vfm = tripSummary.vfm;
+    const mcc = tripSummary.mcc;
+    const clv = tripSummary.clv;
+    const ndfc = tripSummary.ndfc;
+    const gao = tripSummary.gao;
 
     const driver = getCellStr(row, 'Tài xế', 26);
     const extraInfo = getCellStr(row, 'Thông tin bổ sung', 27);
@@ -274,7 +303,7 @@ export async function processNdMccWorkbook(
     const newRoute = getCellStr(row, 'Tuyến mới', 43);
     const invoiceRoute = getCellStr(row, 'Tuyến lên hóa đơn', 44);
 
-    allRows.push({
+    return {
       rowIdx: r,
       supplierCode,
       invoiceNo,
@@ -330,7 +359,185 @@ export async function processNdMccWorkbook(
       feeGhepDiem: null,
       site: determineSite(supplierCode, slot),
       khuVuc: determineKhuVuc(channel, subChannel, customerName),
+      tripSummary,
+    };
+  };
+
+  interface BlockItem {
+    r: number;
+    row: ExcelJS.Row;
+  }
+  let currentBlock: BlockItem[] = [];
+
+  const flushBlock = (
+    items: BlockItem[],
+    sepSummary: TripFiveHousesSummary | null
+  ) => {
+    if (items.length === 0) return;
+
+    let finalSummary: TripFiveHousesSummary;
+    if (
+      sepSummary &&
+      (sepSummary.clf !== null ||
+        sepSummary.vfm !== null ||
+        sepSummary.mcc !== null ||
+        sepSummary.clv !== null ||
+        sepSummary.ndfc !== null ||
+        sepSummary.gao !== null ||
+        sepSummary.total5Nha !== null)
+    ) {
+      const computedTotal =
+        sepSummary.total5Nha !== null && sepSummary.total5Nha > 0
+          ? sepSummary.total5Nha
+          : (sepSummary.clf || 0) +
+            (sepSummary.vfm || 0) +
+            (sepSummary.mcc || 0) +
+            (sepSummary.clv || 0) +
+            (sepSummary.ndfc || 0) +
+            (sepSummary.gao || 0);
+
+      finalSummary = {
+        ...sepSummary,
+        total5Nha: computedTotal > 0 ? Math.round(computedTotal * 1000) / 1000 : null,
+      };
+    } else {
+      // Fallback: calculate trip total and houses from data rows in this block
+      let fClf = 0;
+      let fVfm = 0;
+      let fMcc = 0;
+      let fClv = 0;
+      let fNdfc = 0;
+      let fGao = 0;
+
+      for (const item of items) {
+        const sCode = getCellStr(item.row, 'Mã nhà cung cấp', 1);
+        const wVal =
+          (getCellNum(item.row, 'HĐ Trọng lượng (Net)', 17) || 0) / 1000 ||
+          getCellNum(item.row, 'ROUND (MT)', 18) ||
+          getCellNum(item.row, 'Round(MT)', 18) ||
+          0;
+        const w = Math.round(wVal * 1000) / 1000;
+
+        const rowClf = getCellNum(item.row, 'CLF', 20);
+        const rowVfm = getCellNum(item.row, 'VFM', 21);
+        const rowMcc = getCellNum(item.row, 'MCC', 22);
+        const rowClv = getCellNum(item.row, 'CLV', 23);
+        const rowNdfc = getCellNum(item.row, 'NDFC', 24);
+        const rowGao = getCellNum(item.row, 'Gạo', 25) || getCellNum(item.row, 'GẠO', 25);
+
+        if (rowClf) fClf += rowClf;
+        else if (sCode === '2000000001' || sCode.toUpperCase().includes('CLF')) fClf += w;
+
+        if (rowVfm) fVfm += rowVfm;
+        else if (sCode === '2000000002' || sCode.toUpperCase().includes('VFM')) fVfm += w;
+
+        if (rowMcc) fMcc += rowMcc;
+        else if (sCode === '2000000007' || sCode.toUpperCase().includes('MCC')) fMcc += w;
+
+        if (rowClv) fClv += rowClv;
+        else if (sCode === '2000000004' || sCode.toUpperCase().includes('CLV')) fClv += w;
+
+        if (rowNdfc) fNdfc += rowNdfc;
+        else if (sCode === '2000000008' || sCode.toUpperCase().includes('NDFC')) fNdfc += w;
+
+        if (rowGao) fGao += rowGao;
+      }
+
+      const total = fClf + fVfm + fMcc + fClv + fNdfc + fGao;
+      finalSummary = {
+        clf: fClf > 0 ? Math.round(fClf * 1000) / 1000 : null,
+        vfm: fVfm > 0 ? Math.round(fVfm * 1000) / 1000 : null,
+        mcc: fMcc > 0 ? Math.round(fMcc * 1000) / 1000 : null,
+        clv: fClv > 0 ? Math.round(fClv * 1000) / 1000 : null,
+        ndfc: fNdfc > 0 ? Math.round(fNdfc * 1000) / 1000 : null,
+        gao: fGao > 0 ? Math.round(fGao * 1000) / 1000 : null,
+        total5Nha: total > 0 ? Math.round(total * 1000) / 1000 : null,
+      };
+    }
+
+    for (const item of items) {
+      const parsed = parseProcessedRow(item.r, item.row, finalSummary);
+      if (parsed) {
+        allRows.push(parsed);
+      }
+    }
+  };
+
+  // Check if sheet uses separator rows
+  let hasSeparatorRows = false;
+  for (let r = headerRowIdx + 1; r <= processedV2Sheet.rowCount; r++) {
+    const row = processedV2Sheet.getRow(r);
+    const supplierCode = getCellStr(row, 'Mã nhà cung cấp', 1);
+    const invoiceNo = getCellStr(row, 'Số hóa đơn', 2);
+    const truckNo = getCellStr(row, 'Số tàu', 4);
+    const cell5NhaNum = getCellNum(row, '5 nhà', 19);
+    const roundMtNum = getCellNum(row, 'ROUND (MT)', 18) || getCellNum(row, 'Round(MT)', 18);
+    if (!supplierCode && !invoiceNo && !truckNo && ((cell5NhaNum !== null && cell5NhaNum > 0) || (roundMtNum !== null && roundMtNum > 0))) {
+      hasSeparatorRows = true;
+      break;
+    }
+  }
+
+  for (let r = headerRowIdx + 1; r <= processedV2Sheet.rowCount; r++) {
+    const row = processedV2Sheet.getRow(r);
+    const supplierCode = getCellStr(row, 'Mã nhà cung cấp', 1);
+    const invoiceNo = getCellStr(row, 'Số hóa đơn', 2);
+    const truckNo = getCellStr(row, 'Số tàu', 4);
+    const cell5NhaNum = getCellNum(row, '5 nhà', 19);
+    const roundMtNum = getCellNum(row, 'ROUND (MT)', 18) || getCellNum(row, 'Round(MT)', 18);
+
+    let hasAnyCell = false;
+    row.eachCell({ includeEmpty: false }, (cell) => {
+      if (cell.value !== null && cell.value !== undefined && cell.value !== '') {
+        hasAnyCell = true;
+      }
     });
+    if (!hasAnyCell) {
+      continue;
+    }
+
+    const isSeparatorRow =
+      !supplierCode &&
+      !invoiceNo &&
+      !truckNo &&
+      ((cell5NhaNum !== null && cell5NhaNum > 0) || (roundMtNum !== null && roundMtNum > 0));
+
+    if (isSeparatorRow) {
+      const sepClf = getCellNum(row, 'CLF', 20) || null;
+      const sepVfm = getCellNum(row, 'VFM', 21) || null;
+      const sepMcc = getCellNum(row, 'MCC', 22) || null;
+      const sepClv = getCellNum(row, 'CLV', 23) || null;
+      const sepNdfc = getCellNum(row, 'NDFC', 24) || null;
+      const sepGao = getCellNum(row, 'Gạo', 25) || getCellNum(row, 'GẠO', 25) || null;
+      const sumH = (sepClf || 0) + (sepVfm || 0) + (sepMcc || 0) + (sepClv || 0) + (sepNdfc || 0) + (sepGao || 0);
+
+      const sep5Nha = Math.round(Math.max(sumH, cell5NhaNum || 0, roundMtNum || 0) * 1000) / 1000;
+
+      flushBlock(currentBlock, {
+        clf: sepClf,
+        vfm: sepVfm,
+        mcc: sepMcc,
+        clv: sepClv,
+        ndfc: sepNdfc,
+        gao: sepGao,
+        total5Nha: sep5Nha,
+      });
+      currentBlock = [];
+    } else {
+      // Only split by truck change if the sheet does NOT use separator rows
+      if (!hasSeparatorRows && currentBlock.length > 0 && truckNo) {
+        const prevTruck = getCellStr(currentBlock[currentBlock.length - 1].row, 'Số tàu', 4);
+        if (prevTruck && truckNo !== prevTruck) {
+          flushBlock(currentBlock, null);
+          currentBlock = [];
+        }
+      }
+      currentBlock.push({ r, row });
+    }
+  }
+
+  if (currentBlock.length > 0) {
+    flushBlock(currentBlock, null);
   }
 
   // Batch customer lookups & rate lookups
@@ -352,23 +559,25 @@ export async function processNdMccWorkbook(
     if (cRes) {
       r.dealer = cRes.diem_tra_hang;
       r.actualDest = cRes.tuyen_phuong;
-      r.feeDest = cRes.diem_giao_hang_tinh_phi;
+      r.feeDest = cRes.diem_giao_hang_tinh_phi || cRes.tuyen_phuong || '';
       r.customerId = cRes.customer_id;
+      r.isPartialMatch = cRes.is_partial_match;
+      r.matchedAddress = cRes.matched_address;
     }
   }
 
   // Detect trips with NDFC weight (by truckNo + invoiceDateIso)
   const tripsWithNdfc = new Set<string>();
 
-  for (let r = headerRowIdx + 1; r <= processedSheet.rowCount; r++) {
-    const row = processedSheet.getRow(r);
+  for (let r = headerRowIdx + 1; r <= processedV2Sheet.rowCount; r++) {
+    const row = processedV2Sheet.getRow(r);
     const truck = getCellStr(row, 'Số tàu', 4).trim();
     const invoiceDate = getCellVal(row, 'Ngày hóa đơn', 3);
     const invoiceDateIso = parseDateIso(invoiceDate);
     const tKey = `${truck}___${invoiceDateIso}`;
 
     const suppCode = getCellStr(row, 'Mã nhà cung cấp', 1);
-    const ndfcCol = getCellNum(row, 'NDFC', 23);
+    const ndfcCol = getCellNum(row, 'NDFC', 24);
     const hdWeight = getCellNum(row, 'HĐ Trọng lượng (Net)', 17);
     const spWeight = getCellNum(row, 'SP Trọng lượng net', 16);
 
@@ -397,32 +606,17 @@ export async function processNdMccWorkbook(
   for (const r of allRows) {
     const tKey = `${r.truckNo.trim()}___${r.invoiceDateIso}`;
     const hasNdfcInTrip = tripsWithNdfc.has(tKey);
-    const slotUpper = (r.slot || '').toUpperCase().trim();
 
-    let targetBook: string | undefined;
-    if (r.supplierCode === '2000000007') {
-      // MCC
-      if (slotUpper.includes('CALOFIC HP') || slotUpper === 'CLV') {
-        targetBook = 'CLV';
-      } else if (slotUpper.includes('WH UNIDEPOT') || slotUpper === 'UNI') {
-        targetBook = 'MCC GH';
-      } else if (slotUpper.includes('UNI 1') || slotUpper === 'TT') {
-        targetBook = hasNdfcInTrip ? 'MCC (tt) GHÉP ND' : 'MCC (tt)';
-      } else {
-        targetBook = 'CLV';
-      }
-    } else if (r.supplierCode === '2000000008') {
-      // NDFC
-      if (slotUpper.includes('UNI 1') || slotUpper === 'TT') {
-        targetBook = 'NDFC (TT)';
-      } else {
-        targetBook = 'NDFC-naic';
-      }
-    }
+    // Standardized targetBook resolution
+    const targetBook = resolveTargetBook({
+      supplierCode: r.supplierCode,
+      slot: r.slot,
+      hasNdfcInTrip,
+    });
 
     const rateKey = `${r.feeDest}___${r.khungGia}___${r.invoiceDateIso}___${targetBook || r.supplierCode}___${hasNdfcInTrip}`;
     if (!rateMap.has(rateKey)) {
-      const rate = await bangKeThoPricingLookup.lookupTransportRate({
+      let rate = await bangKeThoPricingLookup.lookupTransportRate({
         diemTinhPhi: r.feeDest,
         khungGia: r.khungGia,
         invoiceDateIso: r.invoiceDateIso,
@@ -431,6 +625,19 @@ export async function processNdMccWorkbook(
         targetBook,
         hasNdfcInTrip,
       });
+
+      if (rate === null && r.actualDest && r.actualDest.trim() !== (r.feeDest || '').trim()) {
+        rate = await bangKeThoPricingLookup.lookupTransportRate({
+          diemTinhPhi: r.actualDest,
+          khungGia: r.khungGia,
+          invoiceDateIso: r.invoiceDateIso,
+          supplierCode: r.supplierCode,
+          slot: r.slot,
+          targetBook,
+          hasNdfcInTrip,
+        });
+      }
+
       rateMap.set(rateKey, rate);
     }
     r.transportRate = rateMap.get(rateKey) ?? null;
@@ -479,8 +686,34 @@ export async function processNdMccWorkbook(
 
   setSheetNameSafely(processedSheet, 'Processed');
 
+  // Highlight partial match cells in processedSheet before generating Processed v2
+  let processedAddrCol = 7;
+  for (let c = 1; c <= 45; c++) {
+    const hVal = String(processedSheet.getRow(headerRowIdx).getCell(c).value || '').trim().toLowerCase();
+    if (hVal.includes('địa chỉ') || hVal.includes('dia chi')) {
+      processedAddrCol = c;
+      break;
+    }
+  }
+
+  for (const r of allRows) {
+    if (r.isPartialMatch && r.rowIdx) {
+      const pCell = processedSheet.getRow(r.rowIdx).getCell(processedAddrCol);
+      pCell.fill = PARTIAL_MATCH_FILL;
+      if (r.matchedAddress) {
+        pCell.note = r.matchedAddress;
+      }
+
+      const p2Cell = processedV2Sheet.getRow(r.rowIdx).getCell(processedAddrCol);
+      p2Cell.fill = PARTIAL_MATCH_FILL;
+      if (r.matchedAddress) {
+        p2Cell.note = r.matchedAddress;
+      }
+    }
+  }
+
   // Remove other sheets from the input workbook that are not one of the base sheets
-  const baseSheetIds = new Set([nccSheet.id, sheet1.id, processedSheet.id]);
+  const baseSheetIds = new Set([nccSheet.id, sheet1.id, processedSheet.id, processedV2Sheet.id]);
   for (const ws of [...workbook.worksheets]) {
     if (!baseSheetIds.has(ws.id)) {
       workbook.removeWorksheet(ws.id);
@@ -558,9 +791,7 @@ const GOC_HEADERS = [
   'Tuyến cũ', 'Tuyến mới', 'Tuyến lên hóa đơn'
 ];
 
-function buildGocSheet(ws: ExcelJS.Worksheet, rows: ProcessedRow[]): void {
-  // Row 1 is empty, Row 2 has headers
-  ws.addRow([]);
+function addGocHeaderRow(ws: ExcelJS.Worksheet): ExcelJS.Row {
   const headerRow = ws.addRow(GOC_HEADERS);
   headerRow.height = 28;
   headerRow.eachCell((cell) => {
@@ -578,25 +809,58 @@ function buildGocSheet(ws: ExcelJS.Worksheet, rows: ProcessedRow[]): void {
       right: { style: 'thin' },
     };
   });
+  return headerRow;
+}
 
-  // Data rows starting from row 3
-  rows.forEach((r, idx) => {
-    const rowNum = idx + 3;
+function setGocColWidths(ws: ExcelJS.Worksheet): void {
+  ws.columns.forEach((col, idx) => {
+    if (idx === 0) col.width = 15;
+    else if (idx === 1) col.width = 12;
+    else if (idx === 6 || idx === 7 || idx === 8) col.width = 28;
+    else if (idx === 9 || idx === 10) col.width = 30;
+    else col.width = 14;
+  });
+}
+
+function buildGocSheet(ws: ExcelJS.Worksheet, rows: ProcessedRow[]): void {
+  const rowsA = rows.filter((r) => (r.khungGia || '').trim() !== '≤2.5 tấn');
+  const rowsB = rows.filter((r) => (r.khungGia || '').trim() === '≤2.5 tấn');
+
+  const hasA = rowsA.length > 0;
+  const hasB = rowsB.length > 0;
+
+  if (!hasA && !hasB) {
+    ws.addRow([]);
+    addGocHeaderRow(ws);
+    setGocColWidths(ws);
+    return;
+  }
+
+  let prevInvoiceNo = '';
+
+  const renderGocRow = (r: ProcessedRow) => {
+    const rowNum = ws.rowCount + 1;
     const prevRowNum = rowNum - 1;
 
-    // Excel formula references
-    // Col 2 = B (Số hóa đơn), Col 3 = C (Ngày HĐ), Col 4 = D (Số xe), Col 7 = G (Điểm TT), Col 12 = L (Khung giá)
-    // Col 21 = U (HĐ TL Net), Col 22 = V (Round MT)
-    // Col 24 = X (Tấn/Chuyến), Col 26 = Z (Đơn giá), Col 27 = AA (Bốc xếp), Col 28 = AB (Chuyển tải)
-    // Col 38 = AL (5 nhà), Col 39..44 = AM..AR (CLF..GẠO)
+    const isFirstRowOfInvoice = r.invoiceNo !== prevInvoiceNo;
+    prevInvoiceNo = r.invoiceNo;
+
     const formulaHoaDon = { formula: `G${rowNum}&", ("&L${rowNum}&"), xe "&D${rowNum}` };
     const formulaRoundMt = { formula: `ROUND(U${rowNum}/1000,3)` };
     const formulaTanHd = { formula: `IF($B${rowNum}=$B${prevRowNum},0,SUMIF($B:$B,$B${rowNum},$V:$V))` };
     const formulaTanChuyen = { formula: `IF(AND(D${rowNum}=D${prevRowNum},C${rowNum}=C${prevRowNum}),0,SUMIFS($V:$V,$C:$C,$C${rowNum},$D:$D,$D${rowNum}))` };
-    const formulaTongChuyen = { formula: `AL${rowNum}` };
+    const formulaTongChuyen = isFirstRowOfInvoice ? { formula: `AL${rowNum}` } : '';
     const formulaThanhTienCheck = { formula: `ROUND(X${rowNum}*SUM(Z${rowNum}:AB${rowNum}),0)` };
     const formulaThanhTienHd = { formula: `ROUND(X${rowNum}*Z${rowNum},0)` };
-    const formula5Nha = { formula: `SUBTOTAL(9,AM${rowNum}:AR${rowNum})` };
+    const formula5Nha = isFirstRowOfInvoice ? { formula: `SUBTOTAL(9,AM${rowNum}:AR${rowNum})` } : '';
+
+    const summary = r.tripSummary;
+    const clfVal = isFirstRowOfInvoice ? (summary?.clf ?? '') : '';
+    const vfmVal = isFirstRowOfInvoice ? (summary?.vfm ?? '') : '';
+    const mccVal = isFirstRowOfInvoice ? (summary?.mcc ?? '') : '';
+    const clvVal = isFirstRowOfInvoice ? (summary?.clv ?? '') : '';
+    const ndfcVal = isFirstRowOfInvoice ? (summary?.ndfc ?? '') : '';
+    const gaoVal = isFirstRowOfInvoice ? (summary?.gao ?? '') : '';
 
     const data = [
       r.supplierCode,                   // A (1)
@@ -637,12 +901,12 @@ function buildGocSheet(ws: ExcelJS.Worksheet, rows: ProcessedRow[]): void {
       '',                               // AJ (36)
       '',                               // AK (37)
       formula5Nha,                      // AL (38)
-      r.clf ?? '',                      // AM (39)
-      r.vfm ?? '',                      // AN (40)
-      r.mcc ?? '',                      // AO (41)
-      r.clv ?? '',                      // AP (42)
-      r.ndfc ?? '',                     // AQ (43)
-      r.gao ?? '',                      // AR (44)
+      clfVal,                           // AM (39)
+      vfmVal,                           // AN (40)
+      mccVal,                           // AO (41)
+      clvVal,                           // AP (42)
+      ndfcVal,                          // AQ (43)
+      gaoVal,                           // AR (44)
       r.driver,                         // AS (45)
       r.extraInfo,                      // AT (46)
       r.slot,                           // AU (47)
@@ -667,7 +931,6 @@ function buildGocSheet(ws: ExcelJS.Worksheet, rows: ProcessedRow[]): void {
     const row = ws.addRow(data);
     row.height = 20;
 
-    // Number formats
     row.getCell(22).numFmt = '#,##0.000'; // V
     row.getCell(23).numFmt = '#,##0.000'; // W
     row.getCell(24).numFmt = '#,##0.000'; // X
@@ -684,16 +947,123 @@ function buildGocSheet(ws: ExcelJS.Worksheet, rows: ProcessedRow[]): void {
     row.getCell(41).numFmt = '#,##0.000'; // AO
     row.getCell(42).numFmt = '#,##0.000'; // AP
     row.getCell(43).numFmt = '#,##0.000'; // AQ
-  });
+    row.getCell(44).numFmt = '#,##0.000'; // AR
 
-  // Set column widths
-  ws.columns.forEach((col, idx) => {
-    if (idx === 0) col.width = 15;
-    else if (idx === 1) col.width = 12;
-    else if (idx === 6 || idx === 7 || idx === 8) col.width = 28;
-    else if (idx === 9 || idx === 10) col.width = 30;
-    else col.width = 14;
-  });
+    if (r.isPartialMatch) {
+      [6, 7, 8].forEach((colIdx) => {
+        const c = row.getCell(colIdx);
+        c.fill = PARTIAL_MATCH_FILL;
+      });
+      const addrCell = row.getCell(11);
+      addrCell.fill = PARTIAL_MATCH_FILL;
+      if (r.matchedAddress) {
+        addrCell.note = r.matchedAddress;
+      }
+    }
+  };
+
+  // 1. RENDER TABLE A
+  if (hasA) {
+    ws.addRow([]); // Row 1 empty
+    addGocHeaderRow(ws); // Row 2 header
+    const tableAStartRow = 3;
+
+    // Group rowsA by contiguous trips
+    const tripsA: ProcessedRow[][] = [];
+    let currentTrip: ProcessedRow[] = [];
+    let currentTripKey = '';
+    for (const r of rowsA) {
+      const tKey = `${r.truckNo.trim()}___${r.invoiceDateIso}`;
+      if (tKey !== currentTripKey) {
+        if (currentTrip.length > 0) tripsA.push(currentTrip);
+        currentTrip = [r];
+        currentTripKey = tKey;
+      } else {
+        currentTrip.push(r);
+      }
+    }
+    if (currentTrip.length > 0) tripsA.push(currentTrip);
+
+    for (const tripRows of tripsA) {
+      const tripStartRow = ws.rowCount + 1;
+      for (const r of tripRows) {
+        renderGocRow(r);
+      }
+      const tripEndRow = ws.rowCount;
+
+      // Add Trip Total row
+      const tripTotalRow = ws.addRow([]);
+      tripTotalRow.height = 20;
+      tripTotalRow.getCell(3).value = 'Tổng cộng';
+      tripTotalRow.getCell(4).value = { formula: `D${tripEndRow}` };
+      tripTotalRow.getCell(6).value = { formula: `I${tripEndRow}` };
+      tripTotalRow.getCell(22).value = { formula: `SUM(V${tripStartRow}:V${tripEndRow})` };
+      tripTotalRow.getCell(23).value = { formula: `SUM(W${tripStartRow}:W${tripEndRow})` };
+      tripTotalRow.getCell(24).value = { formula: `SUM(X${tripStartRow}:X${tripEndRow})` };
+      tripTotalRow.getCell(30).value = { formula: `SUM(AD${tripStartRow}:AD${tripEndRow})` };
+      tripTotalRow.getCell(31).value = { formula: `SUM(AE${tripStartRow}:AE${tripEndRow})` };
+
+      tripTotalRow.getCell(22).numFmt = '#,##0.000';
+      tripTotalRow.getCell(23).numFmt = '#,##0.000';
+      tripTotalRow.getCell(24).numFmt = '#,##0.000';
+      tripTotalRow.getCell(30).numFmt = '#,##0';
+      tripTotalRow.getCell(31).numFmt = '#,##0';
+    }
+
+    const tableAEndRow = ws.rowCount;
+    // Add TỔNG CỘNG A row
+    const totalRowA = ws.addRow([]);
+    totalRowA.height = 20;
+    totalRowA.getCell(5).value = 'TỔNG CỘNG A';
+    totalRowA.getCell(23).value = { formula: `SUM(W${tableAStartRow}:W${tableAEndRow})/2` };
+    totalRowA.getCell(24).value = { formula: `SUM(X${tableAStartRow}:X${tableAEndRow})/2` };
+    totalRowA.getCell(30).value = { formula: `SUM(AD${tableAStartRow}:AD${tableAEndRow})/2` };
+    totalRowA.getCell(31).value = { formula: `SUM(AE${tableAStartRow}:AE${tableAEndRow})/2` };
+
+    totalRowA.getCell(23).numFmt = '#,##0.000';
+    totalRowA.getCell(24).numFmt = '#,##0.000';
+    totalRowA.getCell(30).numFmt = '#,##0';
+    totalRowA.getCell(31).numFmt = '#,##0';
+  }
+
+  // Gap between tables if both exist
+  if (hasA && hasB) {
+    for (let i = 0; i < 6; i++) {
+      ws.addRow([]);
+    }
+  }
+
+  // 2. RENDER TABLE B
+  if (hasB) {
+    if (!hasA) {
+      ws.addRow([]); // Row 1 is empty if only Table B
+    }
+    addGocHeaderRow(ws);
+    const tableBStartRow = ws.rowCount + 1;
+
+    for (const r of rowsB) {
+      renderGocRow(r);
+    }
+    const tableBEndRow = ws.rowCount;
+
+    // Add TỔNG CỘNG B row
+    const totalRowB = ws.addRow([]);
+    totalRowB.height = 20;
+    totalRowB.getCell(5).value = 'TỔNG CỘNG B';
+    totalRowB.getCell(22).value = { formula: `SUM(V${tableBStartRow}:V${tableBEndRow})` };
+    totalRowB.getCell(23).value = { formula: `SUM(W${tableBStartRow}:W${tableBEndRow})` };
+    totalRowB.getCell(24).value = { formula: `SUM(X${tableBStartRow}:X${tableBEndRow})` };
+    totalRowB.getCell(30).value = { formula: `SUM(AD${tableBStartRow}:AD${tableBEndRow})` };
+    totalRowB.getCell(31).value = { formula: `SUM(AE${tableBStartRow}:AE${tableBEndRow})` };
+
+    totalRowB.getCell(22).numFmt = '#,##0.000';
+    totalRowB.getCell(23).numFmt = '#,##0.000';
+    totalRowB.getCell(24).numFmt = '#,##0.000';
+    totalRowB.getCell(30).numFmt = '#,##0';
+    totalRowB.getCell(31).numFmt = '#,##0';
+  }
+
+  setGocColWidths(ws);
 }
 
 const SUMMARY_HEADERS = [
@@ -708,8 +1078,7 @@ const SUMMARY_HEADERS = [
   'Tài xế', 'Thông tin bổ sung', 'Slot'
 ];
 
-function buildSummarySheet(ws: ExcelJS.Worksheet, rows: ProcessedRow[]): void {
-  ws.addRow([]);
+function addSummaryHeaderRow(ws: ExcelJS.Worksheet): ExcelJS.Row {
   const headerRow = ws.addRow(SUMMARY_HEADERS);
   headerRow.height = 28;
   headerRow.eachCell((cell) => {
@@ -727,55 +1096,68 @@ function buildSummarySheet(ws: ExcelJS.Worksheet, rows: ProcessedRow[]): void {
       right: { style: 'thin' },
     };
   });
+  return headerRow;
+}
 
-  // Group by invoice
-  const byInvoice = new Map<string, ProcessedRow[]>();
-  for (const r of rows) {
-    const list = byInvoice.get(r.invoiceNo) || [];
-    list.push(r);
-    byInvoice.set(r.invoiceNo, list);
+function setSummaryColWidths(ws: ExcelJS.Worksheet): void {
+  ws.columns.forEach((col, idx) => {
+    if (idx === 1) col.width = 12;
+    else if (idx === 5 || idx === 6 || idx === 7) col.width = 28;
+    else if (idx === 8 || idx === 9) col.width = 30;
+    else col.width = 14;
+  });
+}
+
+function buildSummarySheet(ws: ExcelJS.Worksheet, rows: ProcessedRow[]): void {
+  const rowsA = rows.filter((r) => (r.khungGia || '').trim() !== '≤2.5 tấn');
+  const rowsB = rows.filter((r) => (r.khungGia || '').trim() === '≤2.5 tấn');
+
+  const hasA = rowsA.length > 0;
+  const hasB = rowsB.length > 0;
+
+  if (!hasA && !hasB) {
+    ws.addRow([]);
+    addSummaryHeaderRow(ws);
+    setSummaryColWidths(ws);
+    return;
   }
 
-  // Calculate trip weight map (truckNo + date)
+  // Calculate trip weight map across all rows
   const tripSumMap = new Map<string, number>();
   for (const r of rows) {
-    const tripKey = `${r.truckNo}___${r.invoiceDateIso}`;
+    const tripKey = `${r.truckNo.trim()}___${r.invoiceDateIso}`;
     tripSumMap.set(tripKey, (tripSumMap.get(tripKey) || 0) + r.roundMt);
   }
 
   const seenTrips = new Set<string>();
-  let rowIdx = 3;
 
-  for (const [invoiceNo, invRows] of byInvoice.entries()) {
+  const renderSummaryInvoiceRow = (invoiceNo: string, invRows: ProcessedRow[]) => {
+    const rowIdx = ws.rowCount + 1;
     const first = invRows[0];
     const totalHdWeight = Math.round(invRows.reduce((sum, item) => sum + item.roundMt, 0) * 1000) / 1000;
 
-    const tripKey = `${first.truckNo}___${first.invoiceDateIso}`;
+    const tripKey = `${first.truckNo.trim()}___${first.invoiceDateIso}`;
     const isFirstInTrip = !seenTrips.has(tripKey);
     seenTrips.add(tripKey);
 
     const tripWeight = isFirstInTrip ? (tripSumMap.get(tripKey) || totalHdWeight) : 0;
 
-    // Sum 5 nha for this invoice
-    const clfSum = invRows.reduce((sum, item) => sum + (item.clf || 0), 0) || null;
-    const vfmSum = invRows.reduce((sum, item) => sum + (item.vfm || 0), 0) || null;
-    const mccSum = invRows.reduce((sum, item) => sum + (item.mcc || 0), 0) || null;
-    const clvSum = invRows.reduce((sum, item) => sum + (item.clv || 0), 0) || null;
-    const ndfcSum = invRows.reduce((sum, item) => sum + (item.ndfc || 0), 0) || null;
-    const gaoSum = invRows.reduce((sum, item) => sum + (item.gao || 0), 0) || null;
+    const summary = first.tripSummary;
+    const clfVal = summary?.clf ?? '';
+    const vfmVal = summary?.vfm ?? '';
+    const mccVal = summary?.mcc ?? '';
+    const clvVal = summary?.clv ?? '';
+    const ndfcVal = summary?.ndfc ?? '';
+    const gaoVal = summary?.gao ?? '';
 
-    // Col 8 = H (Hóa đơn): =F3&", ("&K3&"), xe "&D3
-    // Col 13 = M (Tấn/Hóa đơn), Col 14 = N (Tấn/Chuyến), Col 15 = O (Tổng TL chuyến: =AB3)
-    // Col 16 = P (Đơn giá), Col 17 = Q (Bốc xếp), Col 18 = R (Chuyển tải), Col 19 = S (Ghép điểm)
-    // Col 20 = T (Thành tiền check: =ROUND(N3*SUM(P3:R3),0))
-    // Col 21 = U (Thành tiền hóa đơn: =ROUND(N3*P3,0))
-    // Col 28 = AB (5 nhà: =SUBTOTAL(9,AC3:AH3))
-    // Col 29..34 = AC..AH (CLF..GẠO)
     const formulaHoaDon = { formula: `F${rowIdx}&", ("&K${rowIdx}&"), xe "&D${rowIdx}` };
     const formulaTongChuyen = { formula: `AB${rowIdx}` };
     const formulaThanhTienCheck = { formula: `ROUND(N${rowIdx}*SUM(P${rowIdx}:R${rowIdx}),0)` };
     const formulaThanhTienHd = { formula: `ROUND(N${rowIdx}*P${rowIdx},0)` };
     const formula5Nha = { formula: `SUBTOTAL(9,AC${rowIdx}:AH${rowIdx})` };
+
+    const isPalletKhungGia = (first.khungGia || '').toLowerCase().includes('pallet');
+    const displayKhungGia = isPalletKhungGia ? 'Pallet' : first.khungGia;
 
     const data = [
       first.supplierCode,           // A (1)
@@ -788,7 +1170,7 @@ function buildSummarySheet(ws: ExcelJS.Worksheet, rows: ProcessedRow[]): void {
       formulaHoaDon,                // H (8)
       first.customerName,           // I (9)
       first.address,                // J (10)
-      first.khungGia,               // K (11)
+      displayKhungGia,              // K (11)
       first.dvt || 'Tấn',           // L (12)
       totalHdWeight,                // M (13)
       tripWeight,                   // N (14)
@@ -806,12 +1188,12 @@ function buildSummarySheet(ws: ExcelJS.Worksheet, rows: ProcessedRow[]): void {
       invRows.length,               // Z (26)
       '',                           // AA (27)
       formula5Nha,                  // AB (28)
-      clfSum ?? '',                 // AC (29)
-      vfmSum ?? '',                 // AD (30)
-      mccSum ?? '',                 // AE (31)
-      clvSum ?? '',                 // AF (32)
-      ndfcSum ?? '',                // AG (33)
-      gaoSum ?? '',                 // AH (34)
+      clfVal,                       // AC (29)
+      vfmVal,                       // AD (30)
+      mccVal,                       // AE (31)
+      clvVal,                       // AF (32)
+      ndfcVal,                      // AG (33)
+      gaoVal,                       // AH (34)
       first.driver,                 // AI (35)
       first.extraInfo,              // AJ (36)
       first.slot,                   // AK (37)
@@ -819,6 +1201,10 @@ function buildSummarySheet(ws: ExcelJS.Worksheet, rows: ProcessedRow[]): void {
 
     const row = ws.addRow(data);
     row.height = 20;
+
+    if (isPalletKhungGia && first.khungGia) {
+      row.getCell(11).note = first.khungGia;
+    }
 
     row.getCell(13).numFmt = '#,##0.000'; // M
     row.getCell(14).numFmt = '#,##0.000'; // N
@@ -835,14 +1221,131 @@ function buildSummarySheet(ws: ExcelJS.Worksheet, rows: ProcessedRow[]): void {
     row.getCell(31).numFmt = '#,##0.000'; // AE
     row.getCell(32).numFmt = '#,##0.000'; // AF
     row.getCell(33).numFmt = '#,##0.000'; // AG
+    row.getCell(34).numFmt = '#,##0.000'; // AH
 
-    rowIdx++;
+    const partialMatchRows = invRows.filter((item) => item.isPartialMatch);
+    if (partialMatchRows.length > 0) {
+      [5, 6, 7].forEach((colIdx) => {
+        const c = row.getCell(colIdx);
+        c.fill = PARTIAL_MATCH_FILL;
+      });
+      const addrCell = row.getCell(10);
+      addrCell.fill = PARTIAL_MATCH_FILL;
+      const uniqueMatchedAddrs = Array.from(
+        new Set(partialMatchRows.map((item) => item.matchedAddress).filter(Boolean))
+      );
+      if (uniqueMatchedAddrs.length > 0) {
+        addrCell.note = uniqueMatchedAddrs.join('\n');
+      }
+    }
+  };
+
+  // 1. RENDER TABLE A
+  if (hasA) {
+    ws.addRow([]); // Row 1 is empty
+    addSummaryHeaderRow(ws); // Row 2 header
+    const tableAStartRow = 3;
+
+    // Group rowsA by invoice
+    const byInvoiceA = new Map<string, ProcessedRow[]>();
+    for (const r of rowsA) {
+      const list = byInvoiceA.get(r.invoiceNo) || [];
+      list.push(r);
+      byInvoiceA.set(r.invoiceNo, list);
+    }
+
+    // Group invoices of rowsA by trip
+    const tripsA = new Map<string, Array<{ invoiceNo: string; invRows: ProcessedRow[] }>>();
+    for (const [invoiceNo, invRows] of byInvoiceA.entries()) {
+      const first = invRows[0];
+      const tripKey = `${first.truckNo.trim()}___${first.invoiceDateIso}`;
+      const list = tripsA.get(tripKey) || [];
+      list.push({ invoiceNo, invRows });
+      tripsA.set(tripKey, list);
+    }
+
+    for (const invList of tripsA.values()) {
+      const tripStartRow = ws.rowCount + 1;
+      for (const { invoiceNo, invRows } of invList) {
+        renderSummaryInvoiceRow(invoiceNo, invRows);
+      }
+      const tripEndRow = ws.rowCount;
+
+      // Add Trip Total row
+      const tripTotalRow = ws.addRow([]);
+      tripTotalRow.height = 20;
+      tripTotalRow.getCell(3).value = 'Tổng cộng';
+      tripTotalRow.getCell(4).value = { formula: `D${tripEndRow}` };
+      tripTotalRow.getCell(5).value = { formula: `H${tripEndRow}` };
+      tripTotalRow.getCell(13).value = { formula: `SUM(M${tripStartRow}:M${tripEndRow})` };
+      tripTotalRow.getCell(14).value = { formula: `SUM(N${tripStartRow}:N${tripEndRow})` };
+      tripTotalRow.getCell(20).value = { formula: `SUM(T${tripStartRow}:T${tripEndRow})` };
+      tripTotalRow.getCell(21).value = { formula: `SUM(U${tripStartRow}:U${tripEndRow})` };
+
+      tripTotalRow.getCell(13).numFmt = '#,##0.000';
+      tripTotalRow.getCell(14).numFmt = '#,##0.000';
+      tripTotalRow.getCell(20).numFmt = '#,##0';
+      tripTotalRow.getCell(21).numFmt = '#,##0';
+    }
+
+    const tableAEndRow = ws.rowCount;
+    // Add TỔNG CỘNG A row
+    const totalRowA = ws.addRow([]);
+    totalRowA.height = 20;
+    totalRowA.getCell(5).value = 'TỔNG CỘNG A';
+    totalRowA.getCell(13).value = { formula: `SUM(M${tableAStartRow}:M${tableAEndRow})/2` };
+    totalRowA.getCell(14).value = { formula: `SUM(N${tableAStartRow}:N${tableAEndRow})/2` };
+    totalRowA.getCell(20).value = { formula: `SUM(T${tableAStartRow}:T${tableAEndRow})/2` };
+    totalRowA.getCell(21).value = { formula: `SUM(U${tableAStartRow}:U${tableAEndRow})/2` };
+
+    totalRowA.getCell(13).numFmt = '#,##0.000';
+    totalRowA.getCell(14).numFmt = '#,##0.000';
+    totalRowA.getCell(20).numFmt = '#,##0';
+    totalRowA.getCell(21).numFmt = '#,##0';
   }
 
-  ws.columns.forEach((col, idx) => {
-    if (idx === 1) col.width = 12;
-    else if (idx === 5 || idx === 6 || idx === 7) col.width = 28;
-    else if (idx === 8 || idx === 9) col.width = 30;
-    else col.width = 14;
-  });
+  // Gap between tables if both exist
+  if (hasA && hasB) {
+    for (let i = 0; i < 6; i++) {
+      ws.addRow([]);
+    }
+  }
+
+  // 2. RENDER TABLE B
+  if (hasB) {
+    if (!hasA) {
+      ws.addRow([]); // Row 1 is empty if only Table B
+    }
+    addSummaryHeaderRow(ws);
+    const tableBStartRow = ws.rowCount + 1;
+
+    // Group rowsB by invoice
+    const byInvoiceB = new Map<string, ProcessedRow[]>();
+    for (const r of rowsB) {
+      const list = byInvoiceB.get(r.invoiceNo) || [];
+      list.push(r);
+      byInvoiceB.set(r.invoiceNo, list);
+    }
+
+    for (const [invoiceNo, invRows] of byInvoiceB.entries()) {
+      renderSummaryInvoiceRow(invoiceNo, invRows);
+    }
+    const tableBEndRow = ws.rowCount;
+
+    // Add TỔNG CỘNG B row
+    const totalRowB = ws.addRow([]);
+    totalRowB.height = 20;
+    totalRowB.getCell(5).value = 'TỔNG CỘNG B';
+    totalRowB.getCell(13).value = { formula: `SUM(M${tableBStartRow}:M${tableBEndRow})` };
+    totalRowB.getCell(14).value = { formula: `SUM(N${tableBStartRow}:N${tableBEndRow})` };
+    totalRowB.getCell(20).value = { formula: `SUM(T${tableBStartRow}:T${tableBEndRow})` };
+    totalRowB.getCell(21).value = { formula: `SUM(U${tableBStartRow}:U${tableBEndRow})` };
+
+    totalRowB.getCell(13).numFmt = '#,##0.000';
+    totalRowB.getCell(14).numFmt = '#,##0.000';
+    totalRowB.getCell(20).numFmt = '#,##0';
+    totalRowB.getCell(21).numFmt = '#,##0';
+  }
+
+  setSummaryColWidths(ws);
 }
