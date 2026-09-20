@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useSearchParams } from 'react-router-dom';
 import { AuthLayout } from './layouts/AuthLayout';
 import { MainLayout } from './layouts/MainLayout';
 import { ProtectedRoute } from './components/ProtectedRoute';
@@ -16,6 +16,7 @@ import { DriverInvoicesPage } from './pages/admin/accounting-data/DriverInvoices
 import { RiceDeliveryDataPage } from './pages/admin/RiceDeliveryDataPage';
 import { DeliveryImportPage } from './pages/admin/accounting-data/DeliveryImportPage';
 import { InvoiceMatchingPage } from './pages/admin/accounting-data/InvoiceMatchingPage';
+import { BangKeThoPage } from './pages/admin/accounting-data/BangKeThoPage';
 import { VehicleCatalogPage } from './pages/admin/catalog/VehicleCatalogPage';
 import { VehicleDetailPage } from './pages/admin/catalog/VehicleDetailPage';
 import { InnerCityCustomerPage } from './pages/admin/catalog/InnerCityCustomerPage';
@@ -32,10 +33,29 @@ import { OilChangePage } from './pages/admin/vehicle-data/OilChangePage';
 import { InsurancePage } from './pages/admin/vehicle-data/InsurancePage';
 import { RepairPage } from './pages/admin/vehicle-data/RepairPage';
 import { RoutePricingPage } from './pages/route-pricing/RoutePricingPage';
+import { CustomerSurchargesPage } from './pages/route-pricing/CustomerSurchargesPage';
 import InvoiceTrackingPage from './pages/invoice-tracking/InvoiceTrackingPage';
 import PublicTicketViewPage from './pages/invoice-tracking/PublicTicketViewPage';
 import { DataScopeManagementPage } from './pages/admin/DataScopeManagementPage';
 import { WorkflowManagementPage } from './pages/admin/WorkflowManagementPage';
+
+function RoutePricingRedirect() {
+  const [params] = useSearchParams();
+  const tab = params.get('tab');
+  const next = new URLSearchParams(params);
+  next.delete('tab');
+  const qs = next.toString();
+  const suffix = qs ? `?${qs}` : '';
+  const path =
+    tab === 'sets'
+      ? '/route-pricing/sets'
+      : tab === 'prices'
+        ? '/route-pricing/matrix'
+        : tab === 'groups' || tab === 'manage'
+          ? '/route-pricing/routes'
+          : '/route-pricing/periods';
+  return <Navigate to={`${path}${suffix}`} replace />;
+}
 
 function PlaceholderPage({ title }: { title: string }) {
   return (
@@ -87,6 +107,7 @@ export function Router() {
             <Route path="/accounting-data/customers" element={<CustomersPage />} />
             <Route path="/accounting-data/delivery-import" element={<DeliveryImportPage />} />
             <Route path="/accounting-data/invoice-matching" element={<InvoiceMatchingPage />} />
+            <Route path="/accounting-data/bang-ke-tho" element={<BangKeThoPage />} />
             {/* Jobs */}
             <Route path="/accounting-data/reconcile-jobs" element={<Navigate to="/jobs/reconcile" replace />} />
             <Route path="/jobs/reconcile" element={<ReconcileJobPage />} />
@@ -101,7 +122,12 @@ export function Router() {
             <Route path="/catalog/promo-items" element={<PromoItemCatalogPage />} />
             <Route path="/catalog/delivery-points" element={<DeliveryPointCatalogPage />} />
             <Route path="/catalog/drivers" element={<DriverCatalogPage />} />
-            <Route path="/route-pricing" element={<RoutePricingPage />} />
+            <Route path="/route-pricing" element={<RoutePricingRedirect />} />
+            <Route path="/route-pricing/periods" element={<RoutePricingPage />} />
+            <Route path="/route-pricing/sets" element={<RoutePricingPage />} />
+            <Route path="/route-pricing/routes" element={<RoutePricingPage />} />
+            <Route path="/route-pricing/matrix" element={<RoutePricingPage />} />
+            <Route path="/route-pricing/surcharges" element={<CustomerSurchargesPage />} />
           </Route>
         </Route>
 

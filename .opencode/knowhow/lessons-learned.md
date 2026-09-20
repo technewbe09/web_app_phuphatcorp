@@ -5,6 +5,47 @@ description: Ghi lại các bài học kinh nghiệm, bug đã fix, và pitfalls
 # Lessons Learned — PhuPhatCorp
 
 ---
+## Lesson / Feature: Xử lý Bảng Kê Thô ND-MCC — Chuẩn hóa số liệu, tính toán công thức Excel và Smart Address Matching
+- **Ngày:** 2026-09-20
+- **Severity:** Low / Best Practice
+- **Feature liên quan:** Xử lý Bảng kê thô 5 nhà & ND-MCC (`bangKeTho`, `ndMccEngine`, `processedV2`, `addressMatcher`)
+- **Vấn đề & Bài học:**
+  1. **Công thức SUM chia đôi `=SUM(...)/2` vs `=SUM(...)`:**
+     - Tại **Bảng A** (>2.5 tấn), các dòng hóa đơn được nhóm theo từng chuyến xe và có dòng chèn `Tổng cộng` của từng xe. Khi tính `TỔNG CỘNG A` của toàn bảng, nếu lấy dải từ dòng đầu đến dòng cuối thì giá trị mỗi dòng bị tính 2 lần (1 lần ở dòng chi tiết hóa đơn, 1 lần ở dòng tổng xe). Kế toán giải quyết bằng công thức chia đôi `=SUM(start:end)/2`.
+     - Tuy nhiên, tại **Bảng B** (≤2.5 tấn), các hóa đơn xếp liên tục và không có dòng tổng chuyến xe trung gian. Do đó dòng `TỔNG CỘNG B` phải dùng công thức `=SUM(start:end)` trực tiếp, tuyệt đối không chia 2.
+  2. **Chuẩn hóa số liệu kiểu chuỗi trong Excel input (`Processed v2`):**
+     - File input kế toán thường có các cột số lượng và trọng lượng dạng text có dấu phẩy ngăn cách hàng nghìn (ví dụ `"1,200"` hay `"12,500.25"`). Khi Excel thực thi công thức `=ROUND(...)` hoặc tra cứu tính toán sẽ dễ bị lỗi `#VALUE!` hoặc không nhận dạng được kiểu số.
+     - Tạo sheet `Processed v2` nhân bản và chuẩn hóa sạch kiểu `number` (`parseCellToNumber`), đồng thời tính lại `Khung giá` theo tải trọng thực của chuyến xe (từ cột `5 nhà`) giúp toàn bộ công thức trên các sub-sheets chạy ổn định và chính xác.
+  3. **So khớp địa chỉ linh hoạt (`addressMatcher`):**
+     - Địa chỉ khách hàng trong thực tế có rất nhiều biến thể (ví dụ có/không có "thửa đất số ...", dấu cách, dấu gạch nối). Việc chỉ so khớp chính xác (`===`) sẽ bỏ sót nhiều khách hàng đã có trong cơ sở dữ liệu.
+     - Kết hợp chuẩn hóa dấu + loại bỏ tiền tố thửa đất + substring containment + token overlap (ngưỡng 75%), đồng thời tô màu cảnh báo `#FFF2CC` kèm Note trên ô địa chỉ khi khớp dạng partial match giúp kế toán kiểm soát 100% độ chính xác mà không tốn công nhập liệu lại.
+- **Files liên quan:** `backend/src/services/bangKeTho/`, `backend/src/utils/addressMatcher.ts`, `backend/src/utils/routeMatcher.ts`.
+
+---
+## Bug: Nút xóa phụ phí bị mất do lọt ra ngoài vùng hiển thị trong bảng phụ phí
+- **Ngày:** 2026-09-18
+- **Severity:** Medium
+- **Feature liên quan:** Phụ phí giao hàng (`CustomerSurchargesPage.tsx`)
+- **Triệu chứng:** Người dùng vào trang Phụ phí giao hàng thì không thấy nút Xóa phụ phí trên các dòng đang mở, chỉ thấy nút Đổi giá và Ngừng áp dụng.
+- **Root cause:** Cột `actions` trong `DataGrid` được cấu hình `width: 112`. Các ô dữ liệu `<td>` có padding ngang `px-3` (24px) và `overflow-hidden`. Trong khi đó, dòng phụ phí đang áp dụng chứa 3 nút thao tác (Đổi giá, Ngừng, Xóa) với mỗi nút kích thước `size-8` (32px) và khoảng cách `gap-0.5`, tổng chiều rộng ~100px. Chiều rộng lọt lòng chỉ còn 112 - 24 = 88px (< 100px), khiến nút Xóa nằm ở cuối cùng bị tràn ra ngoài và bị `overflow-hidden` cắt mất.
+- **Fix:** Tăng độ rộng cột `actions` từ 112 lên 140px, bổ sung `shrink-0` cho các wrapper `DataGridTip` và phần tử `button` để chống co giãn flexbox.
+- **File sửa:** `frontend/src/pages/route-pricing/CustomerSurchargesPage.tsx`
+- **Cần chú ý:** Khi định nghĩa cột `actions` có N nút thao tác trong `DataGrid`, cần tính toán: `width >= (N * button_width) + ((N - 1) * gap) + cell_padding (24px) + margin`. Với 3 nút 32px thì tối thiểu cần 128px - 140px.
+
+
+---
+## Bug: Phụ phí lệch 1 ngày khi chọn ngày bắt đầu
+- **Ngày:** 2026-09-17
+- **Severity:** High
+- **Feature liên quan:** Phụ phí giao hàng (`customerSurchargeService`)
+- **Triệu chứng:** Chọn ngày bắt đầu 16/9 bị báo chồng ngày; chọn 17/9 thì tạo được nhưng màn hình hiện 16/9.
+- **Root cause:** `pg` parse cột `DATE` thành `Date` lúc 00:00 local. `iso()` gọi `toISOString().slice(0, 10)` nên ở UTC+7 ngày lịch `2026-09-17` thành `2026-09-16`. Cùng phép map dùng cho kiểm tra chồng kỳ, nên kỳ kết thúc 17/9 bị coi là kết thúc 16/9.
+- **Fix:** So sánh/hiển thị bằng ngày lịch local (`getFullYear/getMonth/getDate`), và SELECT `start_date::text` / `end_date::text`. Không dùng `toISOString()` cho `DATE`.
+- **File sửa:** `backend/src/services/customerSurchargeService.ts`
+- **Regression test:** `backend/src/__tests__/customerSurchargeService.test.ts` — `customer surcharge calendar dates`
+- **Cần chú ý:** Dữ liệu đã lưu vẫn đúng; chỉ lớp đọc bị lệch. Rule tạo lúc bug còn hiệu lực có thể chồng kỳ thật (ví dụ cùng combo, kỳ cũ kết thúc 17/9 và kỳ mới bắt đầu 17/9).
+
+---
 ## Change: Dedicated MinIO Bucket/Prefix for Ticket Attachments (`MINIO_BUCKET_TICKET_ATTACHEMENTS`)
 - **Ngày:** 2026-09-13
 - **Feature:** Theo dõi hóa đơn (`invoice_tracking`), MinIO Storage Configuration
@@ -12,9 +53,10 @@ description: Ghi lại các bài học kinh nghiệm, bug đã fix, và pitfalls
 - **Giải pháp:**
   - Cập nhật `env.ts` nạp `env.minio.ticketAttachmentsBucket` từ `MINIO_BUCKET_TICKET_ATTACHEMENTS` (kèm fallback `MINIO_BUCKET_TICKET_ATTACHMENTS` / `MINIO_BUCKET`).
   - Nâng cấp `storageService` hỗ trợ tham số `bucketLocation` tùy biến: tự động phân tách `bucketName` và `prefix`, đảm bảo khởi tạo bucket (`ensureBucket`), tải lên (`upload`), phát sinh URL (`getPublicUrl`), lấy stream (`getStream`), xóa tệp (`delete`) vào đúng vị trí chỉ định.
+  - Chuẩn hóa bộ API lưu trữ đồng nhất trên toàn hệ thống (loại bỏ các hàm phân mảnh `putObject`, `getObjectStream`, `deleteObject`), hỗ trợ tham số `customKey` trong `upload` để phục vụ linh hoạt cả tệp chứng từ (sinh tên tự động) lẫn batch cố định (Bảng kê thô).
   - Cập nhật `invoiceTrackingService.uploadDocuments` và `invoiceTrackingService.serveFile` truyền `env.minio.ticketAttachmentsBucket`.
   - Cập nhật `server.ts` tự động `ensureBucket` cho bucket tệp đính kèm khi ứng dụng khởi động.
-- **Files sửa:** `backend/src/config/env.ts`, `backend/src/services/storageService.ts`, `backend/src/services/invoiceTrackingService.ts`, `backend/src/server.ts`.
+- **Files sửa:** `backend/src/config/env.ts`, `backend/src/services/storageService.ts`, `backend/src/services/invoiceTrackingService.ts`, `backend/src/services/bangKeTho/index.ts`, `backend/src/server.ts`.
 
 ---
 ## Feature: "Download All" Attached Documents in TicketDetailModal

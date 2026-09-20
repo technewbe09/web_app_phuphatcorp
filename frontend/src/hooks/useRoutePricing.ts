@@ -1,8 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import {
-  type PriceTierInput,
-  routePricingApi,
-} from '../api/routePricingApi';
+import { type PriceSetTierInput, routePricingApi } from '../api/routePricingApi';
 
 export function useProvinces() {
   return useQuery({
@@ -19,31 +16,38 @@ export function useWards(provinceCode?: string) {
   });
 }
 
-export function useRoutes(supplierId?: number, search?: string) {
+export function usePriceBooks() {
   return useQuery({
-    queryKey: ['route-pricing', 'routes', supplierId, search],
-    queryFn: () => routePricingApi.listRoutes({ supplier_id: supplierId!, search }),
-    enabled: Boolean(supplierId),
+    queryKey: ['route-pricing', 'price-books'],
+    queryFn: () => routePricingApi.listPriceBooks(),
   });
 }
 
-export function useGroups(supplierId?: number) {
+export function useRoutes(priceBookId?: number, search?: string) {
   return useQuery({
-    queryKey: ['route-pricing', 'groups', supplierId],
-    queryFn: () => routePricingApi.listGroups({ supplier_id: supplierId! }),
-    enabled: Boolean(supplierId),
+    queryKey: ['route-pricing', 'routes', priceBookId, search],
+    queryFn: () => routePricingApi.listRoutes({ price_book_id: priceBookId!, search }),
+    enabled: Boolean(priceBookId),
   });
 }
 
-export function usePrices(supplierId?: number, routeGroupId?: number) {
+export function useGroups(priceBookId?: number) {
   return useQuery({
-    queryKey: ['route-pricing', 'prices', supplierId, routeGroupId],
+    queryKey: ['route-pricing', 'groups', priceBookId],
+    queryFn: () => routePricingApi.listGroups({ price_book_id: priceBookId! }),
+    enabled: Boolean(priceBookId),
+  });
+}
+
+export function usePrices(priceBookId?: number, routeGroupId?: number) {
+  return useQuery({
+    queryKey: ['route-pricing', 'prices', priceBookId, routeGroupId],
     queryFn: () =>
       routePricingApi.listPrices({
-        supplier_id: supplierId!,
+        price_book_id: priceBookId!,
         route_group_id: routeGroupId,
       }),
-    enabled: Boolean(supplierId),
+    enabled: Boolean(priceBookId),
   });
 }
 
@@ -55,11 +59,18 @@ export function usePriceVersions(configId?: number) {
   });
 }
 
-export function usePriceMatrix(supplierId?: number) {
+export function usePriceSets() {
   return useQuery({
-    queryKey: ['route-pricing', 'prices-matrix', supplierId],
-    queryFn: () => routePricingApi.getPriceMatrix(supplierId!),
-    enabled: Boolean(supplierId),
+    queryKey: ['route-pricing', 'price-sets'],
+    queryFn: () => routePricingApi.listPriceSets(),
+  });
+}
+
+export function usePriceMatrix(priceBookId?: number) {
+  return useQuery({
+    queryKey: ['route-pricing', 'prices-matrix', priceBookId],
+    queryFn: () => routePricingApi.getPriceMatrix(priceBookId!),
+    enabled: Boolean(priceBookId),
   });
 }
 
@@ -70,7 +81,7 @@ export function useAdjustmentPeriods() {
   });
 }
 
-export function useRoutePricingMutations(supplierId?: number) {
+export function useRoutePricingMutations(priceBookId?: number) {
   const qc = useQueryClient();
   const invalidate = () => {
     void qc.invalidateQueries({ queryKey: ['route-pricing'] });
@@ -114,9 +125,9 @@ export function useRoutePricingMutations(supplierId?: number) {
       mutationFn: (body: {
         route_group_id: number;
         adjustment_period_id: number;
-        pricing_mode: 'by_weight' | 'by_trips';
-        pallet_trip_price: number;
-        tiers: PriceTierInput[];
+        price_set_id: number;
+        pallet_trip_price?: number | null;
+        tiers: { price_set_tier_id: number; price: number }[];
       }) => routePricingApi.createPrice(body),
       onSuccess: invalidate,
     }),
@@ -126,10 +137,55 @@ export function useRoutePricingMutations(supplierId?: number) {
         ...body
       }: {
         routeGroupId: number;
-        pricing_mode: 'by_weight' | 'by_trips';
-        pallet_trip_price: number;
-        tiers: PriceTierInput[];
+        price_set_id?: number;
+        pallet_trip_price?: number | null;
+        tiers: { price_set_tier_id: number; price: number }[];
       }) => routePricingApi.updateAbsolutePrice(routeGroupId, body),
+      onSuccess: invalidate,
+    }),
+    deleteGroupPrices: useMutation({
+      mutationFn: (routeGroupId: number) => routePricingApi.deleteGroupPrices(routeGroupId),
+      onSuccess: invalidate,
+    }),
+    createPriceSet: useMutation({
+      mutationFn: routePricingApi.createPriceSet,
+      onSuccess: invalidate,
+    }),
+    renamePriceSet: useMutation({
+      mutationFn: ({ id, name }: { id: number; name: string }) =>
+        routePricingApi.renamePriceSet(id, name),
+      onSuccess: invalidate,
+    }),
+    replacePriceSet: useMutation({
+      mutationFn: ({
+        id,
+        ...body
+      }: {
+        id: number;
+        has_pallet: boolean;
+        tiers: PriceSetTierInput[];
+      }) => routePricingApi.replacePriceSet(id, body),
+      onSuccess: invalidate,
+    }),
+    addPriceSetTier: useMutation({
+      mutationFn: ({ id, ...body }: { id: number } & PriceSetTierInput) =>
+        routePricingApi.addPriceSetTier(id, body),
+      onSuccess: invalidate,
+    }),
+    deactivatePriceSet: useMutation({
+      mutationFn: (id: number) => routePricingApi.deactivatePriceSet(id),
+      onSuccess: invalidate,
+    }),
+    manualAdjustVersion: useMutation({
+      mutationFn: ({
+        versionId,
+        ...body
+      }: {
+        versionId: number;
+        pallet_trip_price?: number | null;
+        tiers: { id: number; price: number }[];
+        added_tiers?: { price_set_tier_id: number; price: number }[];
+      }) => routePricingApi.manualAdjustVersion(versionId, body),
       onSuccess: invalidate,
     }),
     createPeriod: useMutation({
@@ -140,6 +196,19 @@ export function useRoutePricingMutations(supplierId?: number) {
       mutationFn: (id: number) => routePricingApi.deleteAdjustmentPeriod(id),
       onSuccess: invalidate,
     }),
-    supplierId,
+    createPriceBook: useMutation({
+      mutationFn: (name: string) => routePricingApi.createPriceBook(name),
+      onSuccess: invalidate,
+    }),
+    updatePriceBook: useMutation({
+      mutationFn: ({ id, name }: { id: number; name: string }) =>
+        routePricingApi.updatePriceBook(id, name),
+      onSuccess: invalidate,
+    }),
+    deletePriceBook: useMutation({
+      mutationFn: (id: number) => routePricingApi.deletePriceBook(id),
+      onSuccess: invalidate,
+    }),
+    priceBookId,
   };
 }

@@ -214,7 +214,8 @@ VITE_API_URL=http://localhost:3021/api
 | tuyen_phuong | VARCHAR(255) | NULL |
 | tuyen_cu | VARCHAR(255) | NULL |
 | dia_chi_giao_hang | TEXT | NULL |
-| boc_xep | BOOLEAN | NOT NULL, DEFAULT TRUE |
+| diem_giao_hang_tinh_phi | VARCHAR(255) | NULL |
+| boc_xep | BOOLEAN | NOT NULL, DEFAULT TRUE. UI và import không còn ghi. |
 | status | VARCHAR(20) | NOT NULL, DEFAULT 'active' |
 | created_by | INTEGER | FK → users(id), NULL |
 | updated_by | INTEGER | FK → users(id), NULL |
@@ -223,7 +224,23 @@ VITE_API_URL=http://localhost:3021/api
 
 **Indexes:** `idx_customers_diem_tra_hang`, `idx_customers_status`
 **Soft delete:** `status = 'deactive'` (không xóa cứng)
-**Migration:** `012_create_customers.sql`
+**Migration:** `012_create_customers.sql`, `043_add_diem_giao_hang_tinh_phi_to_customers.sql`
+
+### customer_surcharge_rules
+| Column | Type | Constraints |
+|--------|------|-------------|
+| id | SERIAL | PRIMARY KEY |
+| ten_khach_hang | VARCHAR(255) | NOT NULL |
+| customer_id | INTEGER | NULL, FK → customers(id). NULL = mặc định đại lý |
+| fee_type | VARCHAR(30) | boc_xep, phu_phi_giao_hang, chuyen_tai |
+| zone | VARCHAR(20) | NULL, noi_thanh, tinh |
+| vehicle_class | VARCHAR(20) | NULL, le_2_5, gt_8_16, gt_16_23, pallet |
+| amount | INTEGER | NOT NULL, ≥ 0 |
+| pricing_unit | VARCHAR(10) | tan hoặc chuyen, server gán |
+| start_date | DATE | NOT NULL |
+| end_date | DATE | NULL = đang mở |
+
+**Migration:** `056_customer_surcharge_rules.sql`
 
 ### customer_suppliers (junction N-N: customers ↔ suppliers)
 | Column | Type | Constraints |
@@ -237,6 +254,35 @@ VITE_API_URL=http://localhost:3021/api
 **Indexes:** `idx_customer_suppliers_customer`, `idx_customer_suppliers_supplier`
 **Populate:** Auto-populated khi import `delivery_data` (match `ten_kh` → `customers.ten_khach_hang`, `ma_ncc` → `suppliers.supplier_code`)
 **Migration:** `019_create_customer_suppliers.sql`
+
+### bang_ke_tho_batches
+| Column | Type | Constraints |
+|--------|------|-------------|
+| id | UUID | PRIMARY KEY, DEFAULT gen_random_uuid() |
+| original_filename | VARCHAR(255) | NOT NULL |
+| filename_key | VARCHAR(255) | UNIQUE, NOT NULL |
+| input_object_key | TEXT | NOT NULL |
+| input_size_bytes | INTEGER | NOT NULL |
+| uploaded_by | INTEGER | NOT NULL, FK → users(id) |
+| uploaded_at | TIMESTAMPTZ | DEFAULT NOW() |
+| created_at | TIMESTAMPTZ | DEFAULT NOW() |
+| updated_at | TIMESTAMPTZ | DEFAULT NOW() |
+
+### bang_ke_tho_outputs
+| Column | Type | Constraints |
+|--------|------|-------------|
+| id | UUID | PRIMARY KEY, DEFAULT gen_random_uuid() |
+| batch_id | UUID | NOT NULL, FK → bang_ke_tho_batches(id) ON DELETE CASCADE |
+| house_code | VARCHAR(32) | NOT NULL, CHECK in ('nd_mcc', 'clv', 'calofic') |
+| status | VARCHAR(16) | NOT NULL, CHECK in ('pending', 'ready', 'failed'), DEFAULT 'pending' |
+| download_filename | VARCHAR(255) | NOT NULL |
+| object_key | TEXT | NULL |
+| error_message | TEXT | NULL |
+| generated_at | TIMESTAMPTZ | NULL |
+| updated_at | TIMESTAMPTZ | DEFAULT NOW() |
+
+**Constraints:** UNIQUE(batch_id, house_code)
+**Migration:** `046_create_bang_ke_tho.sql`
 
 **Roles:** `ADMIN`, `ACCOUNTANT`, `VIEWER`
 
@@ -286,17 +332,27 @@ Base URL: `/api`
 | GET/POST/DELETE | /route-pricing/adjustment-periods | view/manage | Kỳ điều chỉnh global; tạo kỳ = apply % mọi version mở; chỉ xóa kỳ gần nhất (= rollback) |
 | GET | /route-pricing/geo/provinces | route_pricing.view | Master tỉnh |
 | GET | /route-pricing/geo/wards | route_pricing.view | `?province_code=` |
-| GET/POST/PUT/DELETE | /route-pricing/routes | view/manage | Scoped `supplier_id`; `ward_code` XOR `location_text`; `note` |
-| GET/POST/PUT/DELETE | /route-pricing/groups | view/manage | `ward_codes[]` XOR `location_text` (1 text) XOR residual; `note` → tên + unique |
-| GET/POST | /route-pricing/prices | view/manage | Absolute: `adjustment_period_id` + cascade kỳ sau; `pricing_mode` + range |
-| GET | /route-pricing/prices/matrix | view | Ma tran NCC: weight_tables[] + trips.rows |
-| PUT | /route-pricing/prices/groups/:routeGroupId/absolute | manage | Sửa giá gốc + recompute cascade |
-| GET | /route-pricing/lookup | view | `weight_mt` / `trips_per_vehicle_day`; `location_text`, `note` |
+| GET/POST/PUT/DELETE | /route-pricing/price-books | view/manage | Master bảng giá (tên tự do, unique active) |
+| GET/POST/PUT/DELETE | /route-pricing/routes | view/manage | Scoped `price_book_id`; `ward_code` XOR `location_text`; `note` |
+| GET/POST/PUT/DELETE | /route-pricing/groups | view/manage | Scoped `price_book_id`; `ward_codes[]` XOR `location_text` XOR residual |
+| GET/POST | /route-pricing/price-sets | view/manage | Catalog khung global. POST `{ name, pricing_mode, has_pallet, tiers[] }`. Unique tên và fingerprint khi active. |
+| PUT | /route-pricing/price-sets/:id | manage | `{ name }` luôn. `{ tiers, has_pallet }` chỉ khi chưa có nhóm gắn. |
+| POST | /route-pricing/price-sets/:id/tiers | manage | Append một bậc (kể cả bộ đang dùng). Không tự sinh giá. |
+| DELETE | /route-pricing/price-sets/:id | manage | Soft-deactive. 409 `PRICE_SET_IN_USE` nếu còn nhóm gắn. |
+| GET/POST | /route-pricing/prices | view/manage | Absolute: `adjustment_period_id` + `price_set_id` + cascade kỳ sau. Mode lấy từ bộ. Tiers `{ price_set_tier_id, price }` với `price > 0`. Ô không gửi = không insert. |
+| GET | /route-pricing/prices/matrix | view | Theo `price_book_id`. `set_tables[]` (một bảng / bộ). `weight_tables` / `truck_tables` là filter của `set_tables`. `trips.rows` luôn `[]`. Ô thiếu `null`. |
+| PUT | /route-pricing/prices/groups/:routeGroupId/absolute | manage | Sửa giá gốc + recompute cascade. Đổi `price_set_id` khi đã có version → 409 `PRICE_SET_LOCKED`. |
+| DELETE | /route-pricing/prices/groups/:routeGroupId | manage | Xóa mọi version, `price_set_id = NULL`. Không xóa nhóm tuyến. |
+| PUT | /route-pricing/prices/versions/:versionId/manual-adjust | manage | Sửa bậc đã có. `added_tiers` cho bậc bộ chưa có trên kỳ. Không xóa bậc đã có. Giá mới `> 0`. |
+| GET | /route-pricing/lookup | view | **Deferred** (501 LOOKUP_DEFERRED) — CR riêng sau |
+| GET/POST | /route-pricing/surcharges | view/manage | Phụ phí khách. POST tạo một hoặc nhiều bản ghi mở (`ten_khach_hangs` hoặc `ten_khach_hang`). |
+| GET | /route-pricing/surcharges/customer-options | view | Tên đại lý và điểm có địa chỉ, kèm tên và mã nhà cung cấp lúc đọc |
+| POST | /route-pricing/surcharges/lookup | view | Tra cứu, không ghi. `supplier_code` tùy chọn khi trùng địa chỉ. Trả điểm + 3 phí |
+| POST | /route-pricing/surcharges/:id/replace | manage | Đóng dòng cũ, mở dòng mới |
+| POST | /route-pricing/surcharges/:id/stop | manage | Đặt end_date. Không xóa bản ghi. |
+| DELETE | /route-pricing/surcharges/:id | manage | Xóa cứng. Ghi audit khi thành công. Không mở lại bản ghi cũ. |
 
-**FE:** Tab Kỳ điều chỉnh / Nhóm tuyến / Bảng giá. Bỏ nút Điều chỉnh % riêng. Không sửa kỳ — muốn đổi thì xóa rồi tạo lại.
-
-BA: `docs/ba/20260711_route-pricing-analysis.md`  
-UI: `docs/ui/20260731_route-pricing-adjustment-periods-cr-ui-spec.md`
+**FE:** Sidebar accordion **Quản lý giá cước vận tải**: `/route-pricing/periods`, `/sets`, `/routes` (tab Tuyến + Quản lý giá), `/matrix`, `/surcharges`. `/route-pricing` redirect theo `?tab=` cũ. Bộ giá tạo trước; form giá chỉ chọn bộ và nhập số. Bút chì điều chỉnh giá trên card kỳ. Không sửa kỳ — muốn đổi thì xóa rồi tạo lại. Phụ phí giao hàng là trang riêng, không chọn bảng giá.
 
 ### Dashboard — /dashboard
 
@@ -316,7 +372,7 @@ UI: `docs/ui/20260731_route-pricing-adjustment-periods-cr-ui-spec.md`
 |--------|------|------|----------|
 | GET | /health | No | `{ status: 'ok', timestamp }` |
 
-Frontend route: `/route-pricing` (sidebar top-level **Giá theo tuyến**)
+Frontend: accordion **Quản lý giá cước vận tải** → `/route-pricing/periods|sets|routes|matrix`
 
 ### Dispatch Schedules — /dispatch-schedules
 
@@ -355,12 +411,28 @@ Frontend route: `/route-pricing` (sidebar top-level **Giá theo tuyến**)
 |--------|------|------|------------|----------|
 | GET | /public/invoice-tracking/:token | No (Public) | — | `{ success, data: PublicInvoiceTicket }` — Xem thông tin & chứng từ ticket qua liên kết chia sẻ |
 
+### Bang Kê Thô 5 Nhà — /bang-ke-tho
+
+| Method | Path | Auth | Body/Query | Response |
+|--------|------|------|------------|----------|
+| GET | /bang-ke-tho/batches | JWT + accounting_data.view | query: `page`, `limit`, `q` | `{ success, data: PaginatedBangKe }` |
+| POST | /bang-ke-tho/batches | JWT + accounting_data.manage | `multipart/form-data` (`file`), query: `overwrite` | `{ success, data: BangKeBatch }` |
+| GET | /bang-ke-tho/batches/:id/files/input | JWT + accounting_data.view | — | Stream binary file `.xlsx` gốc |
+| POST | /bang-ke-tho/batches/:id/process-nd-mcc | JWT + accounting_data.manage | — | `{ success, data: { batch_id, house_code, status, download_filename, generated_at, stats } }` |
+| GET | /bang-ke-tho/batches/:id/files/:houseCode | JWT + accounting_data.view | — | Stream binary file `.xlsx` output của nhà (`nd_mcc`, `clv`, `calofic`) |
+| DELETE | /bang-ke-tho/batches/:id | JWT + accounting_data.manage | — | `{ success, data: { id } }` |
+
+- **ND-MCC Output Workbook (12 sheets):** `NCC`, `Sheet1`, `Processed`, `Processed v2`, `MCC (goc)`, `MCC-clv`, `MCC (uni)`, `MCC (tt)`, `NDFC (goc)`, `NDFC-clv`, `NDFC (uni)`, `NDFC (tt)`.
+- **Processed v2:** Bản sao chuẩn hóa từ `Processed`, ép kiểu số thực cho các cột text số lượng/khối lượng, đảo cột `5 nhà` trước `CLF`, thêm cột `Gạo`, tính lại `Khung giá` theo tải trọng thực của chuyến xe (tô vàng nhạt `#FFE599` + note).
+- **Address Matcher (`addressMatcher.ts`):** Chuẩn hóa khoảng trắng/dấu, lọc "thửa đất số ...", so khớp chuỗi con & token overlap >= 75%. Đánh dấu partial match nền vàng `#FFF2CC` + note địa chỉ DB trên cả `Processed` và `Processed v2`.
+- **Bố cục 2 bảng trên sheet:** Bảng A (>2.5 tấn, có dòng tổng xe và TỔNG CỘNG A =SUM/2) và Bảng B (≤2.5 tấn, TỔNG CỘNG B =SUM), phân tách bởi 6 dòng trống.
+
 ### Customers — /customers
 
 | Method | Path | Auth | Body/Query | Response |
 |--------|------|------|------------|----------|
 | GET | /customers | JWT + accounting_data.view | — | `{ success, data: Customer[] }` (only active records) |
-| POST | /customers | JWT + accounting_data.manage | `{ diem_tra_hang, ten_khach_hang, tuyen_phuong?, tuyen_cu?, dia_chi_giao_hang?, boc_xep? }` | `{ success, data: Customer }` |
+| POST | /customers | JWT + accounting_data.manage | `{ diem_tra_hang, ten_khach_hang, tuyen_phuong?, tuyen_cu?, dia_chi_giao_hang?, diem_giao_hang_tinh_phi?, boc_xep? }` | `{ success, data: Customer }` |
 | PUT | /customers/:id | JWT + accounting_data.manage | same as POST | `{ success, data: Customer }` |
 | DELETE | /customers/:id | JWT + accounting_data.manage | — | `{ success, message }` (soft delete: status→'deactive') |
 | POST | /customers/upload | JWT + accounting_data.manage | `{ rows: UploadCustomerRow[] }` | `{ success, data: { inserted: number } }` or `{ success: false, errors: [] }` (HTTP 422) |

@@ -20,7 +20,7 @@ function getClient(): Minio.Client {
 }
 
 export interface UploadResult {
-  filename: string;       // unique stored filename (e.g. "123456-123456.pdf")
+  filename: string;       // unique stored filename or basename (e.g. "123456-123456.pdf")
   objectKey: string;      // full MinIO object key (e.g. "bucket/123456-123456.pdf")
 }
 
@@ -46,12 +46,28 @@ export const storageService = {
     }
   },
 
-  async upload(buffer: Buffer, originalname: string, mimetype: string, bucketLocation?: string): Promise<UploadResult> {
+  async upload(
+    buffer: Buffer,
+    originalname: string,
+    mimetype: string,
+    bucketLocation?: string,
+    customKey?: string,
+  ): Promise<UploadResult> {
     const cl = getClient();
     const { bucketName, prefix } = parseBucketLocation(bucketLocation);
-    const ext = path.extname(originalname);
-    const baseFilename = `${Date.now()}-${Math.round(Math.random() * 1e9)}${ext}`;
-    const objectKey = `${prefix}${baseFilename}`;
+
+    let baseFilename: string;
+    let objectKey: string;
+
+    if (customKey) {
+      // Use exact specified key (ignoring bucketLocation prefix if key already contains path)
+      baseFilename = path.basename(customKey);
+      objectKey = customKey.startsWith('/') ? customKey.slice(1) : customKey;
+    } else {
+      const ext = path.extname(originalname);
+      baseFilename = `${Date.now()}-${Math.round(Math.random() * 1e9)}${ext}`;
+      objectKey = `${prefix}${baseFilename}`;
+    }
 
     await cl.putObject(bucketName, objectKey, buffer, buffer.length, {
       'Content-Type': mimetype,
@@ -63,7 +79,10 @@ export const storageService = {
     };
   },
 
-  async getStream(filename: string, bucketLocation?: string): Promise<{ stream: NodeJS.ReadableStream; stat: Minio.BucketItemStat }> {
+  async getStream(
+    filename: string,
+    bucketLocation?: string,
+  ): Promise<{ stream: NodeJS.ReadableStream; stat: Minio.BucketItemStat }> {
     const cl = getClient();
     const { bucketName, prefix } = parseBucketLocation(bucketLocation);
     const objectKey = filename.startsWith(prefix) ? filename : `${prefix}${filename}`;
@@ -76,7 +95,11 @@ export const storageService = {
     const cl = getClient();
     const { bucketName, prefix } = parseBucketLocation(bucketLocation);
     const objectKey = filename.startsWith(prefix) ? filename : `${prefix}${filename}`;
-    await cl.removeObject(bucketName, objectKey);
+    try {
+      await cl.removeObject(bucketName, objectKey);
+    } catch {
+      // Missing object is fine (overwrite / delete race)
+    }
   },
 
   async getPublicUrl(filename: string, bucketLocation?: string): Promise<string> {
