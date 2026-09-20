@@ -23,7 +23,7 @@ const schema = yup.object({
   tuyen_phuong: yup.string().nullable().optional(),
   tuyen_cu: yup.string().nullable().optional(),
   dia_chi_giao_hang: yup.string().nullable().optional(),
-  boc_xep: yup.boolean().required(),
+  diem_giao_hang_tinh_phi: yup.string().nullable().optional().max(255, 'customers.errors.diemGhtpMax'),
   supplier_code: yup.string().nullable().optional(),
 });
 
@@ -33,7 +33,7 @@ type FormValues = {
   tuyen_phuong?: string | null;
   tuyen_cu?: string | null;
   dia_chi_giao_hang?: string | null;
-  boc_xep: boolean;
+  diem_giao_hang_tinh_phi?: string | null;
   supplier_code?: string | null;
 };
 
@@ -59,7 +59,7 @@ export function EditCustomerModal({ isOpen, onClose, onSuccess, onError, custome
         tuyen_phuong: customer.tuyen_phuong ?? '',
         tuyen_cu: customer.tuyen_cu ?? '',
         dia_chi_giao_hang: customer.dia_chi_giao_hang ?? '',
-        boc_xep: customer.boc_xep,
+        diem_giao_hang_tinh_phi: customer.diem_giao_hang_tinh_phi ?? '',
         supplier_code: customer.supplier_code ?? '',
       });
     }
@@ -78,7 +78,7 @@ export function EditCustomerModal({ isOpen, onClose, onSuccess, onError, custome
       tuyen_phuong: values.tuyen_phuong || null,
       tuyen_cu: values.tuyen_cu || null,
       dia_chi_giao_hang: values.dia_chi_giao_hang || null,
-      boc_xep: values.boc_xep,
+      diem_giao_hang_tinh_phi: values.diem_giao_hang_tinh_phi?.trim() || null,
       supplier_code: values.supplier_code || null,
     };
     try {
@@ -133,6 +133,21 @@ export function EditCustomerModal({ isOpen, onClose, onSuccess, onError, custome
         </div>
 
         <div>
+          <label htmlFor="diem_giao_hang_tinh_phi_edit" className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
+            {t('customers.fields.diemGiaoHangTinhPhi')}
+          </label>
+          <Input
+            id="diem_giao_hang_tinh_phi_edit"
+            autoComplete="off"
+            {...register('diem_giao_hang_tinh_phi')}
+            placeholder={t('customers.fields.diemGiaoHangTinhPhiPlaceholder')}
+          />
+          {errors.diem_giao_hang_tinh_phi && (
+            <p className="mt-1 text-xs text-red-500">{t(errors.diem_giao_hang_tinh_phi.message || '')}</p>
+          )}
+        </div>
+
+        <div>
           <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
             {t('customers.fields.tuyenCu')}
           </label>
@@ -149,18 +164,6 @@ export function EditCustomerModal({ isOpen, onClose, onSuccess, onError, custome
             placeholder={t('customers.fields.diaChiGiaoHang')}
             className="w-full px-3 py-2 text-sm border border-neutral-200 dark:border-neutral-700 rounded-lg bg-white dark:bg-neutral-900 text-neutral-900 dark:text-neutral-100 placeholder-neutral-400 focus:outline-none focus:ring-2 focus:ring-neutral-900 dark:focus:ring-neutral-100 resize-none"
           />
-        </div>
-
-        <div className="flex items-center gap-2">
-          <input
-            type="checkbox"
-            id="boc_xep_edit"
-            {...register('boc_xep')}
-            className="w-4 h-4 rounded border-neutral-300 text-neutral-900"
-          />
-          <label htmlFor="boc_xep_edit" className="text-sm text-neutral-700 dark:text-neutral-300">
-            {t('customers.fields.bocXep')}
-          </label>
         </div>
 
         <div>

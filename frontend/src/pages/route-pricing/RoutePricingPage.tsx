@@ -1,11 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useLocation, useSearchParams } from 'react-router-dom';
 import { MapPinned, Plus, Pencil, Trash2, Search } from 'lucide-react';
-import { useQuery } from '@tanstack/react-query';
-import { supplierCatalogApi } from '../../api/supplierCatalogApi';
 import {
   useAdjustmentPeriods,
   useGroups,
+  usePriceBooks,
   usePriceVersions,
   usePrices,
   useProvinces,
@@ -13,6 +12,10 @@ import {
   useWards,
 } from '../../hooks/useRoutePricing';
 import { PriceMatrixTab } from './PriceMatrixTab';
+import { PeriodPriceAdjustModal } from './PeriodPriceAdjustModal';
+import { PriceSetsTab } from './PriceSetsTab';
+import { PriceFormModal } from './PriceFormModal';
+import { formatPriceDisplay, formatTierRangeLabel } from './priceDisplay';
 import { useAuth } from '../../hooks/useAuth';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
@@ -31,25 +34,27 @@ import {
 } from '../../components/ui/Table';
 import type {
   AdjustmentPeriod,
-  PriceTierInput,
   PricingMode,
   RouteGroup,
   RoutePriceVersion,
 } from '../../api/routePricingApi';
 import { formatDate } from '../../utils/format';
+import { useI18n } from '../../i18n/useI18n';
 
-type TabKey = 'periods' | 'groups' | 'prices' | 'manage';
+type Section = 'periods' | 'sets' | 'routes' | 'matrix';
+
+function sectionFromPath(pathname: string): Section {
+  if (pathname.startsWith('/route-pricing/sets')) return 'sets';
+  if (pathname.startsWith('/route-pricing/routes')) return 'routes';
+  if (pathname.startsWith('/route-pricing/matrix')) return 'matrix';
+  return 'periods';
+}
 
 function formatPercentLabel(percent: number): string {
   const abs = Math.abs(percent);
   if (percent > 0) return `tăng ${abs}%`;
   if (percent < 0) return `giảm ${abs}%`;
   return `${percent}%`;
-}
-
-function periodLabel(p: AdjustmentPeriod): string {
-  const note = p.note ? ` - ${p.note}` : '';
-  return `${formatDate(p.start_date)} (${formatPercentLabel(p.percent)})${note}`;
 }
 
 /** Bỏ dấu tiếng Việt — "ha tie" khớp "Hà Tiên" */
@@ -80,137 +85,322 @@ function apiError(err: unknown, fallback: string) {
 }
 
 export function RoutePricingPage() {
+  const { t } = useI18n();
+  const { pathname } = useLocation();
+  const section = sectionFromPath(pathname);
+  const needsPriceBook = section === 'routes' || section === 'matrix';
   const { hasPermission, user } = useAuth();
   const canManage =
     hasPermission('route_pricing.manage') || user?.role === 'ADMIN';
   const [params, setParams] = useSearchParams();
-  const supplierId = params.get('supplierId')
-    ? parseInt(params.get('supplierId')!, 10)
+  const priceBookId = params.get('priceBookId')
+    ? parseInt(params.get('priceBookId')!, 10)
     : undefined;
-  const tabParam = params.get('tab');
-  const tab: TabKey =
-    tabParam === 'prices' ||
-    tabParam === 'groups' ||
-    tabParam === 'periods' ||
-    tabParam === 'manage'
-      ? tabParam
-      : 'groups';
-
-  const setTab = (t: TabKey) => {
+  const routeView = params.get('view') === 'prices' ? 'prices' : 'groups';
+  const setRouteView = (view: 'groups' | 'prices') => {
     const next = new URLSearchParams(params);
-    next.set('tab', t);
+    if (view === 'prices') next.set('view', 'prices');
+    else next.delete('view');
+    next.delete('tab');
     setParams(next);
   };
-  const setSupplier = (id: string) => {
+  const sectionTitle =
+    section === 'sets'
+      ? t('routePricing.nav.sets')
+      : section === 'routes'
+        ? t('routePricing.nav.routes')
+        : section === 'matrix'
+          ? t('routePricing.nav.matrix')
+          : t('routePricing.nav.periods');
+  const setPriceBook = (id: string) => {
     const next = new URLSearchParams(params);
-    if (id) next.set('supplierId', id);
-    else next.delete('supplierId');
+    if (id) next.set('priceBookId', id);
+    else next.delete('priceBookId');
+    next.delete('supplierId');
     setParams(next);
   };
 
-  const { data: suppliersData } = useQuery({
-    queryKey: ['suppliers', 'all'],
-    queryFn: () => supplierCatalogApi.fetchAll({ page: 1, limit: 200 }),
-  });
-  const suppliers = suppliersData?.suppliers ?? [];
+  const {
+    data: priceBooks = [],
+    isLoading: booksLoading,
+    isError: booksError,
+    refetch: refetchBooks,
+  } = usePriceBooks();
+  const bookMutations = useRoutePricingMutations();
+  const [bookModal, setBookModal] = useState<'create' | 'rename' | null>(null);
+  const [bookName, setBookName] = useState('');
+  const [bookNameError, setBookNameError] = useState('');
 
-  // Tự chọn nhà cung cấp mặc định: mã nhỏ nhất (theo thứ tự danh mục)
+  const selectedBook = priceBooks.find((b) => b.id === priceBookId);
+
   useEffect(() => {
-    if (tab === 'periods') return;
-    if (supplierId || suppliers.length === 0) return;
-    const sorted = [...suppliers].sort((a, b) =>
-      a.supplier_code.localeCompare(b.supplier_code, 'vi', { numeric: true }),
+    if (!needsPriceBook) return;
+    if (priceBookId || priceBooks.length === 0) return;
+    const sorted = [...priceBooks].sort((a, b) =>
+      a.name.localeCompare(b.name, 'vi', { numeric: true }),
     );
-    setSupplier(String(sorted[0].id));
-  }, [suppliers, supplierId, tab]);
+    setPriceBook(String(sorted[0].id));
+  }, [priceBooks, priceBookId, needsPriceBook]);
+
+  useEffect(() => {
+    if (!priceBookId || booksLoading) return;
+    if (priceBooks.length > 0 && !selectedBook) {
+      toast(t('routePricing.priceBook.notFound'), true);
+      setPriceBook('');
+    }
+  }, [priceBookId, booksLoading, priceBooks, selectedBook]);
+
+  const submittingBook =
+    bookMutations.createPriceBook.isPending || bookMutations.updatePriceBook.isPending;
+
+  async function submitBook() {
+    const name = bookName.trim();
+    if (!name) {
+      setBookNameError(t('routePricing.priceBook.nameRequired'));
+      return;
+    }
+    setBookNameError('');
+    try {
+      if (bookModal === 'create') {
+        const created = await bookMutations.createPriceBook.mutateAsync(name);
+        toast(t('routePricing.message.success.createBook'));
+        setPriceBook(String(created.id));
+      } else if (bookModal === 'rename' && priceBookId) {
+        await bookMutations.updatePriceBook.mutateAsync({ id: priceBookId, name });
+        toast(t('routePricing.message.success.renameBook'));
+      }
+      setBookModal(null);
+    } catch (err) {
+      const msg = apiError(err, t('routePricing.priceBook.saveError'));
+      if (/đã tồn tại|exist/i.test(msg)) setBookNameError(t('routePricing.priceBook.duplicate'));
+      else toast(msg, true);
+    }
+  }
+
+  async function confirmDeleteBook() {
+    if (!priceBookId || !selectedBook) return;
+    if (!window.confirm(t('routePricing.priceBook.confirmDelete', { name: selectedBook.name }))) {
+      return;
+    }
+    try {
+      await bookMutations.deletePriceBook.mutateAsync(priceBookId);
+      toast(t('routePricing.message.success.deleteBook'));
+      const remaining = priceBooks.filter((b) => b.id !== priceBookId);
+      if (remaining[0]) setPriceBook(String(remaining[0].id));
+      else setPriceBook('');
+    } catch (err) {
+      toast(apiError(err, t('routePricing.message.error.deleteBook')), true);
+    }
+  }
 
   return (
     <div className="p-6 space-y-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-semibold text-neutral-900 dark:text-neutral-100 flex items-center gap-2">
-            <MapPinned className="w-6 h-6" />
-            Giá theo tuyến
+        <div className="min-w-0">
+          <h1 className="text-2xl font-semibold text-neutral-900 dark:text-neutral-100 flex items-center gap-2 text-pretty">
+            <MapPinned className="w-6 h-6 text-neutral-700 dark:text-neutral-300" aria-hidden="true" />
+            {sectionTitle}
           </h1>
-          <p className="text-sm text-neutral-500 mt-1">
-            Quản lý kỳ điều chỉnh, nhóm tuyến và bảng giá theo từng nhà cung cấp
+          <p className="text-sm text-neutral-500 dark:text-neutral-400 mt-1">
+            {t('routePricing.page.subtitle')}
           </p>
         </div>
         <div
-          className={`min-w-[220px] w-full max-w-sm sm:w-auto ${
-            tab === 'periods' ? 'invisible pointer-events-none' : ''
+          className={`min-w-0 w-full max-w-xl sm:w-auto flex flex-wrap items-end gap-2 ${
+            needsPriceBook ? '' : 'invisible pointer-events-none'
           }`}
-          aria-hidden={tab === 'periods'}
+          aria-hidden={!needsPriceBook}
         >
-          <Select
-            label="Nhà cung cấp *"
-            value={supplierId ? String(supplierId) : ''}
-            onChange={(e) => setSupplier(e.target.value)}
-            options={[
-              { value: '', label: 'Chọn nhà cung cấp' },
-              ...suppliers.map((s) => ({
-                value: String(s.id),
-                label: `${s.supplier_code} — ${s.name}`,
-              })),
-            ]}
-          />
+          <div className="min-w-[220px] flex-1">
+            <Select
+              id="priceBookId"
+              label={t('routePricing.priceBook.label')}
+              name="priceBookId"
+              autoComplete="off"
+              className="h-9 py-0 text-sm"
+              value={priceBookId ? String(priceBookId) : ''}
+              onChange={(e) => setPriceBook(e.target.value)}
+              options={[
+                { value: '', label: t('routePricing.priceBook.placeholder') },
+                ...priceBooks.map((b) => ({
+                  value: String(b.id),
+                  label: b.name,
+                })),
+              ]}
+            />
+          </div>
+          {canManage && (
+            <div className="flex items-center gap-1">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-9 w-9 p-0"
+                aria-label={t('routePricing.priceBook.create')}
+                title={t('routePricing.priceBook.create')}
+                onClick={() => {
+                  setBookName('');
+                  setBookNameError('');
+                  setBookModal('create');
+                }}
+              >
+                <Plus className="w-4 h-4" aria-hidden="true" />
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-9 w-9 p-0"
+                aria-label={t('routePricing.priceBook.rename')}
+                title={t('routePricing.priceBook.rename')}
+                disabled={!priceBookId}
+                onClick={() => {
+                  setBookName(selectedBook?.name ?? '');
+                  setBookNameError('');
+                  setBookModal('rename');
+                }}
+              >
+                <Pencil className="w-4 h-4" aria-hidden="true" />
+              </Button>
+              <Button
+                type="button"
+                variant="danger"
+                size="sm"
+                className="h-9 w-9 p-0"
+                aria-label={t('routePricing.priceBook.delete')}
+                title={t('routePricing.priceBook.delete')}
+                disabled={!priceBookId || bookMutations.deletePriceBook.isPending}
+                onClick={() => void confirmDeleteBook()}
+              >
+                <Trash2 className="w-4 h-4" aria-hidden="true" />
+              </Button>
+            </div>
+          )}
         </div>
       </div>
 
-      <div className="flex gap-1 border-b border-neutral-200 dark:border-neutral-700">
-        {(
-          [
-            ['periods', 'Kỳ điều chỉnh'],
-            ['groups', 'Nhóm tuyến'],
-            ['manage', 'Quản lý giá'],
-            ['prices', 'Bảng giá'],
-          ] as const
-        ).map(([k, label]) => (
-          <button
-            key={k}
-            type="button"
-            onClick={() => setTab(k)}
-            className={`px-4 py-2.5 text-sm font-medium border-b-2 -mb-px ${
-              tab === k
-                ? 'border-neutral-900 dark:border-neutral-100 text-neutral-900 dark:text-neutral-100'
-                : 'border-transparent text-neutral-500 hover:text-neutral-800'
-            }`}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
+      {section === 'periods' && <PeriodsTab canManage={canManage} />}
+      {section === 'sets' && <PriceSetsTab canManage={canManage} />}
 
-      {tab === 'periods' && <PeriodsTab canManage={canManage} />}
-
-      {tab !== 'periods' && !supplierId ? (
-        <div className="rounded-lg border border-dashed border-neutral-300 dark:border-neutral-700 p-10 text-center text-neutral-500">
-          Đang tải nhà cung cấp…
+      {needsPriceBook && booksLoading ? (
+        <div className="rounded-lg border border-dashed border-neutral-300 dark:border-neutral-700 p-10 text-center text-neutral-500 dark:text-neutral-400 bg-neutral-50/50 dark:bg-neutral-800/20">
+          {t('routePricing.priceBook.loading')}
         </div>
       ) : null}
 
-      {tab === 'groups' && supplierId && (
-        <GroupsTab supplierId={supplierId} canManage={canManage} />
+      {needsPriceBook && booksError ? (
+        <div className="rounded-lg border border-dashed border-red-300 dark:border-red-800/60 p-10 text-center text-red-600 dark:text-red-400 space-y-3 bg-red-50/50 dark:bg-red-950/20">
+          <p>{t('routePricing.priceBook.loadError')}</p>
+          <Button type="button" variant="outline" onClick={() => void refetchBooks()}>
+            {t('routePricing.priceBook.retry')}
+          </Button>
+        </div>
+      ) : null}
+
+      {needsPriceBook && !booksLoading && !booksError && priceBooks.length === 0 ? (
+        <div className="rounded-lg border border-dashed border-neutral-300 dark:border-neutral-700 p-10 text-center text-neutral-500 dark:text-neutral-400 space-y-3 bg-neutral-50/50 dark:bg-neutral-800/20">
+          <p>{t('routePricing.priceBook.empty')}</p>
+          {canManage && (
+            <Button
+              type="button"
+              onClick={() => {
+                setBookName('');
+                setBookNameError('');
+                setBookModal('create');
+              }}
+            >
+              {t('routePricing.priceBook.emptyCta')}
+            </Button>
+          )}
+        </div>
+      ) : null}
+
+      {section === 'routes' && priceBookId && (
+        <>
+          <div className="flex gap-1 border-b border-neutral-200 dark:border-neutral-700">
+            {(
+              [
+                ['groups', t('routePricing.tab.groups')],
+                ['prices', t('routePricing.tab.manage')],
+              ] as const
+            ).map(([key, label]) => (
+              <button
+                key={key}
+                type="button"
+                onClick={() => setRouteView(key)}
+                className={`px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors ${
+                  routeView === key
+                    ? 'border-neutral-900 dark:border-neutral-100 text-neutral-900 dark:text-neutral-100'
+                    : 'border-transparent text-neutral-500 dark:text-neutral-400 hover:text-neutral-800 dark:hover:text-neutral-200'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          {routeView === 'groups' ? (
+            <GroupsTab priceBookId={priceBookId} canManage={canManage} />
+          ) : (
+            <PricesTab priceBookId={priceBookId} canManage={canManage} />
+          )}
+        </>
       )}
-      {tab === 'prices' && supplierId && <PriceMatrixTab supplierId={supplierId} />}
-      {tab === 'manage' && supplierId && (
-        <PricesTab supplierId={supplierId} canManage={canManage} />
-      )}
+      {section === 'matrix' && priceBookId && <PriceMatrixTab priceBookId={priceBookId} />}
+
+      <Modal
+        isOpen={bookModal !== null}
+        onClose={() => setBookModal(null)}
+        title={
+          bookModal === 'rename'
+            ? t('routePricing.priceBook.renameTitle')
+            : t('routePricing.priceBook.createTitle')
+        }
+        size="sm"
+      >
+        <form
+          className="space-y-4"
+          onSubmit={(e) => {
+            e.preventDefault();
+            void submitBook();
+          }}
+        >
+          <Input
+            id="priceBookName"
+            label={t('routePricing.priceBook.name')}
+            name="priceBookName"
+            autoComplete="off"
+            spellCheck={false}
+            maxLength={255}
+            value={bookName}
+            error={bookNameError}
+            placeholder={t('routePricing.priceBook.namePlaceholder')}
+            onChange={(e) => setBookName(e.target.value)}
+          />
+          <div className="flex justify-end gap-2">
+            <Button type="button" variant="outline" onClick={() => setBookModal(null)}>
+              {t('routePricing.action.cancel')}
+            </Button>
+            <Button type="submit" disabled={submittingBook} isLoading={submittingBook}>
+              {t('routePricing.action.save')}
+            </Button>
+          </div>
+        </form>
+      </Modal>
     </div>
   );
 }
 
 function GroupsTab({
-  supplierId,
+  priceBookId,
   canManage,
 }: {
-  supplierId: number;
+  priceBookId: number;
   canManage: boolean;
 }) {
   const [, setParams] = useSearchParams();
-  const { data: groups = [], isLoading } = useGroups(supplierId);
+  const { data: groups = [], isLoading } = useGroups(priceBookId);
   const { data: provinces = [] } = useProvinces();
-  const mutations = useRoutePricingMutations(supplierId);
+  const mutations = useRoutePricingMutations(priceBookId);
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<RouteGroup | null>(null);
   const [search, setSearch] = useState('');
@@ -219,7 +409,8 @@ function GroupsTab({
   const openPrices = (groupId: number) => {
     setParams((prev) => {
       const next = new URLSearchParams(prev);
-      next.set('tab', 'manage');
+      next.delete('tab');
+      next.set('view', 'prices');
       next.set('groupId', String(groupId));
       return next;
     });
@@ -242,7 +433,7 @@ function GroupsTab({
     <div className="space-y-3">
       <div className="flex flex-wrap items-end gap-3">
         <div className="relative flex-1 min-w-[200px] max-w-sm">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400 pointer-events-none" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400 dark:text-neutral-500 pointer-events-none" />
           <Input
             placeholder="Tìm tên nhóm, tỉnh, phường…"
             value={search}
@@ -274,13 +465,13 @@ function GroupsTab({
           )}
         </div>
       </div>
-      <p className="text-xs text-neutral-500">Bấm vào một nhóm để xem bảng giá và lịch sử</p>
-      {isLoading && <p className="text-sm text-neutral-500">Đang tải…</p>}
+      <p className="text-xs text-neutral-500 dark:text-neutral-400">Bấm vào một nhóm để xem bảng giá và lịch sử</p>
+      {isLoading && <p className="text-sm text-neutral-500 dark:text-neutral-400">Đang tải…</p>}
       {!isLoading && groups.length === 0 && (
-        <p className="text-sm text-neutral-500">Chưa có nhóm tuyến</p>
+        <p className="text-sm text-neutral-500 dark:text-neutral-400">Chưa có nhóm tuyến</p>
       )}
       {!isLoading && groups.length > 0 && filteredGroups.length === 0 && (
-        <p className="text-sm text-neutral-500">Không tìm thấy nhóm phù hợp</p>
+        <p className="text-sm text-neutral-500 dark:text-neutral-400">Không tìm thấy nhóm phù hợp</p>
       )}
       {filteredGroups.length > 0 && (
         <div className="rounded-lg border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 overflow-hidden">
@@ -308,8 +499,8 @@ function GroupsTab({
                       {g.is_residual && <Badge variant="warning">Còn lại</Badge>}
                     </span>
                   </TableCell>
-                  <TableCell>{g.tinh}</TableCell>
-                  <TableCell>
+                  <TableCell className="text-neutral-700 dark:text-neutral-300">{g.tinh}</TableCell>
+                  <TableCell className="text-neutral-700 dark:text-neutral-300">
                     {g.is_residual
                       ? 'Phường/địa điểm chưa thuộc nhóm khác'
                       : g.members.map((m) => m.phuong || m.location_text).filter(Boolean).join(' · ') || '—'}
@@ -318,7 +509,7 @@ function GroupsTab({
                     <TableCell className="text-right space-x-1" onClick={(e) => e.stopPropagation()}>
                       <button
                         type="button"
-                        className="p-1"
+                        className="p-1 text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-neutral-100"
                         title="Sửa"
                         onClick={() => {
                           setEditing(g);
@@ -329,7 +520,7 @@ function GroupsTab({
                       </button>
                       <button
                         type="button"
-                        className="p-1 text-red-600"
+                        className="p-1 text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300"
                         title="Xóa"
                         onClick={() => {
                           if (!window.confirm('Xóa nhóm này?')) return;
@@ -350,7 +541,7 @@ function GroupsTab({
       )}
       {formOpen && (
         <GroupFormModal
-          supplierId={supplierId}
+          priceBookId={priceBookId}
           group={editing}
           onClose={() => {
             setFormOpen(false);
@@ -363,11 +554,11 @@ function GroupsTab({
 }
 
 function GroupFormModal({
-  supplierId,
+  priceBookId,
   group,
   onClose,
 }: {
-  supplierId: number;
+  priceBookId: number;
   group: RouteGroup | null;
   onClose: () => void;
 }) {
@@ -389,7 +580,7 @@ function GroupFormModal({
   const [note, setNote] = useState(group?.note || '');
   const [wardSearch, setWardSearch] = useState('');
   const { data: wards = [] } = useWards(provinceCode || undefined);
-  const mutations = useRoutePricingMutations(supplierId);
+  const mutations = useRoutePricingMutations(priceBookId);
   const { data: provincesAll = [] } = useProvinces();
 
   const filteredWards = useMemo(() => {
@@ -466,7 +657,7 @@ function GroupFormModal({
               ['location', 'Địa điểm tự do'],
               ['residual', 'Phần còn lại'],
             ] as const).map(([mode, label]) => (
-              <label key={mode} className="flex items-center gap-2">
+              <label key={mode} className="flex items-center gap-2 text-neutral-700 dark:text-neutral-300">
                 <input
                   type="radio"
                   name="destination-mode"
@@ -480,7 +671,7 @@ function GroupFormModal({
           {destinationMode === 'ward' && (
             <>
               <div className="relative mb-2">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400 pointer-events-none" />
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400 dark:text-neutral-500 pointer-events-none" />
                 <Input
                   placeholder="Tìm phường/xã…"
                   value={wardSearch}
@@ -490,18 +681,18 @@ function GroupFormModal({
                 />
               </div>
               {wardCodes.length > 0 && (
-                <p className="text-xs text-neutral-500 mb-1">
+                <p className="text-xs text-neutral-500 dark:text-neutral-400 mb-1">
                   Đã chọn {wardCodes.length} phường
                   {wardSearch.trim() ? ` · lọc: ${filteredWards.length}` : ''}
                 </p>
               )}
-              <div className="max-h-48 overflow-y-auto border border-neutral-200 dark:border-neutral-700 rounded-md p-2 space-y-1">
-                {!provinceCode && <p className="text-xs text-neutral-500">Chọn tỉnh trước</p>}
+              <div className="max-h-48 overflow-y-auto border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 rounded-md p-2 space-y-1">
+                {!provinceCode && <p className="text-xs text-neutral-500 dark:text-neutral-400">Chọn tỉnh trước</p>}
                 {provinceCode && filteredWards.length === 0 && (
-                  <p className="text-xs text-neutral-500">Không tìm thấy phường phù hợp</p>
+                  <p className="text-xs text-neutral-500 dark:text-neutral-400">Không tìm thấy phường phù hợp</p>
                 )}
                 {filteredWards.map((ward) => (
-                  <label key={ward.code} className="flex items-center gap-2 text-sm">
+                  <label key={ward.code} className="flex items-center gap-2 text-sm text-neutral-700 dark:text-neutral-300 hover:bg-neutral-50 dark:hover:bg-neutral-800/50 px-1 py-0.5 rounded">
                     <input
                       type="checkbox"
                       checked={wardCodes.includes(ward.code)}
@@ -522,21 +713,21 @@ function GroupFormModal({
                 disabled={!provinceCode}
                 onChange={(e) => setLocationText(e.target.value)}
               />
-              <p className="text-xs text-neutral-500">
+              <p className="text-xs text-neutral-500 dark:text-neutral-400">
                 Mỗi nhóm chỉ có đúng 1 địa điểm text
               </p>
             </div>
           )}
           {destinationMode === 'residual' && (
-            <p className="text-xs text-neutral-500">Áp dụng cho phường/địa điểm chưa thuộc nhóm khác trong tỉnh.</p>
+            <p className="text-xs text-neutral-500 dark:text-neutral-400">Áp dụng cho phường/địa điểm chưa thuộc nhóm khác trong tỉnh.</p>
           )}
         </div>
         <div>
-          <p className="text-sm font-medium mb-1">Tên nhóm (chỉ xem)</p>
-          <p className="text-sm px-3 py-2 rounded-md bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700">
+          <p className="text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">Tên nhóm (chỉ xem)</p>
+          <p className="text-sm px-3 py-2 rounded-md bg-neutral-50 dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100 border border-neutral-200 dark:border-neutral-700">
             {previewName}
           </p>
-          <p className="text-xs text-neutral-500 mt-1">
+          <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1">
             Tự sinh theo tỉnh và đích — không chỉnh sửa
           </p>
         </div>
@@ -545,7 +736,7 @@ function GroupFormModal({
           value={note}
           onChange={(e) => setNote(e.target.value)}
         />
-        <p className="-mt-2 text-xs text-neutral-500">Vd. Đường nhỏ — gắn vào tên nhóm</p>
+        <p className="-mt-2 text-xs text-neutral-500 dark:text-neutral-400">Vd. Đường nhỏ — gắn vào tên nhóm</p>
         <div className="flex justify-end gap-2 pt-2">
           <Button variant="outline" onClick={onClose}>
             Hủy
@@ -578,7 +769,7 @@ function GroupFormModal({
               } else {
                 mutations.createGroup.mutate(
                   {
-                    supplier_id: supplierId,
+                    price_book_id: priceBookId,
                     province_code: provinceCode,
                     ward_codes: dest.ward_codes,
                     location_text: dest.location_text,
@@ -604,10 +795,10 @@ function GroupFormModal({
 }
 
 function PricesTab({
-  supplierId,
+  priceBookId,
   canManage,
 }: {
-  supplierId: number;
+  priceBookId: number;
   canManage: boolean;
 }) {
   const [params, setParams] = useSearchParams();
@@ -624,8 +815,8 @@ function PricesTab({
     });
   };
 
-  const { data: groups = [] } = useGroups(supplierId);
-  const { data: prices = [], isLoading } = usePrices(supplierId, groupId);
+  const { data: groups = [] } = useGroups(priceBookId);
+  const { data: prices = [], isLoading } = usePrices(priceBookId, groupId);
   const selected = prices.find((p) => p.route_group_id === groupId);
   const configId = selected && selected.id > 0 ? selected.id : undefined;
   const {
@@ -634,8 +825,12 @@ function PricesTab({
   } = usePriceVersions(configId);
   const [formOpen, setFormOpen] = useState(false);
   const [editAbsolute, setEditAbsolute] = useState(false);
+  const [adjustVersion, setAdjustVersion] = useState<RoutePriceVersion | null>(null);
+  const mutations = useRoutePricingMutations(priceBookId);
+  const { t } = useI18n();
 
   const groupMeta = groups.find((g) => g.id === groupId);
+  const hasPrices = versions.length > 0 || (selected?.version_count ?? 0) > 0;
   const absoluteVersion = versions.find(
     (v) => v.adjustment_percent == null && (v.base_version_id == null || v.base_version_id === undefined),
   );
@@ -655,11 +850,11 @@ function PricesTab({
         }))}
       />
       {!groupId && (
-        <p className="text-sm text-neutral-500">
-          Chọn nhóm tuyến để xem giá và lịch sử — hoặc bấm một nhóm ở tab Nhóm tuyến
+        <p className="text-sm text-neutral-500 dark:text-neutral-400">
+          Chọn nhóm tuyến để xem giá và lịch sử — hoặc bấm một nhóm ở tab Tuyến
         </p>
       )}
-      {groupId && isLoading && <p className="text-sm text-neutral-500">Đang tải…</p>}
+      {groupId && isLoading && <p className="text-sm text-neutral-500 dark:text-neutral-400">Đang tải…</p>}
       {groupId && !isLoading && (
         <div className="space-y-4">
           <div className="flex justify-between items-start gap-3">
@@ -667,36 +862,52 @@ function PricesTab({
               <p className="font-medium text-neutral-900 dark:text-neutral-100">
                 {selected?.group_name || groupMeta?.name || 'Nhóm tuyến'}
               </p>
-              <p className="text-xs text-neutral-500 mt-0.5">
-                {configId
+              <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-0.5">
+                {hasPrices
                   ? `${versions.length || selected?.version_count || 0} phiên bản`
-                  : 'Chưa có bảng giá'}
+                  : t('routePricing.price.noPrice')}
+                {selected?.price_set_name ? ` · ${selected.price_set_name}` : ''}
               </p>
             </div>
             <div className="flex gap-2">
-              {canManage && !configId && (
+              {canManage && !hasPrices && !versionsLoading && (
                 <Button onClick={() => setFormOpen(true)}>
-                  <Plus className="w-4 h-4 mr-1" /> Thêm bảng giá gốc
+                  <Plus className="w-4 h-4 mr-1" aria-hidden="true" /> {t('routePricing.price.createTitle')}
                 </Button>
               )}
-              {canManage && configId && absoluteVersion && (
+              {canManage && hasPrices && absoluteVersion && (
                 <Button variant="outline" onClick={() => setEditAbsolute(true)}>
-                  <Pencil className="w-4 h-4 mr-1" /> Sửa bảng giá gốc
+                  <Pencil className="w-4 h-4 mr-1" aria-hidden="true" /> {t('routePricing.price.editTitle')}
+                </Button>
+              )}
+              {canManage && hasPrices && (
+                <Button
+                  variant="danger"
+                  disabled={mutations.deleteGroupPrices.isPending}
+                  onClick={() => {
+                    if (!window.confirm(t('routePricing.price.confirmDelete'))) return;
+                    mutations.deleteGroupPrices.mutate(groupId, {
+                      onSuccess: () => toast(t('routePricing.message.success.deletePrices')),
+                      onError: () => toast(t('routePricing.message.error.generic'), true),
+                    });
+                  }}
+                >
+                  {t('routePricing.price.delete')}
                 </Button>
               )}
             </div>
           </div>
 
-          {!configId && (
-            <p className="text-sm text-neutral-500">Chưa có bảng giá gốc cho nhóm này</p>
+          {!hasPrices && !versionsLoading && (
+            <p className="text-sm text-neutral-500 dark:text-neutral-400">{t('routePricing.price.noPrice')}</p>
           )}
 
           {configId && versionsLoading && (
-            <p className="text-sm text-neutral-500">Đang tải lịch sử giá…</p>
+            <p className="text-sm text-neutral-500 dark:text-neutral-400">Đang tải lịch sử giá…</p>
           )}
 
           {configId && !versionsLoading && versions.length === 0 && (
-            <p className="text-sm text-neutral-500">Chưa có phiên bản giá</p>
+            <p className="text-sm text-neutral-500 dark:text-neutral-400">Chưa có phiên bản giá</p>
           )}
 
           {configId && versions.length > 0 && (
@@ -708,8 +919,11 @@ function PricesTab({
                 <PriceVersionCard
                   key={v.id}
                   version={v}
+                  priceSetName={selected?.price_set_name}
                   isCurrent={v.effective_to == null}
                   isOldest={idx === versions.length - 1}
+                  canManage={canManage}
+                  onAdjust={() => setAdjustVersion(v)}
                 />
               ))}
             </div>
@@ -726,7 +940,32 @@ function PricesTab({
         <PriceFormModal
           routeGroupId={groupId}
           editVersion={absoluteVersion}
+          boundPriceSetId={selected?.price_set_id}
           onClose={() => setEditAbsolute(false)}
+        />
+      )}
+      {adjustVersion && (
+        <PeriodPriceAdjustModal
+          version={adjustVersion}
+          priceSetId={selected?.price_set_id ?? null}
+          laterVersions={versions.filter(
+            (v) => String(v.effective_from) > String(adjustVersion.effective_from),
+          )}
+          onClose={() => setAdjustVersion(null)}
+          isSubmitting={mutations.manualAdjustVersion.isPending}
+          onConfirm={(body) => {
+            mutations.manualAdjustVersion.mutate(
+              { versionId: adjustVersion.id, ...body },
+              {
+                onSuccess: () => {
+                  toast(t('routePricing.message.success.manualAdjust'));
+                  setAdjustVersion(null);
+                },
+                onError: (e) =>
+                  toast(apiError(e, t('routePricing.message.error.manualAdjust')), true),
+              },
+            );
+          }}
         />
       )}
     </div>
@@ -735,16 +974,25 @@ function PricesTab({
 
 function PriceVersionCard({
   version,
+  priceSetName,
   isCurrent,
   isOldest,
+  canManage,
+  onAdjust,
 }: {
   version: RoutePriceVersion;
+  priceSetName?: string | null;
   isCurrent: boolean;
   isOldest: boolean;
+  canManage?: boolean;
+  onAdjust?: () => void;
 }) {
-  const showPallet = Number(version.pallet_trip_price) > 0;
+  const { t } = useI18n();
+  const palletManual = Boolean(version.pallet_manual_adjusted);
+  const showPallet = version.pallet_trip_price != null;
   const mode: PricingMode = version.pricing_mode ?? 'by_weight';
-  const rangeHeader = mode === 'by_trips' ? 'Chuyến/xe/ngày' : 'Trọng lượng';
+  const rangeHeader =
+    mode === 'by_trips' ? 'Chuyến/xe/ngày' : mode === 'by_truck' ? 'Loại xe' : 'Trọng lượng';
 
   return (
     <div
@@ -764,8 +1012,12 @@ function PriceVersionCard({
           {isOldest && version.adjustment_percent == null && (
             <Badge variant="info">Giá gốc</Badge>
           )}
-          <Badge variant={mode === 'by_trips' ? 'info' : 'default'}>
-            {mode === 'by_trips' ? 'Theo chuyến/xe/ngày' : 'Theo trọng lượng'}
+          <Badge variant={mode === 'by_weight' ? 'default' : 'info'}>
+            {mode === 'by_trips'
+              ? 'Theo chuyến/xe/ngày'
+              : mode === 'by_truck'
+                ? 'Theo loại xe'
+                : 'Theo trọng lượng'}
           </Badge>
           {version.adjustment_percent != null && (
             <Badge variant="warning">
@@ -774,520 +1026,88 @@ function PriceVersionCard({
             </Badge>
           )}
         </div>
-        <p className="text-sm text-neutral-600 dark:text-neutral-400">
-          {formatDate(version.effective_from)}
-          {' → '}
-          {version.effective_to ? formatDate(version.effective_to) : 'hiện tại'}
-        </p>
+        {canManage && onAdjust && (
+          <Button
+            variant="outline"
+            size="sm"
+            aria-label={t('routePricing.manage.adjustPrice')}
+            onClick={onAdjust}
+          >
+            <Pencil className="w-4 h-4" aria-hidden="true" />
+          </Button>
+        )}
       </div>
+      <p className="text-sm text-neutral-600 dark:text-neutral-400">
+        {formatDate(version.effective_from)}
+        {' → '}
+        {version.effective_to ? formatDate(version.effective_to) : 'hiện tại'}
+      </p>
+      {priceSetName && (
+        <p className="text-sm text-neutral-700 dark:text-neutral-300">
+          {t('routePricing.price.setLabel')}: {priceSetName}
+        </p>
+      )}
 
       {showPallet && (
-        <p className="text-sm">
-          Giá Pallet (chuyến):{' '}
-          <strong>{Number(version.pallet_trip_price).toLocaleString('vi-VN')}</strong>
+        <p className="text-sm flex flex-wrap items-center gap-2 text-neutral-900 dark:text-neutral-100">
+          {palletManual && Number(version.pallet_trip_price) === 0 ? (
+            <Badge variant="warning">{t('routePricing.manage.palletAdjustedToZero')}</Badge>
+          ) : (
+            <>
+              Giá Pallet (chuyến):{' '}
+              <strong className="tabular-nums text-neutral-900 dark:text-neutral-100">
+                {formatPriceDisplay(Number(version.pallet_trip_price))}
+              </strong>
+            </>
+          )}
+          {palletManual && Number(version.pallet_trip_price) === 0 && (
+            <span className="tabular-nums font-medium text-neutral-500 dark:text-neutral-400">-</span>
+          )}
+          {palletManual && Number(version.pallet_trip_price) > 0 && (
+            <span title={t('routePricing.manage.manualMarkTitle')} aria-label={t('routePricing.manage.manualMarkTitle')}>
+              *
+            </span>
+          )}
         </p>
       )}
 
       <table className="w-full text-sm">
         <thead>
-          <tr className="text-left text-neutral-500 border-b border-neutral-200 dark:border-neutral-700">
+          <tr className="text-left text-neutral-500 dark:text-neutral-400 border-b border-neutral-200 dark:border-neutral-700">
             <th className="py-1.5 pr-3 font-medium">{rangeHeader}</th>
             <th className="py-1.5 pr-3 font-medium">Đơn vị</th>
             <th className="py-1.5 font-medium text-right">Đơn giá</th>
           </tr>
         </thead>
         <tbody>
-          {version.tiers.map((t, i) => (
+          {version.tiers.map((tier, i) => (
             <tr
-              key={i}
+              key={tier.id ?? i}
               className="border-t border-neutral-100 dark:border-neutral-800 align-top"
             >
-              <td className="py-2 pr-3 whitespace-pre-line">{formatTierRangeLabel(mode, t)}</td>
-              <td className="py-2 pr-3 text-neutral-700 dark:text-neutral-300">
-                {t.pricing_unit === 'chuyen' ? 'vnđ/chuyến' : 'vnđ/tấn'}
+              <td className="py-2 pr-3 whitespace-pre-line break-words text-neutral-900 dark:text-neutral-100">
+                {formatTierRangeLabel(mode, tier)}
               </td>
-              <td className="py-2 text-right font-medium tabular-nums">
-                {Number(t.price).toLocaleString('vi-VN')}
+              <td className="py-2 pr-3 text-neutral-700 dark:text-neutral-300">
+                {tier.pricing_unit === 'chuyen' ? 'vnđ/chuyến' : 'vnđ/tấn'}
+              </td>
+              <td className="py-2 text-right font-medium tabular-nums text-neutral-900 dark:text-neutral-100">
+                {formatPriceDisplay(Number(tier.price))}
+                {tier.is_manual_adjusted ? (
+                  <span
+                    className="ml-1 text-amber-600 dark:text-amber-400"
+                    title={t('routePricing.manage.manualMarkTitle')}
+                    aria-label={t('routePricing.manage.manualMarkTitle')}
+                  >
+                    *
+                  </span>
+                ) : null}
               </td>
             </tr>
           ))}
         </tbody>
       </table>
     </div>
-  );
-}
-
-function formatTonNumber(n: number): string {
-  return Number.isInteger(n) ? String(n) : String(n);
-}
-
-/** Hiển thị khoảng tấn `(from, to]`: `≤ 2.5 tấn`, `>8-16`, `>16` */
-function formatTonRange(fromTon: number, toTon: number | null | undefined): string {
-  const from = Number(fromTon);
-  if (toTon == null) {
-    return from <= 0 ? 'Mọi trọng lượng' : `>${formatTonNumber(from)}`;
-  }
-  const to = Number(toTon);
-  if (from <= 0) return `≤ ${formatTonNumber(to)} tấn`;
-  return `>${formatTonNumber(from)}-${formatTonNumber(to)}`;
-}
-
-function formatTripsRange(fromTrips: number, toTrips: number | null | undefined): string {
-  const from = Number(fromTrips);
-  if (toTrips == null) return `Áp dụng từ ${formatTonNumber(from)} chuyến trở lên`;
-  const to = Number(toTrips);
-  if (from === to) return `Áp dụng cho ${formatTonNumber(from)} chuyến`;
-  return `Áp dụng từ ${formatTonNumber(from)} đến ${formatTonNumber(to)} chuyến`;
-}
-
-function formatTierRangeLabel(mode: PricingMode, t: PriceTierInput): string {
-  if (mode === 'by_trips') {
-    return formatTripsRange(t.range_from, t.range_to ?? null);
-  }
-  let line = formatTonRange(t.range_from, t.range_to ?? null);
-  if (
-    t.pricing_unit === 'tan' &&
-    t.min_billable_ton != null &&
-    Number(t.min_billable_ton) > 0
-  ) {
-    line += ` (cước tối thiểu ${formatTonNumber(Number(t.min_billable_ton))} tấn)`;
-  }
-  return line;
-}
-
-const WEIGHT_TEMPLATE: PriceTierInput[] = [
-  { range_from: 0, range_to: 2.5, pricing_unit: 'chuyen', price: 0 },
-  { range_from: 2.5, range_to: 8, pricing_unit: 'tan', price: 0, min_billable_ton: 5 },
-  { range_from: 8, range_to: 16, pricing_unit: 'tan', price: 0 },
-  { range_from: 16, range_to: 23, pricing_unit: 'tan', price: 0 },
-  { range_from: 23, range_to: null, pricing_unit: 'tan', price: 0 },
-];
-
-function tripsTemplate(firstTo = 2): PriceTierInput[] {
-  return [
-    { range_from: 1, range_to: firstTo, pricing_unit: 'chuyen', price: 0 },
-    { range_from: firstTo + 1, range_to: null, pricing_unit: 'chuyen', price: 0 },
-  ];
-}
-
-/** Re-chain trips tiers so from[0]=1, from[i]=to[i-1]+1, last to=null */
-function rechainTrips(tiers: PriceTierInput[]): PriceTierInput[] {
-  if (tiers.length === 0) return tripsTemplate();
-  const next = tiers.map((t) => ({ ...t, pricing_unit: 'chuyen' as const, min_billable_ton: null }));
-  next[0] = { ...next[0], range_from: 1 };
-  for (let i = 1; i < next.length; i++) {
-    const prevTo = next[i - 1].range_to;
-    const from = prevTo == null ? next[i - 1].range_from + 1 : Number(prevTo) + 1;
-    next[i] = { ...next[i], range_from: from };
-  }
-  next[next.length - 1] = { ...next[next.length - 1], range_to: null };
-  return next;
-}
-
-function PriceFormModal({
-  routeGroupId,
-  editVersion,
-  onClose,
-}: {
-  routeGroupId: number;
-  editVersion?: RoutePriceVersion;
-  onClose: () => void;
-}) {
-  const mutations = useRoutePricingMutations();
-  const { data: periods = [], isLoading: periodsLoading } = useAdjustmentPeriods();
-  const isEdit = Boolean(editVersion);
-  const [periodId, setPeriodId] = useState(
-    editVersion?.adjustment_period_id ? String(editVersion.adjustment_period_id) : '',
-  );
-  const [pallet, setPallet] = useState(String(editVersion?.pallet_trip_price ?? '0'));
-  const [pricingMode, setPricingMode] = useState<PricingMode>(
-    editVersion?.pricing_mode ?? 'by_weight',
-  );
-  const [tiers, setTiers] = useState<PriceTierInput[]>(() =>
-    editVersion
-      ? editVersion.tiers.map((t) => ({ ...t }))
-      : WEIGHT_TEMPLATE.map((t) => ({ ...t })),
-  );
-
-  const earliestPeriodId = useMemo(() => {
-    if (periods.length === 0) return '';
-    const earliest = [...periods].sort((a, b) => a.start_date.localeCompare(b.start_date))[0];
-    return earliest ? String(earliest.id) : '';
-  }, [periods]);
-
-  // Derive default kỳ gốc when periods load — avoid setState-in-effect.
-  const effectivePeriodId = isEdit ? periodId : periodId || earliestPeriodId;
-  const selectedPeriod = periods.find((p) => String(p.id) === effectivePeriodId);
-
-  const switchMode = (mode: PricingMode) => {
-    if (mode === pricingMode) return;
-    if (!window.confirm('Đổi chế độ sẽ xóa các bậc đang nhập. Tiếp tục?')) return;
-    setPricingMode(mode);
-    setTiers(mode === 'by_weight' ? WEIGHT_TEMPLATE.map((t) => ({ ...t })) : tripsTemplate());
-  };
-
-  const updateTripsTo = (idx: number, toValue: string) => {
-    setTiers((prev) => {
-      const next = prev.map((t) => ({ ...t }));
-      if (idx === next.length - 1) {
-        next[idx] = { ...next[idx], range_to: null };
-        return rechainTrips(next);
-      }
-      next[idx] = {
-        ...next[idx],
-        range_to: toValue === '' ? next[idx].range_from : Number(toValue),
-      };
-      return rechainTrips(next);
-    });
-  };
-
-  const addTripsTier = () => {
-    setTiers((prev) => {
-      if (prev.length === 0) return tripsTemplate();
-      if (prev.length === 1) {
-        const price = prev[0].price;
-        return rechainTrips([
-          { range_from: 1, range_to: 1, pricing_unit: 'chuyen', price },
-          { range_from: 2, range_to: null, pricing_unit: 'chuyen', price: 0 },
-        ]);
-      }
-      const copy = prev.map((t) => ({ ...t }));
-      const lastIdx = copy.length - 1;
-      const prevIdx = lastIdx - 1;
-      const prevTo = Number(copy[prevIdx].range_to ?? copy[prevIdx].range_from);
-      const midFrom = prevTo + 1;
-      const midTo = midFrom;
-      copy[prevIdx] = { ...copy[prevIdx], range_to: prevTo };
-      copy.splice(lastIdx, 0, {
-        range_from: midFrom,
-        range_to: midTo,
-        pricing_unit: 'chuyen',
-        price: 0,
-      });
-      copy[copy.length - 1] = {
-        ...copy[copy.length - 1],
-        range_from: midTo + 1,
-        range_to: null,
-        pricing_unit: 'chuyen',
-        price: copy[copy.length - 1].price,
-      };
-      return rechainTrips(copy);
-    });
-  };
-
-  return (
-    <Modal
-      isOpen
-      onClose={onClose}
-      title={isEdit ? 'Sửa bảng giá gốc' : 'Thêm bảng giá gốc'}
-      size="lg"
-    >
-      <div className="space-y-3 max-h-[70vh] overflow-y-auto">
-        {!isEdit && (
-          <div>
-            <Select
-              label="Kỳ gốc *"
-              value={effectivePeriodId}
-              onChange={(e) => setPeriodId(e.target.value)}
-              options={[
-                {
-                  value: '',
-                  label: periodsLoading
-                    ? 'Đang tải kỳ…'
-                    : periods.length
-                      ? 'Chọn kỳ gốc'
-                      : 'Chưa có kỳ — vào tab Kỳ điều chỉnh để tạo',
-                },
-                ...[...periods]
-                  .sort((a, b) => a.start_date.localeCompare(b.start_date))
-                  .map((p) => ({
-                    value: String(p.id),
-                    label: periodLabel(p),
-                  })),
-              ]}
-            />
-            {selectedPeriod && (
-              <p className="mt-1 text-xs text-neutral-500">
-                Ngày hiệu lực gốc: {formatDate(selectedPeriod.start_date)}. Hệ thống sẽ tự tạo
-                bảng giá cho các kỳ tiếp theo (sau kỳ gốc), nhân % từng kỳ.
-              </p>
-            )}
-          </div>
-        )}
-        {isEdit && (
-          <p className="text-sm text-neutral-500">
-            Sửa giá gốc sẽ tính lại các kỳ tiếp theo theo %.
-          </p>
-        )}
-        <Input
-          label="Giá Pallet (chuyến) *"
-          type="number"
-          min={0}
-          value={pallet}
-          onChange={(e) => setPallet(e.target.value)}
-        />
-        <p className="-mt-2 text-xs text-neutral-500">Cho phép 0 nếu nhóm không dùng giá pallet</p>
-
-        <div>
-          <p className="text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
-            Chế độ áp giá *
-          </p>
-          <div className="flex flex-wrap gap-4 text-sm">
-            <label className="flex items-center gap-2">
-              <input
-                type="radio"
-                name="pricing-mode"
-                checked={pricingMode === 'by_weight'}
-                onChange={() => switchMode('by_weight')}
-              />
-              Theo trọng lượng
-            </label>
-            <label className="flex items-center gap-2">
-              <input
-                type="radio"
-                name="pricing-mode"
-                checked={pricingMode === 'by_trips'}
-                onChange={() => switchMode('by_trips')}
-              />
-              Theo số chuyến/xe/ngày
-            </label>
-          </div>
-        </div>
-
-        <div className="space-y-3">
-          <p className="text-sm font-medium">Bậc điều kiện *</p>
-          {pricingMode === 'by_weight' &&
-            tiers.map((t, idx) => {
-              const isChuyen = t.pricing_unit === 'chuyen';
-              return (
-                <div
-                  key={idx}
-                  className="flex flex-wrap gap-2 items-end rounded-lg border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 p-3"
-                >
-                  <div className="w-[7.5rem] shrink-0">
-                    <Select
-                      label="Đơn vị"
-                      value={t.pricing_unit}
-                      onChange={(e) => {
-                        const unit = e.target.value as 'chuyen' | 'tan';
-                        const next = [...tiers];
-                        next[idx] = {
-                          ...t,
-                          pricing_unit: unit,
-                          min_billable_ton: unit === 'chuyen' ? null : t.min_billable_ton,
-                        };
-                        setTiers(next);
-                      }}
-                      options={[
-                        { value: 'chuyen', label: 'Chuyến' },
-                        { value: 'tan', label: 'Tấn' },
-                      ]}
-                    />
-                  </div>
-                  <div className="w-24 shrink-0">
-                    <Input
-                      label="Từ (tấn)"
-                      type="number"
-                      value={String(t.range_from)}
-                      onChange={(e) => {
-                        const next = [...tiers];
-                        next[idx] = { ...t, range_from: Number(e.target.value) };
-                        setTiers(next);
-                      }}
-                    />
-                  </div>
-                  <div className="w-24 shrink-0">
-                    <Input
-                      label="Đến (tấn)"
-                      type="number"
-                      value={t.range_to == null ? '' : String(t.range_to)}
-                      onChange={(e) => {
-                        const next = [...tiers];
-                        next[idx] = {
-                          ...t,
-                          range_to: e.target.value === '' ? null : Number(e.target.value),
-                        };
-                        setTiers(next);
-                      }}
-                    />
-                  </div>
-                  {!isChuyen && (
-                    <div className="w-24 shrink-0">
-                      <Input
-                        label="Tối thiểu (tấn)"
-                        type="number"
-                        value={t.min_billable_ton == null ? '' : String(t.min_billable_ton)}
-                        onChange={(e) => {
-                          const next = [...tiers];
-                          next[idx] = {
-                            ...t,
-                            min_billable_ton:
-                              e.target.value === '' ? null : Number(e.target.value),
-                          };
-                          setTiers(next);
-                        }}
-                      />
-                    </div>
-                  )}
-                  <div className="w-36 min-w-[8rem] flex-1">
-                    <Input
-                      label="Giá"
-                      type="number"
-                      value={String(t.price)}
-                      onChange={(e) => {
-                        const next = [...tiers];
-                        next[idx] = { ...t, price: Number(e.target.value) };
-                        setTiers(next);
-                      }}
-                    />
-                  </div>
-                  <button
-                    type="button"
-                    className="p-2 text-red-600 disabled:cursor-not-allowed disabled:opacity-40"
-                    title="Xóa bậc"
-                    disabled={tiers.length === 1}
-                    onClick={() => setTiers((previous) => previous.filter((_, i) => i !== idx))}
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                </div>
-              );
-            })}
-
-          {pricingMode === 'by_trips' &&
-            tiers.map((t, idx) => {
-              const isLast = idx === tiers.length - 1;
-              return (
-                <div
-                  key={idx}
-                  className="flex flex-wrap gap-2 items-end rounded-lg border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 p-3"
-                >
-                  <div className="w-28 shrink-0">
-                    <Input
-                      label="Từ (≥)"
-                      type="number"
-                      value={String(t.range_from)}
-                      disabled
-                      onChange={() => undefined}
-                    />
-                  </div>
-                  <div className="w-32 shrink-0">
-                    <Input
-                      label={isLast ? 'Đến (∞)' : 'Đến (≤)'}
-                      type="number"
-                      value={t.range_to == null ? '' : String(t.range_to)}
-                      disabled={isLast}
-                      onChange={(e) => updateTripsTo(idx, e.target.value)}
-                    />
-                  </div>
-                  <div className="w-36 min-w-[8rem] flex-1">
-                    <Input
-                      label="Giá (vnđ/chuyến)"
-                      type="number"
-                      value={String(t.price)}
-                      onChange={(e) => {
-                        const next = [...tiers];
-                        next[idx] = { ...t, price: Number(e.target.value) };
-                        setTiers(next);
-                      }}
-                    />
-                  </div>
-                  <button
-                    type="button"
-                    className="p-2 text-red-600 disabled:cursor-not-allowed disabled:opacity-40"
-                    title="Xóa bậc"
-                    disabled={tiers.length <= 1}
-                    onClick={() =>
-                      setTiers((previous) => rechainTrips(previous.filter((_, i) => i !== idx)))
-                    }
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                </div>
-              );
-            })}
-
-          <Button
-            variant="outline"
-            type="button"
-            onClick={() => {
-              if (pricingMode === 'by_weight') {
-                setTiers((prev) => [
-                  ...prev,
-                  { range_from: 0, range_to: null, pricing_unit: 'tan', price: 0 },
-                ]);
-                return;
-              }
-              addTripsTier();
-            }}
-          >
-            + Thêm bậc
-          </Button>
-        </div>
-        <div className="flex justify-end gap-2">
-          <Button variant="outline" onClick={onClose}>
-            Hủy
-          </Button>
-          <Button
-            disabled={
-              mutations.createPrice.isPending ||
-              mutations.updateAbsolutePrice.isPending ||
-              (!isEdit && !effectivePeriodId)
-            }
-            onClick={() => {
-              const normalizedTiers =
-                pricingMode === 'by_trips'
-                  ? rechainTrips(tiers).map((tier) => ({
-                      ...tier,
-                      pricing_unit: 'chuyen' as const,
-                      min_billable_ton: null,
-                    }))
-                  : tiers.map((tier) => ({
-                      ...tier,
-                      min_billable_ton:
-                        tier.pricing_unit === 'tan' ? tier.min_billable_ton ?? null : null,
-                    }));
-              if (isEdit) {
-                mutations.updateAbsolutePrice.mutate(
-                  {
-                    routeGroupId,
-                    pricing_mode: pricingMode,
-                    pallet_trip_price: Number(pallet),
-                    tiers: normalizedTiers,
-                  },
-                  {
-                    onSuccess: () => {
-                      toast('Đã cập nhật bảng giá gốc');
-                      onClose();
-                    },
-                    onError: (e) => toast(apiError(e, 'Không cập nhật được'), true),
-                  },
-                );
-                return;
-              }
-              mutations.createPrice.mutate(
-                {
-                  route_group_id: routeGroupId,
-                  adjustment_period_id: Number(effectivePeriodId),
-                  pricing_mode: pricingMode,
-                  pallet_trip_price: Number(pallet),
-                  tiers: normalizedTiers,
-                },
-                {
-                  onSuccess: () => {
-                    toast('Đã lưu thành công');
-                    onClose();
-                  },
-                  onError: (e) => toast(apiError(e, 'Không lưu được'), true),
-                },
-              );
-            }}
-          >
-            Lưu
-          </Button>
-        </div>
-      </div>
-    </Modal>
   );
 }
 
@@ -1300,8 +1120,8 @@ function PeriodsTab({ canManage }: { canManage: boolean }) {
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-end gap-3">
-        <p className="text-xs text-neutral-500 flex-1 min-w-[200px]">
-          Kỳ điều chỉnh áp dụng mọi nhà cung cấp — chỉ xóa được kỳ gần nhất (rollback)
+        <p className="text-xs text-neutral-500 dark:text-neutral-400 flex-1 min-w-[200px]">
+          Kỳ điều chỉnh áp dụng mọi bảng giá — chỉ xóa được kỳ gần nhất (rollback)
         </p>
         <div className="ml-auto">
           {canManage && (
@@ -1312,17 +1132,17 @@ function PeriodsTab({ canManage }: { canManage: boolean }) {
         </div>
       </div>
 
-      {isLoading && <p className="text-sm text-neutral-500">Đang tải…</p>}
+      {isLoading && <p className="text-sm text-neutral-500 dark:text-neutral-400">Đang tải…</p>}
       {isError && (
-        <p className="text-sm text-red-600">
+        <p className="text-sm text-red-600 dark:text-red-400">
           Không tải được kỳ điều chỉnh.{' '}
-          <button type="button" className="underline" onClick={() => void refetch()}>
+          <button type="button" className="underline hover:text-red-700 dark:hover:text-red-300" onClick={() => void refetch()}>
             Thử lại
           </button>
         </p>
       )}
       {!isLoading && !isError && periods.length === 0 && (
-        <p className="text-sm text-neutral-500">Chưa có kỳ điều chỉnh</p>
+        <p className="text-sm text-neutral-500 dark:text-neutral-400">Chưa có kỳ điều chỉnh</p>
       )}
 
       {periods.length > 0 && (
@@ -1347,14 +1167,14 @@ function PeriodsTab({ canManage }: { canManage: boolean }) {
                       {formatDate(p.start_date)}
                     </span>
                   </TableCell>
-                  <TableCell>{formatPercentLabel(p.percent)}</TableCell>
-                  <TableCell className="max-w-xs truncate">{p.note || '—'}</TableCell>
+                  <TableCell className="text-neutral-700 dark:text-neutral-300">{formatPercentLabel(p.percent)}</TableCell>
+                  <TableCell className="max-w-xs truncate text-neutral-600 dark:text-neutral-400">{p.note || '—'}</TableCell>
                   {canManage && (
                     <TableCell className="text-right space-x-1">
                       {p.id === latestId ? (
                         <button
                           type="button"
-                          className="p-1 text-red-600"
+                          className="p-1 text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300"
                           title="Xóa"
                           onClick={() => {
                             if (
@@ -1373,7 +1193,7 @@ function PeriodsTab({ canManage }: { canManage: boolean }) {
                           <Trash2 className="w-4 h-4 inline" />
                         </button>
                       ) : (
-                        <span className="text-xs text-neutral-400">—</span>
+                        <span className="text-xs text-neutral-400 dark:text-neutral-500">—</span>
                       )}
                     </TableCell>
                   )}
@@ -1398,8 +1218,8 @@ function PeriodFormModal({ onClose }: { onClose: () => void }) {
   return (
     <Modal isOpen onClose={onClose} title="Thêm kỳ điều chỉnh" size="md">
       <div className="space-y-4">
-        <p className="text-sm text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-900/20 p-3 rounded-md">
-          Thêm kỳ sẽ áp dụng % cho mọi NCC đang có bảng giá hiệu lực.
+        <p className="text-sm text-amber-800 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/40 p-3 rounded-md">
+          Thêm kỳ sẽ áp dụng % cho mọi bảng giá đang có giá hiệu lực.
         </p>
         <div>
           <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1.5">
@@ -1413,7 +1233,7 @@ function PeriodFormModal({ onClose }: { onClose: () => void }) {
           value={percent}
           onChange={(e) => setPercent(e.target.value)}
         />
-        <p className="-mt-2 text-xs text-neutral-500">VD 8 = tăng 8%; -5 = giảm 5%</p>
+        <p className="-mt-2 text-xs text-neutral-500 dark:text-neutral-400">VD 8 = tăng 8%; -5 = giảm 5%</p>
         <Input
           label="Ghi chú"
           value={note}

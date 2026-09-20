@@ -3,12 +3,15 @@ import { formatDate } from '../../utils/format';
 import { Select } from '../../components/ui/Select';
 import { usePriceMatrix } from '../../hooks/useRoutePricing';
 import type {
+  PriceMatrixCell,
   PriceMatrixPeriod,
   PriceMatrixTripsRow,
   PriceMatrixWeightColumn,
   PriceMatrixWeightRow,
   PriceMatrixWeightTable,
 } from '../../api/routePricingApi';
+import { useI18n } from '../../i18n/useI18n';
+import { formatPriceDisplay } from './priceDisplay';
 
 function formatPercentLabel(percent: number): string {
   const abs = Math.abs(percent);
@@ -25,13 +28,27 @@ function periodHeader(p: PriceMatrixPeriod): string {
 
 function periodTone(index: number): string {
   return index % 2 === 0
-    ? 'bg-amber-50 dark:bg-amber-950/40'
-    : 'bg-lime-50 dark:bg-lime-950/40';
+    ? 'bg-amber-50/80 dark:bg-amber-950/30'
+    : 'bg-lime-50/80 dark:bg-lime-950/30';
 }
 
-function formatMoney(value: number | null | undefined): string {
-  if (value == null) return '';
-  return Number(value).toLocaleString('vi-VN');
+function readCell(cell: PriceMatrixCell | number | null | undefined): {
+  value: number | null;
+  manual: boolean;
+} {
+  if (cell == null) return { value: null, manual: false };
+  if (typeof cell === 'number') return { value: cell, manual: false };
+  return { value: cell.value, manual: Boolean(cell.manual_adjusted) };
+}
+
+function formatMoneyCell(cell: PriceMatrixCell | number | null | undefined): string {
+  return formatPriceDisplay(readCell(cell).value);
+}
+
+function cellClass(manual: boolean): string {
+  return manual
+    ? 'bg-amber-100 dark:bg-amber-900/40 text-amber-950 dark:text-amber-200 font-medium border border-neutral-200 dark:border-neutral-700 px-2 py-1.5 text-right tabular-nums whitespace-nowrap transition-colors'
+    : 'bg-white dark:bg-neutral-900 text-neutral-900 dark:text-neutral-100 border border-neutral-200 dark:border-neutral-700 px-2 py-1.5 text-right tabular-nums whitespace-nowrap group-hover:bg-neutral-50 dark:group-hover:bg-neutral-800/60 transition-colors';
 }
 
 /** Kỳ đang mở (end_date null); fallback = start_date lớn nhất. */
@@ -54,7 +71,7 @@ function visiblePeriodsFrom(
 }
 
 function stickyCellClass(extra = ''): string {
-  return `sticky z-20 bg-white dark:bg-neutral-900 ${extra}`.trim();
+  return `sticky z-20 bg-white dark:bg-neutral-900 text-neutral-900 dark:text-neutral-100 group-hover:bg-neutral-50 dark:group-hover:bg-neutral-800/60 transition-colors ${extra}`.trim();
 }
 
 const STICKY_EDGE_SHADOW = 'shadow-[2px_0_4px_-2px_rgba(0,0,0,0.18)]';
@@ -62,7 +79,7 @@ const ROUTE_COLUMN_WIDTH = 'w-[160px] max-w-[160px] sm:w-[220px] sm:max-w-[220px
 
 function RouteNameCell({ name }: { name: string }) {
   return (
-    <span className="block whitespace-normal break-words">
+    <span className="block whitespace-normal break-words text-neutral-900 dark:text-neutral-100">
       {name}
     </span>
   );
@@ -107,68 +124,73 @@ function useStickyLeftOffsets(columnCount: number) {
   return { lefts, registerCell };
 }
 
-export function PriceMatrixTab({ supplierId }: { supplierId: number }) {
-  const { data, isLoading, isError, refetch } = usePriceMatrix(supplierId);
+export function PriceMatrixTab({ priceBookId }: { priceBookId: number }) {
+  const { t } = useI18n();
+  const { data, isLoading, isError, refetch } = usePriceMatrix(priceBookId);
   const [fromPeriodId, setFromPeriodId] = useState('');
 
   if (isLoading) {
-    return <p className="text-sm text-neutral-500">Đang tải bảng giá…</p>;
+    return (
+      <div className="rounded-lg border border-dashed border-neutral-300 dark:border-neutral-700 p-8 text-center text-neutral-500 dark:text-neutral-400 bg-neutral-50/50 dark:bg-neutral-800/20">
+        <p className="text-sm">{t('routePricing.priceSet.loading')}</p>
+      </div>
+    );
   }
   if (isError) {
     return (
-      <p className="text-sm text-red-600">
-        Không tải được bảng giá.{' '}
-        <button type="button" className="underline" onClick={() => void refetch()}>
-          Thử lại
+      <div className="rounded-lg border border-dashed border-red-300 dark:border-red-800/60 p-8 text-center text-red-600 dark:text-red-400 bg-red-50/50 dark:bg-red-950/20 space-y-2">
+        <p className="text-sm">{t('routePricing.matrix.loadError')}</p>
+        <button
+          type="button"
+          className="text-sm font-medium underline hover:text-red-700 dark:hover:text-red-300"
+          onClick={() => void refetch()}
+        >
+          {t('routePricing.priceSet.retry')}
         </button>
-      </p>
+      </div>
     );
   }
 
   const periods = data?.periods ?? [];
-  const weightTables = data?.weight_tables ?? [];
-  const tripsRows = data?.trips.rows ?? [];
+  const setTables = data?.set_tables ?? [];
 
   if (periods.length === 0) {
     return (
-      <p className="text-sm text-neutral-500">
-        Chưa có kỳ điều chỉnh — vào tab Kỳ điều chỉnh để tạo.
-      </p>
+      <div className="rounded-lg border border-dashed border-neutral-300 dark:border-neutral-700 p-8 text-center text-neutral-500 dark:text-neutral-400 bg-neutral-50/50 dark:bg-neutral-800/20">
+        <p className="text-sm">{t('routePricing.matrix.noPeriods')}</p>
+      </div>
     );
   }
 
-  if (weightTables.length === 0 && tripsRows.length === 0) {
+  if (setTables.length === 0) {
     return (
-      <p className="text-sm text-neutral-500">
-        Chưa có nhóm tuyến nào có bảng giá. Tạo giá ở tab Quản lý giá.
-      </p>
+      <div className="rounded-lg border border-dashed border-neutral-300 dark:border-neutral-700 p-8 text-center text-neutral-500 dark:text-neutral-400 bg-neutral-50/50 dark:bg-neutral-800/20">
+        <p className="text-sm">{t('routePricing.matrix.emptyBook')}</p>
+      </div>
     );
   }
 
   return (
     <PriceMatrixContent
       periods={periods}
-      weightTables={weightTables}
-      tripsRows={tripsRows}
+      setTables={setTables}
       fromPeriodId={fromPeriodId}
       onFromPeriodChange={setFromPeriodId}
     />
   );
 }
-
 function PriceMatrixContent({
   periods,
-  weightTables,
-  tripsRows,
+  setTables,
   fromPeriodId,
   onFromPeriodChange,
 }: {
   periods: PriceMatrixPeriod[];
-  weightTables: PriceMatrixWeightTable[];
-  tripsRows: PriceMatrixTripsRow[];
+  setTables: PriceMatrixWeightTable[];
   fromPeriodId: string;
   onFromPeriodChange: (id: string) => void;
 }) {
+  const { t } = useI18n();
   const currentPeriod = useMemo(() => resolveCurrentPeriod(periods), [periods]);
   const currentPeriodId = currentPeriod ? String(currentPeriod.id) : '';
   const effectiveFromId = fromPeriodId || currentPeriodId;
@@ -190,43 +212,25 @@ function PriceMatrixContent({
       <div className="max-w-md">
         <Select
           id="matrix-from-period"
-          label="Từ kỳ"
+          label={t('routePricing.matrix.fromPeriod')}
           value={effectiveFromId}
           onChange={(e) => onFromPeriodChange(e.target.value)}
           options={periodOptions}
         />
-        <p className="mt-1 text-xs text-neutral-500">
-          Hiện giá từ kỳ đã chọn đến kỳ hiện tại. Mặc định chỉ kỳ hiện tại.
-        </p>
+        <p className="mt-1 text-xs text-neutral-500 dark:text-neutral-400">{t('routePricing.matrix.fromPeriodHint')}</p>
       </div>
 
-      {weightTables.length > 0 && (
-        <section className="space-y-6">
-          <h2 className="text-sm font-medium text-neutral-800 dark:text-neutral-200">
-            Theo trọng lượng
+      {setTables.map((table) => (
+        <section key={table.schema_key} className="space-y-3">
+          <h2 className="text-sm font-semibold text-neutral-800 dark:text-neutral-200">
+            {table.schema_label}
           </h2>
-          {weightTables.map((table) => (
-            <PriceMatrixWeightTableView
-              key={table.schema_key}
-              periods={visiblePeriods}
-              table={table}
-            />
-          ))}
+          <PriceMatrixWeightTableView periods={visiblePeriods} table={table} />
         </section>
-      )}
-
-      {tripsRows.length > 0 && (
-        <section className="space-y-3">
-          <h2 className="text-sm font-medium text-neutral-800 dark:text-neutral-200">
-            Theo chuyến / xe / ngày
-          </h2>
-          <PriceMatrixTripsTableView periods={visiblePeriods} rows={tripsRows} />
-        </section>
-      )}
+      ))}
     </div>
   );
 }
-
 function PriceMatrixWeightTableView({
   periods,
   table,
@@ -235,11 +239,14 @@ function PriceMatrixWeightTableView({
   table: PriceMatrixWeightTable;
 }) {
   const cols = table.columns;
+  const hideCaption = cols.some((c) => c.kind === 'truck') || !table.schema_label;
   const { lefts, registerCell } = useStickyLeftOffsets(2);
   return (
     <div className="space-y-2">
-      <p className="text-xs text-neutral-500">{table.schema_label}</p>
-      <div className="overflow-auto rounded-lg border border-neutral-200 dark:border-neutral-700 max-h-[70vh]">
+      {!hideCaption && (
+        <p className="text-xs text-neutral-500 dark:text-neutral-400">{table.schema_label}</p>
+      )}
+      <div className="overflow-auto rounded-lg border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 max-h-[70vh] shadow-sm">
         <table className="min-w-max border-separate border-spacing-0 text-xs">
           <thead>
             <tr>
@@ -247,7 +254,7 @@ function PriceMatrixWeightTableView({
                 ref={registerCell(0)}
                 rowSpan={3}
                 style={{ left: lefts[0] }}
-                className={`${stickyCellClass('min-w-[48px]')} border border-neutral-200 dark:border-neutral-700 px-2 py-1.5 text-left`}
+                className={`${stickyCellClass('min-w-[48px]')} border border-neutral-200 dark:border-neutral-700 px-2 py-1.5 text-left font-medium text-neutral-700 dark:text-neutral-300`}
               >
                 STT
               </th>
@@ -255,7 +262,7 @@ function PriceMatrixWeightTableView({
                 ref={registerCell(1)}
                 rowSpan={3}
                 style={{ left: lefts[1] }}
-                className={`${stickyCellClass(`${ROUTE_COLUMN_WIDTH} ${STICKY_EDGE_SHADOW}`)} border border-neutral-200 dark:border-neutral-700 px-2 py-1.5 text-left`}
+                className={`${stickyCellClass(`${ROUTE_COLUMN_WIDTH} ${STICKY_EDGE_SHADOW}`)} border border-neutral-200 dark:border-neutral-700 px-2 py-1.5 text-left font-medium text-neutral-700 dark:text-neutral-300`}
               >
                 Tuyến
               </th>
@@ -263,7 +270,7 @@ function PriceMatrixWeightTableView({
                 <th
                   key={p.id}
                   colSpan={cols.length}
-                  className={`border border-neutral-200 dark:border-neutral-700 px-2 py-1.5 text-center font-medium ${periodTone(i)}`}
+                  className={`border border-neutral-200 dark:border-neutral-700 px-2 py-1.5 text-center font-medium text-neutral-900 dark:text-neutral-100 ${periodTone(i)}`}
                 >
                   {periodHeader(p)}
                 </th>
@@ -274,13 +281,17 @@ function PriceMatrixWeightTableView({
                 cols.map((col) => (
                   <th
                     key={`${p.id}-${col.key}-label`}
-                    className={`border border-neutral-200 dark:border-neutral-700 px-2 py-1 whitespace-pre-line min-w-[88px] ${periodTone(i)}`}
+                    className={`border border-neutral-200 dark:border-neutral-700 px-2 py-1 min-w-[88px] font-medium text-neutral-800 dark:text-neutral-200 ${
+                      col.kind === 'truck'
+                        ? 'max-w-[10rem] break-words whitespace-normal'
+                        : 'whitespace-pre-line'
+                    } ${periodTone(i)}`}
                   >
                     {col.label}
                     {col.hint ? (
                       <>
                         <br />
-                        <span className="font-normal text-[10px]">({col.hint})</span>
+                        <span className="font-normal text-[10px] text-neutral-500 dark:text-neutral-400">({col.hint})</span>
                       </>
                     ) : null}
                   </th>
@@ -292,7 +303,7 @@ function PriceMatrixWeightTableView({
                 cols.map((col) => (
                   <th
                     key={`${p.id}-${col.key}-unit`}
-                    className={`border border-neutral-200 dark:border-neutral-700 px-2 py-1 font-normal text-neutral-600 dark:text-neutral-300 ${periodTone(i)}`}
+                    className={`border border-neutral-200 dark:border-neutral-700 px-2 py-1 font-normal text-neutral-600 dark:text-neutral-400 ${periodTone(i)}`}
                   >
                     {col.unit_label}
                   </th>
@@ -308,6 +319,7 @@ function PriceMatrixWeightTableView({
                 periods={periods}
                 columns={cols}
                 stickyLefts={lefts}
+                virtualize={table.rows.length > 50}
               />
             ))}
           </tbody>
@@ -322,17 +334,22 @@ function WeightRow({
   periods,
   columns,
   stickyLefts,
+  virtualize,
 }: {
   row: PriceMatrixWeightRow;
   periods: PriceMatrixPeriod[];
   columns: PriceMatrixWeightColumn[];
   stickyLefts: number[];
+  virtualize: boolean;
 }) {
   return (
-    <tr className="hover:bg-neutral-50 dark:hover:bg-neutral-800/50">
+    <tr
+      className="group hover:bg-neutral-50 dark:hover:bg-neutral-800/50 transition-colors"
+      style={virtualize ? { contentVisibility: 'auto' } : undefined}
+    >
       <td
         style={{ left: stickyLefts[0] }}
-        className={`${stickyCellClass()} border border-neutral-200 dark:border-neutral-700 px-2 py-1.5 text-center`}
+        className={`${stickyCellClass()} border border-neutral-200 dark:border-neutral-700 px-2 py-1.5 text-center text-neutral-500 dark:text-neutral-400 tabular-nums`}
       >
         {row.stt}
       </td>
@@ -343,20 +360,25 @@ function WeightRow({
         <RouteNameCell name={row.group_name} />
       </td>
       {periods.map((p) =>
-        columns.map((col) => (
-          <td
-            key={`${p.id}-${col.key}`}
-            className="bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-700 px-2 py-1.5 text-right tabular-nums whitespace-nowrap"
-          >
-            {formatMoney(row.cells[String(p.id)]?.[col.key] ?? null)}
-          </td>
-        )),
+        columns.map((col) => {
+          const cell = row.cells[String(p.id)]?.[col.key];
+          const { value, manual } = readCell(cell);
+          return (
+            <td
+              key={`${p.id}-${col.key}`}
+              className={cellClass(manual)}
+              title={manual ? 'Đã điều chỉnh' : undefined}
+            >
+              {value == null ? '-' : formatMoneyCell(cell)}
+            </td>
+          );
+        }),
       )}
     </tr>
   );
 }
 
-function PriceMatrixTripsTableView({
+export function PriceMatrixTripsTableView({
   periods,
   rows,
 }: {
@@ -365,35 +387,35 @@ function PriceMatrixTripsTableView({
 }) {
   const { lefts, registerCell } = useStickyLeftOffsets(3);
   return (
-    <div className="overflow-auto rounded-lg border border-neutral-200 dark:border-neutral-700 max-h-[70vh]">
+    <div className="overflow-auto rounded-lg border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 max-h-[70vh] shadow-sm">
       <table className="min-w-max border-separate border-spacing-0 text-xs">
         <thead>
           <tr>
             <th
               ref={registerCell(0)}
               style={{ left: lefts[0] }}
-              className={`${stickyCellClass('min-w-[48px]')} border border-neutral-200 dark:border-neutral-700 px-2 py-1.5 text-left`}
+              className={`${stickyCellClass('min-w-[48px]')} border border-neutral-200 dark:border-neutral-700 px-2 py-1.5 text-left font-medium text-neutral-700 dark:text-neutral-300`}
             >
               STT
             </th>
             <th
               ref={registerCell(1)}
               style={{ left: lefts[1] }}
-              className={`${stickyCellClass(ROUTE_COLUMN_WIDTH)} border border-neutral-200 dark:border-neutral-700 px-2 py-1.5 text-left`}
+              className={`${stickyCellClass(ROUTE_COLUMN_WIDTH)} border border-neutral-200 dark:border-neutral-700 px-2 py-1.5 text-left font-medium text-neutral-700 dark:text-neutral-300`}
             >
               Tuyến
             </th>
             <th
               ref={registerCell(2)}
               style={{ left: lefts[2] }}
-              className={`${stickyCellClass(`min-w-[140px] ${STICKY_EDGE_SHADOW}`)} border border-neutral-200 dark:border-neutral-700 px-2 py-1.5 text-left`}
+              className={`${stickyCellClass(`min-w-[140px] ${STICKY_EDGE_SHADOW}`)} border border-neutral-200 dark:border-neutral-700 px-2 py-1.5 text-left font-medium text-neutral-700 dark:text-neutral-300`}
             >
               Số chuyến
             </th>
             {periods.map((p, i) => (
               <th
                 key={p.id}
-                className={`border border-neutral-200 dark:border-neutral-700 px-2 py-1.5 text-center font-medium min-w-[100px] ${periodTone(i)}`}
+                className={`border border-neutral-200 dark:border-neutral-700 px-2 py-1.5 text-center font-medium min-w-[100px] text-neutral-900 dark:text-neutral-100 ${periodTone(i)}`}
               >
                 {periodHeader(p)}
               </th>
@@ -402,10 +424,10 @@ function PriceMatrixTripsTableView({
         </thead>
         <tbody>
           {rows.map((row) => (
-            <tr key={`${row.route_group_id}-${row.row_kind}-${row.trips_label}-${row.stt}`} className="hover:bg-neutral-50 dark:hover:bg-neutral-800/50">
+            <tr key={`${row.route_group_id}-${row.row_kind}-${row.trips_label}-${row.stt}`} className="group hover:bg-neutral-50 dark:hover:bg-neutral-800/50 transition-colors">
               <td
                 style={{ left: lefts[0] }}
-                className={`${stickyCellClass()} border border-neutral-200 dark:border-neutral-700 px-2 py-1.5 text-center`}
+                className={`${stickyCellClass()} border border-neutral-200 dark:border-neutral-700 px-2 py-1.5 text-center text-neutral-500 dark:text-neutral-400 tabular-nums`}
               >
                 {row.stt}
               </td>
@@ -417,18 +439,23 @@ function PriceMatrixTripsTableView({
               </td>
               <td
                 style={{ left: lefts[2] }}
-                className={`${stickyCellClass(STICKY_EDGE_SHADOW)} border border-neutral-200 dark:border-neutral-700 px-2 py-1.5`}
+                className={`${stickyCellClass(STICKY_EDGE_SHADOW)} border border-neutral-200 dark:border-neutral-700 px-2 py-1.5 text-neutral-700 dark:text-neutral-300`}
               >
                 {row.trips_label}
               </td>
-              {periods.map((p) => (
-                <td
-                  key={p.id}
-                  className="bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-700 px-2 py-1.5 text-right tabular-nums whitespace-nowrap"
-                >
-                  {formatMoney(row.cells[String(p.id)] ?? null)}
-                </td>
-              ))}
+              {periods.map((p) => {
+                const cell = row.cells[String(p.id)];
+                const { manual } = readCell(cell);
+                return (
+                  <td
+                    key={p.id}
+                    className={cellClass(manual)}
+                    title={manual ? 'Đã điều chỉnh' : undefined}
+                  >
+                    {formatMoneyCell(cell)}
+                  </td>
+                );
+              })}
             </tr>
           ))}
         </tbody>

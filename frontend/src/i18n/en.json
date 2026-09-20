@@ -101,7 +101,7 @@
     "adminReadonly": "ADMIN role always has all permissions",
     "groups": {
       "dashboard": "Dashboard",
-      "route_pricing": "Route Pricing",
+      "route_pricing": "Freight rate management",
       "delivery_data": "Delivery Data Processing",
       "vehicle_data": "Vehicle Data",
       "dispatch": "Transport Operations",
@@ -112,7 +112,7 @@
     },
     "subMenus": {
       "dashboard": "Dashboard",
-      "route_pricing": "Route Pricing",
+      "route_pricing": "Adjustment periods, Price sets, Routes, Price table, Customer surcharges",
       "delivery_5_houses": "Process 5 Houses",
       "delivery_rice": "Process Rice",
       "driver_invoices": "Driver Invoices / Stats",
@@ -120,14 +120,14 @@
       "fuel": "Fuel Data & Stats",
       "schedule": "Dispatch Schedule",
       "invoice_tracking": "Invoice Tracking",
-      "accounting": "Weight Adjustment, Customers, Import, Invoice Matching",
+      "accounting": "Weight Adjustment, Customers, Import, Raw packing list, Invoice Matching",
       "users": "User Management",
       "roles": "Role Management",
       "permissions": "Permission Management",
       "data_scopes": "Data Scopes",
       "workflows": "Workflows",
       "logs": "System Audit Logs",
-      "catalog": "Vehicles, Inner-City Customers, Suppliers, Promo Items, Delivery Points",
+      "catalog": "Vehicles, Drivers, Inner-City Customers, Suppliers, Promo Items, Delivery Points",
       "jobs": "Job Config & History"
     },
     "modules": {
@@ -143,7 +143,7 @@
       "catalog": "Catalog Management",
       "jobs": "Job Management",
       "logs": "System Audit Logs",
-      "route_pricing": "Route Pricing",
+      "route_pricing": "Freight rate management",
       "data_scopes": "Data Scopes",
       "workflows": "Workflows",
       "invoice_tracking": "Invoice Tracking"
@@ -170,8 +170,8 @@
       "jobs_view": "View Jobs Config",
       "jobs_manage": "Manage Jobs Config",
       "logs_view": "View System Audit Logs",
-      "route_pricing_view": "View Route Pricing",
-      "route_pricing_manage": "Manage Route Pricing",
+      "route_pricing_view": "View freight rates",
+      "route_pricing_manage": "Manage freight rates",
       "data_scopes_view": "View Data Scopes Config",
       "data_scopes_manage": "Manage Data Scopes",
       "workflows_view": "View Workflows",
@@ -247,7 +247,7 @@
     "title": "Customer Delivery List",
     "addCustomer": "Add New",
     "importExcel": "Import Excel",
-    "search": "Search by name...",
+    "search": "Search by name, drop-off, or chargeable point…",
     "filterTuyen": "Filter by route",
     "allTuyen": "All routes",
     "columns": {
@@ -255,10 +255,16 @@
       "diemTraHang": "Delivery Point",
       "tenKhachHang": "Customer Name",
       "tuyenPhuong": "Route (New)",
+      "diemGiaoHangTinhPhi": "Chargeable delivery point",
       "tuyenCu": "Route (Old)",
       "diaChiGiaoHang": "Delivery Address",
       "bocXep": "Loading",
+      "nhaCungCap": "Supplier",
       "actions": "Actions"
+    },
+    "actions": {
+      "edit": "Edit",
+      "delete": "Delete"
     },
     "bocXep": {
       "true": "Yes",
@@ -286,7 +292,8 @@
     },
     "upload": {
       "title": "Import Customers from Excel",
-      "success": "Imported {{count}} customers successfully"
+      "success": "Imported {{count}} customers successfully",
+      "colDiemGhtp": "Chargeable delivery point (optional)"
     },
     "fields": {
       "diemTraHang": "Delivery Point",
@@ -294,12 +301,15 @@
       "tuyenPhuong": "Route (New)",
       "tuyenCu": "Route (Old)",
       "diaChiGiaoHang": "Delivery Address",
+      "diemGiaoHangTinhPhi": "Chargeable delivery point",
+      "diemGiaoHangTinhPhiPlaceholder": "e.g. HCM - Tay Thanh…",
       "bocXep": "Has Loading Service"
     },
     "errors": {
       "diemTraHangRequired": "Delivery point is required",
       "tenKhachHangRequired": "Customer name is required",
       "diemTraHangDuplicate": "Delivery point already exists",
+      "diemGhtpMax": "Chargeable delivery point must be at most 255 characters",
       "notFound": "Customer not found"
     }
   },
@@ -683,6 +693,251 @@
       "diff": "Deviation"
     }
   },
+  "routePricing": {
+    "nav": {
+      "title": "Freight rate management",
+      "periods": "Adjustment periods",
+      "sets": "Price sets",
+      "routes": "Route management",
+      "matrix": "Price table",
+      "surcharges": "Delivery surcharges"
+    },
+    "page": {
+      "title": "Freight rate management",
+      "subtitle": "Adjustment periods, price sets, routes, and freight tables"
+    },
+    "tab": {
+      "periods": "Adjustment periods",
+      "sets": "Price sets",
+      "groups": "Routes",
+      "manage": "Manage prices",
+      "matrix": "Price matrix"
+    },
+    "priceBook": {
+      "label": "Price book *",
+      "placeholder": "Select a price book…",
+      "loading": "Loading price books…",
+      "loadError": "Could not load price books",
+      "retry": "Try again",
+      "empty": "No price books yet",
+      "emptyCta": "Create price book",
+      "create": "Create price book",
+      "createTitle": "Create price book",
+      "rename": "Rename",
+      "renameTitle": "Rename price book",
+      "delete": "Delete",
+      "name": "Name *",
+      "namePlaceholder": "e.g. CLF urban…",
+      "nameRequired": "Enter a price book name",
+      "duplicate": "A price book with this name already exists",
+      "saveError": "Could not save the price book",
+      "notFound": "Price book not found",
+      "confirmDelete": "Delete price book \"{name}\"? Route groups in this book will be deactivated. This cannot be undone in the UI."
+    },
+    "action": {
+      "cancel": "Cancel",
+      "save": "Save"
+    },
+    "manage": {
+      "adjustPrice": "Adjust price",
+      "adjustPricePeriod": "Adjust price — {date}",
+      "adjustHint": "Only unit prices. Later periods are recalculated with each period’s % (rounded to thousands).",
+      "saveAdjust": "Save",
+      "confirmTitle": "Confirm price adjustment",
+      "confirmChanges": "Changed cells",
+      "confirmLaterPeriods": "Later periods will be recalculated by %",
+      "confirmNoLater": "No later periods to cascade.",
+      "confirmLoseMark": "will lose the manual-adjust mark on changed cells",
+      "confirmAdd": "add",
+      "confirmSubmit": "Confirm",
+      "palletAdjustedToZero": "Pallet adjusted to 0",
+      "manualMarkTitle": "Manually adjusted",
+      "priceZeroDisplay": "-"
+    },
+    "validation": {
+      "priceRequired": "Enter a unit price",
+      "priceMin0": "Price must be ≥ 0",
+      "priceInvalid": "Invalid price"
+    },
+    "message": {
+      "success": {
+        "createBook": "Price book created",
+        "renameBook": "Price book renamed",
+        "deleteBook": "Price book deleted",
+        "manualAdjust": "Price adjusted",
+        "createSet": "Price set created",
+        "renameSet": "Price set renamed",
+        "addTier": "Tier added",
+        "deleteSet": "Price set deactivated",
+        "deletePrices": "Prices deleted",
+        "savePrice": "Base price saved"
+      },
+      "error": {
+        "deleteBook": "Could not delete the price book",
+        "manualAdjust": "Could not adjust price",
+        "generic": "System error, please try again"
+      }
+    },
+    "mode": {
+      "by_weight": "By weight",
+      "by_trips": "By trips per vehicle per day",
+      "by_truck": "By truck type"
+    },
+    "priceSet": {
+      "title": "Price sets",
+      "subtitle": "Shared frames. No amounts stored here.",
+      "create": "Create price set",
+      "empty": "No price sets yet",
+      "loading": "Loading…",
+      "loadError": "Could not load price sets",
+      "retry": "Try again",
+      "name": "Name *",
+      "namePlaceholder": "e.g. Standard tons + pallet…",
+      "nameRequired": "Enter a price set name",
+      "duplicate": "A price set with this name already exists",
+      "subset": "This frame is already covered by another set. Use the full set and leave unused tiers blank.",
+      "hasPallet": "Has pallet price",
+      "hint": "A price set is only a frame. Amounts are entered per group.",
+      "save": "Save price set",
+      "saveName": "Save name",
+      "saving": "Saving…",
+      "rename": "Rename",
+      "addTier": "Add tier",
+      "addTierHint": "Groups using this set have no price for the new tier until it is entered.",
+      "delete": "Deactivate",
+      "deleteInUse": "Groups are using this set",
+      "confirmDelete": "Deactivate price set “{name}”?",
+      "discard": "Discard changes?",
+      "switchMode": "Changing mode clears the tiers you entered. Continue?",
+      "editStructure": "Edit price set",
+      "colName": "Name",
+      "colMode": "Mode",
+      "colPallet": "Pallet",
+      "colTiers": "Tiers",
+      "colActions": "Actions",
+      "palletYes": "Yes",
+      "palletNo": "No",
+      "mode": "Mode *",
+      "tiers": "Tiers *",
+      "tier": "Tier",
+      "tierLabel": "Label",
+      "tierLabelRequired": "Enter a tier label",
+      "tierRangeRequired": "Invalid tier range",
+      "rangeFrom": "From",
+      "rangeTo": "To",
+      "rangeFromTon": "From (tons)",
+      "rangeToTon": "To (tons)",
+      "rangeFromGte": "From (≥)",
+      "rangeToLte": "to (≤)",
+      "rangeToInf": "to (∞)",
+      "unit": "Unit",
+      "unitTrip": "Trip",
+      "unitTon": "Ton",
+      "minTon": "Minimum",
+      "truckLabel": "Truck type label",
+      "truckPlaceholder": "e.g. Truck 0.5mt…",
+      "truckHint": "Copy the tier label from Excel (type / capacity, e.g. Truck 0.5mt or 8 < Truck ≤16). Cargo tons on the ticket are not used.",
+      "removeTier": "Remove tier"
+    },
+    "price": {
+      "pickSet": "Price set *",
+      "pickSetPlaceholder": "Select a price set…",
+      "pickSetRequired": "Select a price set",
+      "blankHint": "Leave unused tiers blank. Do not enter 0.",
+      "atLeastOne": "Enter at least one tier",
+      "pricePositive": "Price must be greater than 0",
+      "setLocked": "To change the price set, delete prices and enter them again.",
+      "setLabel": "Price set",
+      "confirmRecascade": "Later periods will be recalculated. Manual edits on later periods will be lost.",
+      "delete": "Delete prices",
+      "confirmDelete": "Delete all prices for this group in every period? The route group stays. This cannot be undone in the UI.",
+      "periodNoRemoveTier": "To drop a tier or pallet that already has a price, edit the base price and leave it blank. For a tier or pallet with no price, leave it blank if the group still does not use it, or enter a price to apply it from this period.",
+      "createTitle": "Add base price",
+      "editTitle": "Edit base price",
+      "period": "Base period *",
+      "periodPlaceholder": "Select base period",
+      "periodEmpty": "No periods yet — create one in the periods tab",
+      "periodRequired": "Select a base period",
+      "noPrice": "This group has no base price yet",
+      "pallet": "Pallet price (per trip)",
+      "amount": "Unit price",
+      "unitTrip": "VND/trip",
+      "unitTon": "VND/ton"
+    },
+    "matrix": {
+      "emptyBook": "No prices in this price book",
+      "emptyCell": "-",
+      "loadError": "Could not load the matrix",
+      "noPeriods": "No adjustment periods yet — create one in the periods tab.",
+      "fromPeriod": "From period",
+      "fromPeriodHint": "Shows prices from the selected period through the current one. Defaults to the current period."
+    }
+  },
+  "bangKeTho": {
+    "title": "Draft statements (5 houses)",
+    "subtitle": "Store processed 5-house workbooks so others can download the right batch.",
+    "subtitleHint": "Per-house modules come later — this screen only stores the source file.",
+    "nav": "Draft statements",
+    "dropzone": "Drop an .xlsx file here, or click to choose",
+    "dropzoneHint": "Max 10 MB. The workbook must include a “Processed” sheet.",
+    "chooseFile": "Choose Excel file",
+    "selectedFile": "Selected file",
+    "clearFile": "Clear",
+    "saveFile": "Save file",
+    "saving": "Saving…",
+    "overwriting": "Overwriting…",
+    "searchPlaceholder": "Search by file name…",
+    "col": {
+      "filename": "File name",
+      "uploadedBy": "Uploaded by",
+      "uploadedAt": "Uploaded at",
+      "ndMcc": "ND-MCC",
+      "clv": "CLV",
+      "calofic": "Calofic",
+      "actions": "Actions"
+    },
+    "house": {
+      "pending": "Not processed",
+      "ready": "Ready",
+      "failed": "Failed"
+    },
+    "action": {
+      "downloadInput": "Download source file",
+      "downloadOutput": "Download {filename}",
+      "delete": "Delete batch"
+    },
+    "empty": "No draft statement files yet.",
+    "emptyHintManage": "Upload a processed 5-house workbook to start.",
+    "emptySearch": "No batches match “{q}”.",
+    "error": "Could not load the list.",
+    "retry": "Retry",
+    "message": {
+      "success": {
+        "save": "Draft statement file saved",
+        "overwrite": "File overwritten",
+        "delete": "Batch deleted"
+      },
+      "error": {
+        "save": "Could not save the file. Try again.",
+        "download": "File not found",
+        "forbidden": "You do not have permission for this action",
+        "type": "Only .xlsx files are accepted",
+        "size": "File is too large (max 10 MB)"
+      }
+    },
+    "overwrite": {
+      "title": "File already exists",
+      "body": "A batch named “{filename}” already exists. Overwriting deletes the current source file and every house output (including processed ones).",
+      "confirm": "Overwrite file",
+      "cancel": "Cancel"
+    },
+    "delete": {
+      "title": "Delete batch",
+      "body": "Delete “{filename}”? The source file and house outputs cannot be restored.",
+      "confirm": "Delete batch",
+      "cancel": "Cancel"
+    }
+  },
   "data_scopes": {
     "title": "Data Scope Management",
     "tabs": {
@@ -708,7 +963,11 @@
     "messages": {
       "save_success": "Data scope configuration saved successfully",
       "assign_success": "Entities assigned to user successfully",
-      "delete_assign_success": "Entity assignment removed"
+      "delete_assign_success": "Entity assignment removed",
+      "delete_confirm": "Are you sure you want to remove this entity assignment?",
+      "empty_matrix": "No features have been registered for data scope configuration",
+      "empty_user_entities": "No user entity assignments have been set up yet",
+      "empty_user_entities_hint": "Click \"Assign Entity\" to grant specific data access to users."
     }
   },
   "invoice_tracking": {
@@ -854,38 +1113,6 @@
       "request_supplement": "Supplement Requested"
     }
   },
-  "data_scopes": {
-    "title": "Data Scope Management",
-    "tabs": {
-      "matrix": "Role Matrix",
-      "user_entities": "User Entity Assignments"
-    },
-    "types": {
-      "all": "All Data",
-      "owner": "Owner Only",
-      "entity": "By Assigned Entities",
-      "none": "Locked"
-    },
-    "entities": {
-      "driver": "Driver",
-      "vehicle": "Vehicle",
-      "customer": "Customer"
-    },
-    "actions": {
-      "save_changes": "Save Changes",
-      "assign_entity": "Assign Entity",
-      "reset": "Reset"
-    },
-    "messages": {
-      "save_success": "Data scope configuration saved successfully",
-      "assign_success": "Entities assigned to user successfully",
-      "delete_assign_success": "Entity assignment removed",
-      "delete_confirm": "Are you sure you want to remove this entity assignment?",
-      "empty_matrix": "No features have been registered for data scope configuration",
-      "empty_user_entities": "No user entity assignments have been set up yet",
-      "empty_user_entities_hint": "Click \"Assign Entity\" to grant specific data access to users."
-    }
-  },
   "workflows": {
     "title": "Workflow Configuration",
     "status": {
@@ -895,6 +1122,234 @@
     "actions": {
       "configure": "Configure Steps",
       "save": "Save Workflow Configuration"
+    }
+  },
+  "customerSurcharges": {
+    "page": {
+      "title": "Delivery surcharges",
+      "subtitle": "Customer rates. Not part of the route price table."
+    },
+    "action": {
+      "add": "Add surcharge",
+      "lookup": "Look up",
+      "replace": "Change rate",
+      "stop": "Stop rate",
+      "delete": "Delete surcharge",
+      "expandPoint": "Expand delivery point column",
+      "collapsePoint": "Collapse delivery point column",
+      "clearSearch": "Clear typed text",
+      "removeName": "Remove {name}",
+      "clearFilters": "Clear filters",
+      "save": "Save surcharge",
+      "cancel": "Cancel",
+      "stay": "Stay",
+      "discard": "Discard",
+      "retry": "Try again"
+    },
+    "empty": "No surcharges yet",
+    "emptySearch": "No matches",
+    "emptyFiltered": "No rows match these filters",
+    "error": "Could not load data",
+    "loading": "Loading…",
+    "saving": "Saving…",
+    "stopping": "Stopping…",
+    "deleting": "Deleting…",
+    "lookingUp": "Looking up…",
+    "field": {
+      "customer": "Customer name",
+      "scope": "Scope",
+      "point": "Delivery point",
+      "branch": "Branch",
+      "supplier": "NCC",
+      "supplierCode": "Supplier code",
+      "feeType": "Fee type",
+      "zone": "Zone",
+      "vehicleClass": "Vehicle class",
+      "amount": "Rate (VND)",
+      "startDate": "Start date",
+      "endDate": "End date",
+      "address": "Delivery address",
+      "onDate": "Date",
+      "status": "Status",
+      "source": "Source",
+      "result": "Result"
+    },
+    "scope": {
+      "dealer": "Whole system",
+      "point": "Specific branch",
+      "dealerShort": "Whole system",
+      "pointShort": "Branch"
+    },
+    "fee": {
+      "boc_xep": "Loading",
+      "phu_phi_giao_hang": "Delivery surcharge",
+      "chuyen_tai": "Transshipment"
+    },
+    "zone": {
+      "any": "Any zone",
+      "all": "All zones",
+      "noi_thanh": "Inner city",
+      "tinh": "Province"
+    },
+    "vehicle": {
+      "any": "Any class",
+      "all": "All classes",
+      "le_2_5": "≤2.5 tons",
+      "gt_8_16": ">8-16 tons",
+      "gt_16_23": ">16-23 tons",
+      "pallet": "Pallet"
+    },
+    "unit": {
+      "tan": "VND/ton",
+      "chuyen": "VND/trip"
+    },
+    "column": {
+      "amount": "Rate",
+      "from": "Effective from",
+      "to": "To"
+    },
+    "status": {
+      "open": "Open",
+      "closed": "Closed",
+      "all": "All"
+    },
+    "customerInactive": "Inactive",
+    "hint": {
+      "rateOnly": "Lookup returns the rate. It does not multiply by tonnage.",
+      "replaceDate": "The new date must be after the current start date."
+    },
+    "lookup": {
+      "noPoint": "No matching drop point",
+      "ambiguousPoint": "Duplicate drop points, none selected",
+      "ambiguousNeedCode": "Same address. Enter a supplier code to tell them apart",
+      "ambiguousSameCode": "Two points share this address and supplier code",
+      "matched": "Matched",
+      "noRule": "No rule",
+      "ambiguous": "Several rules match",
+      "pointLabel": "Drop point",
+      "routeLabel": "Ward route",
+      "feePointLabel": "Fee delivery point",
+      "freeText": "Type the text on the trip. Do not pick from a list."
+    },
+    "message": {
+      "success": {
+        "create": "Surcharge added",
+        "createMany": "Added {n} surcharges",
+        "replace": "Rate changed",
+        "stop": "Surcharge stopped",
+        "delete": "Surcharge deleted"
+      },
+      "createFailed": "Could not save",
+      "error": {
+        "generic": "System error, try again"
+      }
+    },
+    "confirm": {
+      "discard": "Discard changes?",
+      "stopTitle": "Stop this surcharge?",
+      "stopBody": "After this date the rule no longer applies. If it is a drop-point rate, later dates use the customer rate when one exists.",
+      "deleteOpen": "Delete this surcharge?",
+      "deleteOpenBody": "After deletion, lookup will no longer return this surcharge.",
+      "deleteOpenHasHistory": "Delete the current surcharge?",
+      "deleteOpenHasHistoryBody": "The previous surcharge stays closed. After its end date, lookup will not return this surcharge.",
+      "deletePointFallback": "If the drop point has no current surcharge of this type, lookup uses the customer rate.",
+      "deleteClosed": "Delete this stopped surcharge?",
+      "deleteClosedBody": "Lookup on the dates this surcharge matched will no longer return this amount."
+    },
+    "validation": {
+      "required": "This field is required",
+      "amount": "Enter an integer from 0",
+      "point": "Choose a branch with an address",
+      "replaceDate": "Choose a date after the current start date",
+      "stopDate": "The end date cannot be before the start date",
+      "customer": "Choose a customer from the list",
+      "zone": "Choose a zone",
+      "vehicle": "Choose a vehicle class"
+    },
+    "reason": {
+      "openExists": "An open surcharge already uses these conditions",
+      "overlap": "The start date overlaps a stopped surcharge",
+      "ambiguous": "This matches another surcharge, so the rate is unclear",
+      "unknownName": "This name is no longer an active customer"
+    },
+    "placeholder": {
+      "customer": "Choose a customer…",
+      "search": "Search customers…",
+      "point": "Choose a branch…",
+      "supplierCode": "e.g. 2000000007…",
+      "address": "Paste the delivery address…"
+    }
+  },
+  "bangKeTho": {
+    "nav": "5-house raw statements",
+    "title": "5-house raw statements",
+    "subtitle": "Upload pre-processed files and download individual house raw statements.",
+    "subtitleHint": "Supports extraction and generation of 8 statement sheets for ND-MCC.",
+    "searchPlaceholder": "Search by filename...",
+    "error": "Error loading batch list",
+    "retry": "Retry",
+    "empty": "No batches found.",
+    "emptyHintManage": "Drag and drop or select an Excel file to get started.",
+    "emptySearch": "No batches matching \"{q}\"",
+    "chooseFile": "Choose file",
+    "dropzone": "Drag and drop .xlsx file here or click to select",
+    "dropzoneHint": "Max 10 MB, must contain sheet \"Processed\"",
+    "selectedFile": "Selected file",
+    "clearFile": "Clear",
+    "saveFile": "Save batch",
+    "col": {
+      "filename": "Original file",
+      "uploadedBy": "Uploaded by",
+      "uploadedAt": "Uploaded at",
+      "ndMcc": "ND-MCC",
+      "clv": "CLV",
+      "calofic": "CALOFIC",
+      "actions": "Actions"
+    },
+    "house": {
+      "pending": "Pending",
+      "ready": "Ready",
+      "failed": "Failed",
+      "processing": "Processing…"
+    },
+    "action": {
+      "process": "Process",
+      "retry": "Retry",
+      "processNdMcc": "Process ND-MCC statements",
+      "reprocessNdMcc": "Re-run ND-MCC statements",
+      "retryNdMcc": "Retry ND-MCC processing",
+      "downloadNdMcc": "Download ND-MCC statements",
+      "downloadInput": "Download original input",
+      "delete": "Delete batch"
+    },
+    "overwrite": {
+      "title": "Duplicate file",
+      "body": "A batch named \"{filename}\" already exists. Are you sure you want to overwrite? All previously generated outputs will be deleted and replaced.",
+      "cancel": "Cancel",
+      "confirm": "Overwrite"
+    },
+    "delete": {
+      "title": "Confirm batch deletion",
+      "body": "Are you sure you want to delete \"{filename}\"? This will permanently remove both the original input and generated house statements.",
+      "cancel": "Cancel",
+      "confirm": "Confirm delete"
+    },
+    "message": {
+      "success": {
+        "save": "Raw statement file saved successfully",
+        "overwrite": "Raw statement file overwritten successfully",
+        "delete": "Batch deleted successfully",
+        "processNdMcc": "Processed ND-MCC statement \"{filename}\" successfully"
+      },
+      "error": {
+        "type": "Only Excel files (.xlsx) are accepted",
+        "size": "File size exceeds 10 MB limit",
+        "save": "Failed to save statement file",
+        "delete": "Failed to delete batch",
+        "download": "Failed to download file",
+        "forbidden": "You do not have permission to perform this action",
+        "processNdMcc": "Failed to process ND-MCC statement"
+      }
     }
   }
 }

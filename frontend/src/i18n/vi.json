@@ -101,7 +101,7 @@
     "adminReadonly": "Vai trò ADMIN luôn có toàn bộ quyền",
     "groups": {
       "dashboard": "Dashboard",
-      "route_pricing": "Giá theo tuyến",
+      "route_pricing": "Quản lý giá cước vận tải",
       "delivery_data": "Xử lý Data Giao Hàng",
       "vehicle_data": "Quản lý dữ liệu xe",
       "dispatch": "Điều hành vận tải",
@@ -112,7 +112,7 @@
     },
     "subMenus": {
       "dashboard": "Dashboard",
-      "route_pricing": "Giá theo tuyến",
+      "route_pricing": "Kỳ điều chỉnh, Bộ giá, Quản lý tuyến, Bảng giá, Phụ phí KH",
       "delivery_5_houses": "Xử lý 5 nhà",
       "delivery_rice": "Xử lý gạo",
       "driver_invoices": "Hoá đơn tài xế / Thống kê",
@@ -120,14 +120,14 @@
       "fuel": "Dữ liệu dầu & Thống kê",
       "schedule": "Lịch điều phối xe",
       "invoice_tracking": "Theo dõi hóa đơn",
-      "accounting": "Điều chỉnh trọng lượng, Khách hàng, Import, Đối chiếu",
+      "accounting": "ĐK Trọng lượng, Khách hàng, Import, Bảng kê thô, Đối chiếu",
       "users": "Quản lý người dùng",
       "roles": "Quản lý vai trò",
       "permissions": "Quản lý quyền",
       "data_scopes": "Phạm vi dữ liệu",
       "workflows": "Cấu hình quy trình",
       "logs": "Nhật ký hệ thống",
-      "catalog": "Phương tiện, Khách hàng nội thành, Nhà cung cấp, Mặt hàng KM, Điểm giao",
+      "catalog": "Phương tiện, Tài xế, Khách hàng nội thành, Nhà cung cấp, Mặt hàng KM, Điểm giao",
       "jobs": "Cấu hình Job & Lịch sử"
     },
     "modules": {
@@ -143,7 +143,7 @@
       "catalog": "Quản lý danh mục",
       "jobs": "Quản lý Job",
       "logs": "Nhật ký hệ thống",
-      "route_pricing": "Giá theo tuyến",
+      "route_pricing": "Quản lý giá cước vận tải",
       "data_scopes": "Phạm vi dữ liệu",
       "workflows": "Cấu hình quy trình",
       "invoice_tracking": "Theo dõi hóa đơn"
@@ -170,8 +170,8 @@
       "jobs_view": "Xem cấu hình Job",
       "jobs_manage": "Quản lý cấu hình Job",
       "logs_view": "Xem nhật ký hệ thống",
-      "route_pricing_view": "Xem giá theo tuyến",
-      "route_pricing_manage": "Quản lý giá theo tuyến",
+      "route_pricing_view": "Xem giá cước vận tải",
+      "route_pricing_manage": "Quản lý giá cước vận tải",
       "data_scopes_view": "Xem cấu hình phạm vi dữ liệu",
       "data_scopes_manage": "Quản lý phạm vi dữ liệu",
       "workflows_view": "Xem cấu hình quy trình",
@@ -247,7 +247,7 @@
     "title": "Danh sách khách nhận hàng",
     "addCustomer": "Thêm mới",
     "importExcel": "Import Excel",
-    "search": "Tìm kiếm theo tên...",
+    "search": "Tìm kiếm theo tên, điểm trả hàng, điểm GHTP…",
     "filterTuyen": "Lọc theo tuyến",
     "allTuyen": "Tất cả tuyến",
     "columns": {
@@ -255,11 +255,16 @@
       "diemTraHang": "Điểm trả hàng",
       "tenKhachHang": "Tên khách hàng",
       "tuyenPhuong": "Tuyến-phường",
+      "diemGiaoHangTinhPhi": "Điểm giao hàng tính phí",
       "tuyenCu": "Tuyến-cũ",
       "diaChiGiaoHang": "Địa chỉ giao hàng",
       "bocXep": "Bốc xếp",
       "nhaCungCap": "Nhà cung cấp",
       "actions": "Hành động"
+    },
+    "actions": {
+      "edit": "Sửa",
+      "delete": "Xóa"
     },
     "bocXep": {
       "true": "Có",
@@ -287,7 +292,8 @@
     },
     "upload": {
       "title": "Import khách hàng từ Excel",
-      "success": "Đã import {{count}} khách hàng thành công"
+      "success": "Đã import {{count}} khách hàng thành công",
+      "colDiemGhtp": "Điểm giao hàng tính phí (không bắt buộc)"
     },
     "fields": {
       "diemTraHang": "Điểm trả hàng",
@@ -295,6 +301,8 @@
       "tuyenPhuong": "Tuyến-phường",
       "tuyenCu": "Tuyến-cũ",
       "diaChiGiaoHang": "Địa chỉ giao hàng",
+      "diemGiaoHangTinhPhi": "Điểm giao hàng tính phí",
+      "diemGiaoHangTinhPhiPlaceholder": "VD: HCM - Tây Thạnh…",
       "bocXep": "Có bốc xếp",
       "supplierCode": "Mã nhà cung cấp"
     },
@@ -302,6 +310,7 @@
       "diemTraHangRequired": "Điểm trả hàng không được rỗng",
       "tenKhachHangRequired": "Tên khách hàng không được rỗng",
       "diemTraHangDuplicate": "Điểm trả hàng đã tồn tại",
+      "diemGhtpMax": "Điểm giao hàng tính phí tối đa 255 ký tự",
       "notFound": "Không tìm thấy khách hàng"
     }
   },
@@ -729,6 +738,251 @@
       "diff": "Chênh lệch"
     }
   },
+  "routePricing": {
+    "nav": {
+      "title": "Quản lý giá cước vận tải",
+      "periods": "Kỳ điều chỉnh",
+      "sets": "Bộ giá",
+      "routes": "Quản lý tuyến",
+      "matrix": "Bảng giá",
+      "surcharges": "Phụ phí giao hàng"
+    },
+    "page": {
+      "title": "Quản lý giá cước vận tải",
+      "subtitle": "Kỳ điều chỉnh, bộ giá, tuyến và bảng giá cước"
+    },
+    "tab": {
+      "periods": "Kỳ điều chỉnh",
+      "sets": "Bộ giá",
+      "groups": "Tuyến",
+      "manage": "Quản lý giá",
+      "matrix": "Ma trận giá"
+    },
+    "priceBook": {
+      "label": "Bảng giá *",
+      "placeholder": "Chọn bảng giá…",
+      "loading": "Đang tải bảng giá…",
+      "loadError": "Không thể tải danh sách bảng giá",
+      "retry": "Thử lại",
+      "empty": "Chưa có bảng giá",
+      "emptyCta": "Tạo bảng giá",
+      "create": "Tạo bảng giá",
+      "createTitle": "Tạo bảng giá",
+      "rename": "Đổi tên",
+      "renameTitle": "Đổi tên bảng giá",
+      "delete": "Xóa",
+      "name": "Tên *",
+      "namePlaceholder": "VD: CLF nội thành…",
+      "nameRequired": "Nhập tên bảng giá",
+      "duplicate": "Tên bảng giá đã tồn tại",
+      "saveError": "Không lưu được bảng giá",
+      "notFound": "Không tìm thấy bảng giá",
+      "confirmDelete": "Xóa bảng giá \"{name}\"? Nhóm tuyến trong bảng này sẽ ngừng sử dụng. Không hoàn tác từ giao diện."
+    },
+    "action": {
+      "cancel": "Hủy",
+      "save": "Lưu"
+    },
+    "manage": {
+      "adjustPrice": "Điều chỉnh giá",
+      "adjustPricePeriod": "Điều chỉnh giá — {date}",
+      "adjustHint": "Chỉ sửa đơn giá. Các kỳ sau sẽ được tính lại theo % của từng kỳ (làm tròn nghìn).",
+      "saveAdjust": "Lưu",
+      "confirmTitle": "Xác nhận điều chỉnh giá",
+      "confirmChanges": "Các ô thay đổi",
+      "confirmLaterPeriods": "Các kỳ sau sẽ được tính lại theo %",
+      "confirmNoLater": "Không có kỳ sau để cascade.",
+      "confirmLoseMark": "sẽ mất dấu đã điều chỉnh trên ô vừa sửa",
+      "confirmAdd": "thêm",
+      "confirmSubmit": "Xác nhận",
+      "palletAdjustedToZero": "Pallet được điều chỉnh về 0",
+      "manualMarkTitle": "Đã điều chỉnh",
+      "priceZeroDisplay": "-"
+    },
+    "validation": {
+      "priceRequired": "Nhập đơn giá",
+      "priceMin0": "Giá phải ≥ 0",
+      "priceInvalid": "Giá không hợp lệ"
+    },
+    "message": {
+      "success": {
+        "createBook": "Đã tạo bảng giá",
+        "renameBook": "Đã đổi tên bảng giá",
+        "deleteBook": "Đã xóa bảng giá",
+        "manualAdjust": "Đã điều chỉnh giá",
+        "createSet": "Đã tạo bộ giá",
+        "renameSet": "Đã đổi tên bộ giá",
+        "addTier": "Đã thêm bậc",
+        "deleteSet": "Đã ngừng dùng bộ giá",
+        "deletePrices": "Đã xóa giá",
+        "savePrice": "Đã lưu bảng giá gốc"
+      },
+      "error": {
+        "deleteBook": "Không xóa được bảng giá",
+        "manualAdjust": "Không điều chỉnh được giá",
+        "generic": "Lỗi hệ thống, vui lòng thử lại"
+      }
+    },
+    "mode": {
+      "by_weight": "Theo trọng lượng",
+      "by_trips": "Theo số chuyến/xe/ngày",
+      "by_truck": "Theo loại xe"
+    },
+    "priceSet": {
+      "title": "Bộ giá",
+      "subtitle": "Catalog khung dùng chung. Không chứa số tiền.",
+      "create": "Tạo bộ giá",
+      "empty": "Chưa có bộ giá",
+      "loading": "Đang tải…",
+      "loadError": "Không tải được danh sách bộ giá",
+      "retry": "Thử lại",
+      "name": "Tên *",
+      "namePlaceholder": "VD: Tấn chuẩn + Pallet…",
+      "nameRequired": "Nhập tên bộ giá",
+      "duplicate": "Tên bộ giá đã tồn tại",
+      "subset": "Khung này đã nằm trong bộ giá khác. Dùng bộ đủ và để trống bậc không cần.",
+      "hasPallet": "Có giá pallet",
+      "hint": "Bộ giá chỉ là khung. Số tiền nhập ở từng nhóm.",
+      "save": "Lưu bộ giá",
+      "saveName": "Lưu tên",
+      "saving": "Đang lưu…",
+      "rename": "Đổi tên",
+      "addTier": "Thêm bậc",
+      "addTierHint": "Nhóm đang dùng bộ này chưa có giá cho bậc mới cho đến khi được nhập.",
+      "delete": "Ngừng dùng",
+      "deleteInUse": "Đang có nhóm sử dụng",
+      "confirmDelete": "Ngừng dùng bộ giá “{name}”?",
+      "discard": "Bỏ thay đổi?",
+      "switchMode": "Đổi chế độ sẽ xóa các bậc đang nhập. Tiếp tục?",
+      "editStructure": "Sửa bộ giá",
+      "colName": "Tên",
+      "colMode": "Chế độ",
+      "colPallet": "Pallet",
+      "colTiers": "Bậc",
+      "colActions": "Hành động",
+      "palletYes": "Có",
+      "palletNo": "Không",
+      "mode": "Chế độ *",
+      "tiers": "Bậc *",
+      "tier": "Bậc",
+      "tierLabel": "Nhãn",
+      "tierLabelRequired": "Nhập nhãn bậc",
+      "tierRangeRequired": "Khoảng bậc không hợp lệ",
+      "rangeFrom": "Từ",
+      "rangeTo": "Đến",
+      "rangeFromTon": "Từ (tấn)",
+      "rangeToTon": "Đến (tấn)",
+      "rangeFromGte": "Từ (≥)",
+      "rangeToLte": "đến (≤)",
+      "rangeToInf": "đến (∞)",
+      "unit": "Đơn vị",
+      "unitTrip": "Chuyến",
+      "unitTon": "Tấn",
+      "minTon": "Tối thiểu",
+      "truckLabel": "Nhãn loại xe",
+      "truckPlaceholder": "vd. Truck 0,5mt…",
+      "truckHint": "Nhãn bậc copy từ Excel (loại / tải xe, ví dụ Truck 0,5mt hoặc 8 < Truck ≤16). Không dùng tấn hàng trên phiếu.",
+      "removeTier": "Xóa bậc"
+    },
+    "price": {
+      "pickSet": "Bộ giá *",
+      "pickSetPlaceholder": "Chọn bộ giá…",
+      "pickSetRequired": "Chọn bộ giá",
+      "blankHint": "Để trống bậc nhóm không dùng. Không nhập 0.",
+      "atLeastOne": "Nhập ít nhất một bậc",
+      "pricePositive": "Giá phải lớn hơn 0",
+      "setLocked": "Muốn đổi bộ giá, xóa giá rồi nhập lại.",
+      "setLabel": "Bộ giá",
+      "confirmRecascade": "Các kỳ sau sẽ được tính lại. Chỉnh tay trên kỳ sau sẽ mất.",
+      "delete": "Xóa giá",
+      "confirmDelete": "Xóa hết giá của nhóm này ở mọi kỳ? Nhóm tuyến vẫn còn. Không hoàn tác từ giao diện.",
+      "periodNoRemoveTier": "Muốn bỏ bậc hoặc pallet đã có, sửa giá gốc và để trống. Bậc hoặc pallet chưa có giá: để trống nếu nhóm vẫn không dùng, hoặc nhập số để áp dụng từ kỳ này.",
+      "createTitle": "Thêm bảng giá gốc",
+      "editTitle": "Sửa bảng giá gốc",
+      "period": "Kỳ gốc *",
+      "periodPlaceholder": "Chọn kỳ gốc",
+      "periodEmpty": "Chưa có kỳ — vào tab Kỳ điều chỉnh để tạo",
+      "periodRequired": "Chọn kỳ gốc",
+      "noPrice": "Chưa có bảng giá gốc cho nhóm này",
+      "pallet": "Giá Pallet (chuyến)",
+      "amount": "Đơn giá",
+      "unitTrip": "vnđ/chuyến",
+      "unitTon": "vnđ/tấn"
+    },
+    "matrix": {
+      "emptyBook": "Chưa có giá trong bảng giá này",
+      "emptyCell": "-",
+      "loadError": "Không tải được ma trận",
+      "noPeriods": "Chưa có kỳ điều chỉnh — vào tab Kỳ điều chỉnh để tạo.",
+      "fromPeriod": "Từ kỳ",
+      "fromPeriodHint": "Hiện giá từ kỳ đã chọn đến kỳ hiện tại. Mặc định chỉ kỳ hiện tại."
+    }
+  },
+  "bangKeTho": {
+    "title": "Lên bảng kê thô 5 nhà",
+    "subtitle": "Lưu file đã xử lý 5 nhà để đồng nghiệp tải đúng đợt.",
+    "subtitleHint": "Module từng nhà sẽ bổ sung sau — hiện tại chỉ lưu file gốc.",
+    "nav": "Bảng kê thô 5 nhà",
+    "dropzone": "Kéo thả file .xlsx vào đây, hoặc bấm để chọn",
+    "dropzoneHint": "Tối đa 10 MB. Cần sheet “Processed”.",
+    "chooseFile": "Chọn file Excel",
+    "selectedFile": "File đã chọn",
+    "clearFile": "Hủy chọn",
+    "saveFile": "Lưu file",
+    "saving": "Đang lưu…",
+    "overwriting": "Đang ghi đè…",
+    "searchPlaceholder": "Tìm theo tên file…",
+    "col": {
+      "filename": "Tên file",
+      "uploadedBy": "Người upload",
+      "uploadedAt": "Thời điểm",
+      "ndMcc": "ND-MCC",
+      "clv": "CLV",
+      "calofic": "Calofic",
+      "actions": "Thao tác"
+    },
+    "house": {
+      "pending": "Chưa xử lý",
+      "ready": "Sẵn sàng",
+      "failed": "Lỗi"
+    },
+    "action": {
+      "downloadInput": "Tải file gốc",
+      "downloadOutput": "Tải {filename}",
+      "delete": "Xóa đợt"
+    },
+    "empty": "Chưa có file bảng kê thô.",
+    "emptyHintManage": "Upload file đã xử lý 5 nhà để bắt đầu.",
+    "emptySearch": "Không tìm thấy đợt nào khớp “{q}”.",
+    "error": "Không tải được danh sách.",
+    "retry": "Thử lại",
+    "message": {
+      "success": {
+        "save": "Đã lưu file bảng kê thô",
+        "overwrite": "Đã ghi đè file",
+        "delete": "Đã xóa đợt"
+      },
+      "error": {
+        "save": "Không lưu được file. Thử lại.",
+        "download": "Không tìm thấy file",
+        "forbidden": "Bạn không có quyền thực hiện thao tác này",
+        "type": "Chỉ chấp nhận file .xlsx",
+        "size": "File quá lớn (tối đa 10 MB)"
+      }
+    },
+    "overwrite": {
+      "title": "File đã tồn tại",
+      "body": "Đã có đợt “{filename}”. Ghi đè sẽ xóa file gốc hiện tại và mọi bảng kê nhà (kể cả đã xử lý).",
+      "confirm": "Ghi đè file",
+      "cancel": "Hủy"
+    },
+    "delete": {
+      "title": "Xóa đợt",
+      "body": "Xóa “{filename}”? File gốc và bảng kê nhà sẽ không khôi phục được.",
+      "confirm": "Xóa đợt",
+      "cancel": "Hủy"
+    }
+  },
   "invoice_tracking": {
     "tabs": {
       "list": "Danh sách ticket",
@@ -913,6 +1167,234 @@
     "actions": {
       "configure": "Cấu hình bước",
       "save": "Lưu cấu hình quy trình"
+    }
+  },
+  "customerSurcharges": {
+    "page": {
+      "title": "Phụ phí giao hàng",
+      "subtitle": "Giá theo khách. Không nằm trên bảng giá tuyến."
+    },
+    "action": {
+      "add": "Thêm phụ phí",
+      "lookup": "Tra cứu",
+      "replace": "Đổi giá",
+      "stop": "Ngừng áp dụng",
+      "delete": "Xóa phụ phí",
+      "expandPoint": "Mở rộng xem Điểm trả hàng",
+      "collapsePoint": "Thu hẹp cột Điểm trả hàng",
+      "clearSearch": "Xóa chữ đã gõ",
+      "removeName": "Bỏ {name}",
+      "clearFilters": "Xóa lọc",
+      "save": "Lưu phụ phí",
+      "cancel": "Hủy",
+      "stay": "Ở lại",
+      "discard": "Bỏ",
+      "retry": "Thử lại"
+    },
+    "empty": "Chưa có phụ phí",
+    "emptySearch": "Không tìm thấy",
+    "emptyFiltered": "Không có dòng khớp bộ lọc",
+    "error": "Không thể tải dữ liệu",
+    "loading": "Đang tải…",
+    "saving": "Đang lưu…",
+    "stopping": "Đang ngừng…",
+    "deleting": "Đang xóa…",
+    "lookingUp": "Đang tra cứu…",
+    "field": {
+      "customer": "Tên khách hàng",
+      "scope": "Phạm vi",
+      "point": "Điểm trả hàng",
+      "branch": "Chi nhánh",
+      "supplier": "NCC",
+      "supplierCode": "Mã nhà cung cấp",
+      "feeType": "Loại phí",
+      "zone": "Vùng",
+      "vehicleClass": "Khung xe",
+      "amount": "Đơn giá (đồng)",
+      "startDate": "Ngày bắt đầu",
+      "endDate": "Ngày ngừng",
+      "address": "Địa chỉ giao hàng",
+      "onDate": "Ngày",
+      "status": "Trạng thái",
+      "source": "Nguồn",
+      "result": "Kết quả"
+    },
+    "scope": {
+      "dealer": "Toàn hệ thống",
+      "point": "Chi nhánh cụ thể",
+      "dealerShort": "Toàn hệ thống",
+      "pointShort": "Chi nhánh"
+    },
+    "fee": {
+      "boc_xep": "Bốc xếp",
+      "phu_phi_giao_hang": "Phụ phí giao hàng",
+      "chuyen_tai": "Chuyển tải"
+    },
+    "zone": {
+      "any": "Mọi vùng",
+      "all": "Tất cả vùng",
+      "noi_thanh": "Nội thành",
+      "tinh": "Tỉnh"
+    },
+    "vehicle": {
+      "any": "Mọi khung xe",
+      "all": "Tất cả khung xe",
+      "le_2_5": "≤2.5 tấn",
+      "gt_8_16": ">8-16 tấn",
+      "gt_16_23": ">16-23 tấn",
+      "pallet": "Pallet"
+    },
+    "unit": {
+      "tan": "đồng/tấn",
+      "chuyen": "đồng/chuyến"
+    },
+    "column": {
+      "amount": "Đơn giá",
+      "from": "Hiệu lực từ",
+      "to": "Đến"
+    },
+    "status": {
+      "open": "Đang mở",
+      "closed": "Đã đóng",
+      "all": "Tất cả"
+    },
+    "customerInactive": "Đã ngừng",
+    "hint": {
+      "rateOnly": "Tra cứu trả đơn giá, không nhân với số tấn.",
+      "replaceDate": "Ngày mới phải sau ngày bắt đầu hiện tại."
+    },
+    "lookup": {
+      "noPoint": "Không khớp điểm",
+      "ambiguousPoint": "Trùng điểm, không chọn",
+      "ambiguousNeedCode": "Trùng địa chỉ. Nhập mã nhà cung cấp để phân biệt",
+      "ambiguousSameCode": "Hai điểm cùng địa chỉ và cùng mã nhà cung cấp",
+      "matched": "Khớp",
+      "noRule": "Không có rule",
+      "ambiguous": "Nhiều rule cùng khớp",
+      "pointLabel": "Điểm trả hàng",
+      "routeLabel": "Tuyến - phường",
+      "feePointLabel": "Điểm giao hàng tính phí",
+      "freeText": "Nhập đúng chuỗi trên chuyến. Không cần chọn từ danh sách."
+    },
+    "message": {
+      "success": {
+        "create": "Đã thêm phụ phí",
+        "createMany": "Đã thêm {n} phụ phí",
+        "replace": "Đã đổi giá",
+        "stop": "Đã ngừng phụ phí",
+        "delete": "Đã xóa phụ phí"
+      },
+      "createFailed": "Không lưu được",
+      "error": {
+        "generic": "Lỗi hệ thống, vui lòng thử lại"
+      }
+    },
+    "confirm": {
+      "discard": "Bỏ thay đổi?",
+      "stopTitle": "Ngừng phụ phí này?",
+      "stopBody": "Sau ngày này rule không còn dùng. Nếu đây là giá riêng cửa hàng, các ngày sau lấy giá đại lý khi đại lý còn rule.",
+      "deleteOpen": "Xóa phụ phí này?",
+      "deleteOpenBody": "Sau khi xóa, tra cứu sẽ không còn phụ phí này.",
+      "deleteOpenHasHistory": "Xóa phụ phí đang áp dụng?",
+      "deleteOpenHasHistoryBody": "Phụ phí cũ không được mở lại. Sau ngày kết thúc của phụ phí cũ, tra cứu không còn phụ phí này.",
+      "deletePointFallback": "Nếu điểm không còn phụ phí đang áp dụng cùng loại, tra cứu lấy giá đại lý.",
+      "deleteClosed": "Xóa phụ phí đã ngừng?",
+      "deleteClosedBody": "Tra cứu các ngày mà phụ phí này đang khớp sẽ không còn ra số này."
+    },
+    "validation": {
+      "required": "Trường này là bắt buộc",
+      "amount": "Nhập số nguyên từ 0",
+      "point": "Chọn một chi nhánh có địa chỉ",
+      "replaceDate": "Chọn ngày sau ngày bắt đầu hiện tại",
+      "stopDate": "Ngày ngừng không được trước ngày bắt đầu",
+      "customer": "Chọn khách đang có trong danh sách",
+      "zone": "Chọn vùng",
+      "vehicle": "Chọn khung xe"
+    },
+    "reason": {
+      "openExists": "Đã có phụ phí đang mở cùng điều kiện",
+      "overlap": "Ngày bắt đầu chồng với phụ phí đã ngừng",
+      "ambiguous": "Trùng điều kiện với phụ phí khác, không biết lấy giá nào",
+      "unknownName": "Tên không còn trong khách đang hoạt động"
+    },
+    "placeholder": {
+      "customer": "Chọn khách…",
+      "search": "Tìm khách…",
+      "point": "Chọn chi nhánh…",
+      "supplierCode": "VD: 2000000007…",
+      "address": "Dán địa chỉ giao hàng…"
+    }
+  },
+  "bangKeTho": {
+    "nav": "Lên bảng kê thô 5 nhà",
+    "title": "Lên bảng kê thô 5 nhà",
+    "subtitle": "Upload file đã qua bước xử lý dữ liệu và tải xuống bảng kê thô các nhà.",
+    "subtitleHint": "Hỗ trợ bóc tách và tạo 8 sheets bảng kê cho nhà ND-MCC.",
+    "searchPlaceholder": "Tìm theo tên file...",
+    "error": "Có lỗi khi tải danh sách đợt",
+    "retry": "Thử lại",
+    "empty": "Chưa có đợt bảng kê nào.",
+    "emptyHintManage": "Kéo thả hoặc chọn file Excel để bắt đầu.",
+    "emptySearch": "Không tìm thấy đợt nào khớp với \"{q}\"",
+    "chooseFile": "Chọn file",
+    "dropzone": "Kéo thả file .xlsx vào đây hoặc bấm để chọn",
+    "dropzoneHint": "Dung lượng tối đa 10 MB, phải chứa sheet \"Processed\"",
+    "selectedFile": "File đã chọn",
+    "clearFile": "Bỏ chọn",
+    "saveFile": "Lưu đợt bảng kê",
+    "col": {
+      "filename": "Tên file gốc",
+      "uploadedBy": "Người tải lên",
+      "uploadedAt": "Thời gian tải",
+      "ndMcc": "ND-MCC",
+      "clv": "CLV",
+      "calofic": "CALOFIC",
+      "actions": "Thao tác"
+    },
+    "house": {
+      "pending": "Chưa xử lý",
+      "ready": "Sẵn sàng",
+      "failed": "Lỗi",
+      "processing": "Đang xử lý…"
+    },
+    "action": {
+      "process": "Xử lý",
+      "retry": "Thử lại",
+      "processNdMcc": "Xử lý bảng kê ND-MCC",
+      "reprocessNdMcc": "Chạy lại bảng kê ND-MCC",
+      "retryNdMcc": "Thử lại xử lý ND-MCC",
+      "downloadNdMcc": "Tải bảng kê ND-MCC",
+      "downloadInput": "Tải file input gốc",
+      "delete": "Xóa đợt"
+    },
+    "overwrite": {
+      "title": "Trùng tên file",
+      "body": "Đã có đợt bảng kê \"{filename}\" trong hệ thống. Bạn có chắc chắn muốn ghi đè? Mọi bảng kê nhà đã sinh của đợt cũ sẽ bị xóa và thay thế.",
+      "cancel": "Hủy bỏ",
+      "confirm": "Ghi đè"
+    },
+    "delete": {
+      "title": "Xác nhận xóa đợt",
+      "body": "Bạn có chắc chắn muốn xóa đợt \"{filename}\"? Thao tác này sẽ xóa vĩnh viễn cả file input gốc và các file bảng kê nhà liên quan.",
+      "cancel": "Hủy bỏ",
+      "confirm": "Xác nhận xóa"
+    },
+    "message": {
+      "success": {
+        "save": "Đã lưu file bảng kê thô thành công",
+        "overwrite": "Đã ghi đè file bảng kê thô thành công",
+        "delete": "Đã xóa đợt bảng kê thành công",
+        "processNdMcc": "Xử lý bảng kê ND-MCC \"{filename}\" thành công"
+      },
+      "error": {
+        "type": "Chỉ chấp nhận file định dạng Excel (.xlsx)",
+        "size": "Dung lượng file vượt quá giới hạn 10 MB",
+        "save": "Không lưu được file bảng kê",
+        "delete": "Không xóa được đợt bảng kê",
+        "download": "Không tải được file",
+        "forbidden": "Bạn không có quyền thực hiện thao tác này",
+        "processNdMcc": "Xử lý bảng kê ND-MCC thất bại"
+      }
     }
   }
 }

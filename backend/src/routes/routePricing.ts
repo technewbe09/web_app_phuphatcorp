@@ -1,5 +1,14 @@
 import { Router } from 'express';
 import {
+  customerSurchargeController,
+  surchargeCreateSchema,
+  surchargeDeleteSchema,
+  surchargeListSchema,
+  surchargeLookupSchema,
+  surchargeReplaceSchema,
+  surchargeStopSchema,
+} from '../controllers/customerSurchargeController';
+import {
   geoWardsSchema,
   groupCreateSchema,
   groupDeleteSchema,
@@ -8,7 +17,16 @@ import {
   lookupSchema,
   periodCreateSchema,
   periodDeleteSchema,
+  priceBookCreateSchema,
+  priceBookDeleteSchema,
+  priceBookUpdateSchema,
   priceCreateSchema,
+  priceDeleteGroupSchema,
+  priceManualAdjustSchema,
+  priceSetAddTierSchema,
+  priceSetCreateSchema,
+  priceSetDeleteSchema,
+  priceSetUpdateSchema,
   priceUpdateAbsoluteSchema,
   pricesListSchema,
   pricesMatrixSchema,
@@ -32,6 +50,30 @@ router.get(
   requirePermission('route_pricing.view'),
   ...validate(geoWardsSchema),
   routePricingController.listWards,
+);
+
+router.get(
+  '/price-books',
+  requirePermission('route_pricing.view'),
+  routePricingController.listPriceBooks,
+);
+router.post(
+  '/price-books',
+  requirePermission('route_pricing.manage'),
+  ...validate(priceBookCreateSchema),
+  routePricingController.createPriceBook,
+);
+router.put(
+  '/price-books/:id',
+  requirePermission('route_pricing.manage'),
+  ...validate(priceBookUpdateSchema),
+  routePricingController.updatePriceBook,
+);
+router.delete(
+  '/price-books/:id',
+  requirePermission('route_pricing.manage'),
+  ...validate(priceBookDeleteSchema),
+  routePricingController.deletePriceBook,
 );
 
 router.get(
@@ -131,6 +173,90 @@ router.put(
   requirePermission('route_pricing.manage'),
   ...validate(priceUpdateAbsoluteSchema),
   routePricingController.updateAbsolutePrice,
+);
+router.delete(
+  '/prices/groups/:routeGroupId',
+  requirePermission('route_pricing.manage'),
+  ...validate(priceDeleteGroupSchema),
+  routePricingController.deleteGroupPrices,
+);
+router.put(
+  '/prices/versions/:versionId/manual-adjust',
+  requirePermission('route_pricing.manage'),
+  ...validate(priceManualAdjustSchema),
+  routePricingController.manualAdjustVersion,
+);
+
+router.get(
+  '/price-sets',
+  requirePermission('route_pricing.view'),
+  routePricingController.listPriceSets,
+);
+router.post(
+  '/price-sets',
+  requirePermission('route_pricing.manage'),
+  ...validate(priceSetCreateSchema),
+  routePricingController.createPriceSet,
+);
+router.put(
+  '/price-sets/:id',
+  requirePermission('route_pricing.manage'),
+  ...validate(priceSetUpdateSchema),
+  routePricingController.updatePriceSet,
+);
+router.post(
+  '/price-sets/:id/tiers',
+  requirePermission('route_pricing.manage'),
+  ...validate(priceSetAddTierSchema),
+  routePricingController.addPriceSetTier,
+);
+router.delete(
+  '/price-sets/:id',
+  requirePermission('route_pricing.manage'),
+  ...validate(priceSetDeleteSchema),
+  routePricingController.deletePriceSet,
+);
+
+router.get(
+  '/surcharges/customer-options',
+  requirePermission('route_pricing.view'),
+  customerSurchargeController.customerOptions,
+);
+router.post(
+  '/surcharges/lookup',
+  requirePermission('route_pricing.view'),
+  ...validate(surchargeLookupSchema),
+  customerSurchargeController.lookup,
+);
+router.get(
+  '/surcharges',
+  requirePermission('route_pricing.view'),
+  ...validate(surchargeListSchema),
+  customerSurchargeController.list,
+);
+router.post(
+  '/surcharges',
+  requirePermission('route_pricing.manage'),
+  ...validate(surchargeCreateSchema),
+  customerSurchargeController.create,
+);
+router.post(
+  '/surcharges/:id/replace',
+  requirePermission('route_pricing.manage'),
+  ...validate(surchargeReplaceSchema),
+  customerSurchargeController.replace,
+);
+router.post(
+  '/surcharges/:id/stop',
+  requirePermission('route_pricing.manage'),
+  ...validate(surchargeStopSchema),
+  customerSurchargeController.stop,
+);
+router.delete(
+  '/surcharges/:id',
+  requirePermission('route_pricing.manage'),
+  ...validate(surchargeDeleteSchema),
+  customerSurchargeController.remove,
 );
 
 router.get(

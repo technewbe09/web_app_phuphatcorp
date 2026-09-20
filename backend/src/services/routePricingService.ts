@@ -1,9 +1,10 @@
 import type { PoolClient } from 'pg';
 import { pool } from '../config/database';
+import { materializePricedTiers, normalizePallet, priceSetService } from './priceSetService';
 import {
-  AdjustmentPeriod, DeliveryRoute, LookupResult, PricingMode, Province, RouteGroup, RouteGroupMember,
+  AdjustmentPeriod, DeliveryRoute, LookupResult, PriceBook, PricingMode, Province, RouteGroup, RouteGroupMember,
   RoutePriceConfigSummary, RoutePriceTier, RoutePriceVersion, Ward,
-  PriceMatrixResponse, PriceMatrixTripsRow, PriceMatrixWeightColumn, PriceMatrixWeightTable,
+  PriceMatrixResponse, PriceMatrixTripsRow, PriceMatrixWeightColumn, PriceMatrixWeightTable, PriceMatrixCell, PriceMatrixPeriod,
   noteKey, normalizeLocation, roundToThousands,
 } from '../types/routePricing';
 
@@ -36,8 +37,12 @@ function buildGroupName(tinh: string, destNames: string[], note?: string | null)
 }
 
 function parsePricingMode(value: unknown): PricingMode {
-  if (value === 'by_weight' || value === 'by_trips') return value;
+  if (value === 'by_weight' || value === 'by_trips' || value === 'by_truck') return value;
   throw err('INVALID_TIERS', 'pricing_mode không hợp lệ');
+}
+
+function truckLabel(tier: { label?: string | null }): string {
+  return String(tier.label ?? '').trim();
 }
 
 /** Ton intervals `(from, to]` — left-open, right-closed. */
@@ -53,6 +58,28 @@ function closedRangesOverlap(aFrom: number, aTo: number | null, bFrom: number, b
 }
 
 function validateTiers(mode: PricingMode, tiers: RoutePriceTier[]): void {
+  if (mode === 'by_truck') {
+    if (!tiers.length) throw err('INVALID_TIERS', 'Cần ít nhất 1 bậc');
+    const seen = new Set<string>();
+    for (const tier of tiers) {
+      if (tier.pricing_unit !== 'chuyen' && tier.pricing_unit !== 'tan') {
+        throw err('INVALID_TIERS', 'pricing_unit không hợp lệ');
+      }
+      if (!(num(tier.price) >= 0) || Number.isNaN(num(tier.price))) {
+        throw err('INVALID_TIERS', 'Giá phải ≥ 0');
+      }
+      const label = truckLabel(tier);
+      if (!label) throw err('INVALID_TIERS', 'Nhãn loại xe không được trống');
+      if (label.length > 255) throw err('INVALID_TIERS', 'Nhãn loại xe tối đa 255 ký tự');
+      if (seen.has(label)) throw err('INVALID_TIERS', 'Các bậc trùng nhãn');
+      seen.add(label);
+      if (tier.min_billable_ton != null && num(tier.min_billable_ton) !== 0) {
+        throw err('INVALID_TIERS', 'Min tính không dùng ở chế độ loại xe');
+      }
+    }
+    return;
+  }
+
   if (mode === 'by_trips') {
     if (tiers.length < 1) throw err('INVALID_TIERS', 'Chế độ chuyến/xe/ngày cần ít nhất 1 bậc');
   } else if (!tiers.length) {
@@ -63,7 +90,9 @@ function validateTiers(mode: PricingMode, tiers: RoutePriceTier[]): void {
     if (tier.pricing_unit !== 'chuyen' && tier.pricing_unit !== 'tan') {
       throw err('INVALID_TIERS', 'pricing_unit không hợp lệ');
     }
-    if (!(num(tier.price) > 0)) throw err('INVALID_TIERS', 'Giá phải > 0');
+    if (!(num(tier.price) >= 0) || Number.isNaN(num(tier.price))) {
+      throw err('INVALID_TIERS', 'Giá phải ≥ 0');
+    }
     const from = num(tier.range_from);
     const to = nullableNumber(tier.range_to);
 
@@ -156,6 +185,9 @@ function matchTier(
 }
 
 function khungLabel(mode: PricingMode, tier: RoutePriceTier): string {
+  if (mode === 'by_truck') {
+    return truckLabel(tier) || 'Truck';
+  }
   if (mode === 'by_trips') {
     const from = num(tier.range_from);
     return tier.range_to == null
@@ -175,7 +207,8 @@ function mapVersionRow(row: Record<string, unknown>, tiers: RoutePriceTier[]): R
     effective_from: toDateOnly(row.period_start_date),
     effective_to: toDateOnlyOrNull(row.period_end_date),
     pricing_mode: parsePricingMode(row.pricing_mode ?? 'by_weight'),
-    pallet_trip_price: num(row.pallet_trip_price),
+    pallet_trip_price: nullableNumber(row.pallet_trip_price),
+    pallet_manual_adjusted: Boolean(row.pallet_manual_adjusted),
     adjustment_percent: baseVersionId == null ? null : num(row.period_percent),
     base_version_id: baseVersionId,
     adjustment_period_id: num(row.adjustment_period_id),
@@ -196,6 +229,36 @@ function mapPeriodRow(row: Record<string, unknown>): AdjustmentPeriod {
   };
 }
 
+async function insertCopiedTier(
+  client: PoolClient,
+  versionId: number,
+  mode: PricingMode,
+  tier: RoutePriceTier,
+  price: number,
+  manual: boolean,
+): Promise<void> {
+  const isTruck = mode === 'by_truck';
+  await client.query(
+    `INSERT INTO route_price_tiers
+      (price_version_id,price_set_tier_id,range_from,range_to,pricing_unit,price,min_billable_ton,sort_order,label,is_manual_adjusted)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
+    [
+      versionId,
+      tier.price_set_tier_id ?? null,
+      isTruck ? 0 : tier.range_from,
+      isTruck ? null : tier.range_to ?? null,
+      mode === 'by_trips' ? 'chuyen' : tier.pricing_unit,
+      price,
+      mode === 'by_weight' && tier.pricing_unit === 'tan' && num(tier.min_billable_ton ?? 0) > 0
+        ? tier.min_billable_ton
+        : null,
+      tier.sort_order ?? 0,
+      isTruck ? truckLabel(tier) : null,
+      manual,
+    ],
+  );
+}
+
 async function insertTiers(
   client: PoolClient,
   versionId: number,
@@ -203,22 +266,50 @@ async function insertTiers(
   tiers: RoutePriceTier[],
 ): Promise<void> {
   for (const [sort, tier] of tiers.entries()) {
+    const isTruck = mode === 'by_truck';
     await client.query(
-      `INSERT INTO route_price_tiers (price_version_id,range_from,range_to,pricing_unit,price,min_billable_ton,sort_order)
-       VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+      `INSERT INTO route_price_tiers
+        (price_version_id,price_set_tier_id,range_from,range_to,pricing_unit,price,min_billable_ton,sort_order,label,is_manual_adjusted)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
       [
         versionId,
-        tier.range_from,
-        tier.range_to ?? null,
+        tier.price_set_tier_id ?? null,
+        isTruck ? 0 : tier.range_from,
+        isTruck ? null : tier.range_to ?? null,
         mode === 'by_trips' ? 'chuyen' : tier.pricing_unit,
         tier.price,
         mode === 'by_weight' && tier.pricing_unit === 'tan' && num(tier.min_billable_ton ?? 0) > 0
           ? tier.min_billable_ton
           : null,
         sort,
+        isTruck ? truckLabel(tier) : null,
+        Boolean(tier.is_manual_adjusted),
       ],
     );
   }
+}
+
+function matrixCell(value: number | null, manualAdjusted = false): PriceMatrixCell {
+  return { value, manual_adjusted: value == null ? false : Boolean(manualAdjusted) };
+}
+
+function tierFingerprint(mode: PricingMode, tier: RoutePriceTier): string {
+  if (mode === 'by_truck') return truckTierColumnKey(tier);
+  if (mode === 'by_trips') {
+    const to = nullableNumber(tier.range_to);
+    return `trips:${num(tier.range_from)}-${to == null ? 'inf' : String(to)}`;
+  }
+  return weightTierColumnKey({
+    range_from: num(tier.range_from),
+    range_to: nullableNumber(tier.range_to),
+    pricing_unit: tier.pricing_unit,
+    min_billable_ton: nullableNumber(tier.min_billable_ton),
+  });
+}
+
+function scaleNullablePallet(value: number | null, percent: number): number | null {
+  if (value == null) return null;
+  return roundToThousands(value * (1 + percent / 100));
 }
 
 function scaleTiers(tiers: RoutePriceTier[], percent: number): RoutePriceTier[] {
@@ -344,9 +435,9 @@ function formatWeightTierLabel(tier: RoutePriceTier): { label: string; hint: str
 function formatTripsTierLabel(tier: RoutePriceTier): string {
   const from = num(tier.range_from);
   const to = nullableNumber(tier.range_to);
-  if (to == null) return `từ ${formatTonNumber(from)} chuyến/xe/ngày trở lên`;
-  if (from === to) return `${formatTonNumber(from)} chuyến/xe/ngày`;
-  return `${formatTonNumber(from)}–${formatTonNumber(to)} chuyến/xe/ngày`;
+  if (to == null) return `từ ${formatTonNumber(from)} chuyến/xe/ngày đi trở lên`;
+  if (from === to) return `${formatTonNumber(from)} chuyến/xe/ngày đi`;
+  return `${formatTonNumber(from)} - ${formatTonNumber(to)} chuyến/xe/ngày đi`;
 }
 
 function buildWeightColumns(tiers: RoutePriceTier[]): PriceMatrixWeightColumn[] {
@@ -384,6 +475,76 @@ function schemaLabelFromColumns(columns: PriceMatrixWeightColumn[]): string {
   return columns.map((c) => c.label).join(' · ');
 }
 
+/** Exported for unit tests — ordered fingerprint for by_truck tiers. */
+export function truckTierColumnKey(tier: { label?: string | null; pricing_unit: string }): string {
+  return `t:${truckLabel(tier)}:${tier.pricing_unit}`;
+}
+
+export function truckSchemaKey(tiers: RoutePriceTier[]): string {
+  const ordered = tiers.some((t) => t.sort_order != null)
+    ? [...tiers].sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
+    : tiers;
+  return ordered.map((t) => truckTierColumnKey(t)).join('|');
+}
+
+/** Parse class tải từ nhãn Excel `Truck 0,5mt` / `Truck 15mt`. Nhãn khoảng → null. */
+export function truckClassMt(label: string): number | null {
+  const m = String(label ?? '')
+    .trim()
+    .match(/(\d+(?:[.,]\d+)?)\s*mt\b/i);
+  if (!m) return null;
+  const n = Number(m[1].replace(',', '.'));
+  return Number.isFinite(n) ? n : null;
+}
+
+function compareTruckColumns(a: PriceMatrixWeightColumn, b: PriceMatrixWeightColumn): number {
+  const ma = truckClassMt(a.label);
+  const mb = truckClassMt(b.label);
+  if (ma != null && mb != null && ma !== mb) return ma - mb;
+  if (ma != null && mb == null) return -1;
+  if (ma == null && mb != null) return 1;
+  return a.label.localeCompare(b.label, 'vi');
+}
+
+function truckColumnFromTier(tier: RoutePriceTier): PriceMatrixWeightColumn {
+  return {
+    key: truckTierColumnKey(tier),
+    kind: 'truck',
+    label: truckLabel(tier),
+    unit_label: tier.pricing_unit === 'chuyen' ? 'vnđ/chuyến' : 'vnđ/tấn',
+    hint: null,
+    pricing_unit: tier.pricing_unit,
+  };
+}
+
+function palletTruckColumn(): PriceMatrixWeightColumn {
+  return {
+    key: 'pallet',
+    kind: 'pallet',
+    label: 'Pallet',
+    unit_label: 'vnđ/chuyến',
+    hint: null,
+  };
+}
+
+/** Union truck columns across groups, ordered by class tải (0,5 → 15), Pallet last. */
+export function buildUnionTruckColumns(tierLists: RoutePriceTier[][]): PriceMatrixWeightColumn[] {
+  const seen = new Set<string>();
+  const columns: PriceMatrixWeightColumn[] = [];
+  for (const tiers of tierLists) {
+    const ordered = [...tiers].sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
+    for (const tier of ordered) {
+      const key = truckTierColumnKey(tier);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      columns.push(truckColumnFromTier(tier));
+    }
+  }
+  columns.sort(compareTruckColumns);
+  columns.push(palletTruckColumn());
+  return columns;
+}
+
 async function insertScaledVersionsFromBases(
   client: PoolClient,
   bases: Record<string, unknown>[],
@@ -413,7 +574,9 @@ async function insertScaledVersionsFromBases(
       [
         old.price_config_id,
         mode,
-        roundToThousands(num(old.pallet_trip_price) * (1 + data.percent / 100)),
+        old.pallet_trip_price == null
+          ? null
+          : roundToThousands(num(old.pallet_trip_price) * (1 + data.percent / 100)),
         old.id,
         data.adjustment_period_id,
         userId,
@@ -429,11 +592,13 @@ async function insertScaledVersionsFromBases(
       mode,
       scaleTiers(
         tiers.rows.map((tier) => ({
+          price_set_tier_id: tier.price_set_tier_id == null ? undefined : num(tier.price_set_tier_id),
           range_from: num(tier.range_from),
           range_to: nullableNumber(tier.range_to),
           pricing_unit: tier.pricing_unit,
           price: num(tier.price),
           min_billable_ton: nullableNumber(tier.min_billable_ton),
+          label: tier.label,
         })),
         data.percent,
       ),
@@ -469,18 +634,24 @@ async function getWard(code: string): Promise<Ward | null> {
   const result = await pool.query<Ward>('SELECT code, name, full_name, province_code FROM wards WHERE code = $1', [code]);
   return result.rows[0] ?? null;
 }
-async function loadTiers(versionId: number): Promise<RoutePriceTier[]> {
-  const result = await pool.query<RoutePriceTier>(
-    `SELECT id, range_from, range_to, pricing_unit, price, min_billable_ton, sort_order
+async function loadTiers(versionId: number, client?: PoolClient): Promise<RoutePriceTier[]> {
+  const q = client ?? pool;
+  const result = await q.query(
+    `SELECT id, price_set_tier_id, range_from, range_to, pricing_unit, price, min_billable_ton, sort_order, label, is_manual_adjusted
      FROM route_price_tiers WHERE price_version_id = $1 ORDER BY sort_order, range_from`,
     [versionId],
   );
   return result.rows.map((tier) => ({
-    ...tier,
+    id: num(tier.id),
+    price_set_tier_id: tier.price_set_tier_id == null ? undefined : num(tier.price_set_tier_id),
     range_from: num(tier.range_from),
     range_to: nullableNumber(tier.range_to),
+    pricing_unit: tier.pricing_unit,
     price: num(tier.price),
     min_billable_ton: nullableNumber(tier.min_billable_ton),
+    sort_order: num(tier.sort_order),
+    label: tier.label == null || String(tier.label).trim() === '' ? null : String(tier.label),
+    is_manual_adjusted: Boolean(tier.is_manual_adjusted),
   }));
 }
 async function loadMembers(groupId: number): Promise<RouteGroupMember[]> {
@@ -494,7 +665,7 @@ async function loadMembers(groupId: number): Promise<RouteGroupMember[]> {
 }
 async function mapGroup(row: Record<string, unknown>): Promise<RouteGroup> {
   return {
-    id: num(row.id), supplier_id: num(row.supplier_id), name: String(row.name), province_code: String(row.province_code),
+    id: num(row.id), price_book_id: num(row.price_book_id), name: String(row.name), province_code: String(row.province_code),
     tinh: String(row.tinh), is_residual: Boolean(row.is_residual), note: (row.note as string | null) ?? null,
     status: row.status as 'active' | 'deactive', members: await loadMembers(num(row.id)),
     created_at: String(row.created_at), updated_at: String(row.updated_at),
@@ -531,6 +702,135 @@ async function resolveDestinations(
 }
 function destinationNames(destinations: Destination[]): string[] { return destinations.map((destination) => destination.phuong); }
 
+function normalizeBookName(name: string): string {
+  const trimmed = name.trim();
+  if (!trimmed) throw err('INVALID_PRICE_BOOK_NAME', 'Nhập tên bảng giá');
+  return trimmed.slice(0, 255);
+}
+
+function mapPriceBook(row: Record<string, unknown>): PriceBook {
+  return {
+    id: num(row.id),
+    name: String(row.name),
+    status: row.status as 'active' | 'deactive',
+    created_at: String(row.created_at),
+    updated_at: String(row.updated_at),
+  };
+}
+
+async function buildSetTables(
+  bundles: Array<{
+    id: number;
+    name: string;
+    is_residual: boolean;
+    province_code: string;
+    tinh: string;
+    price_set_id: number | null;
+    price_set_name: string | null;
+    set_mode: PricingMode | null;
+    has_pallet: boolean;
+    byPeriod: Map<number, { pallet_trip_price: number | null; pallet_manual_adjusted: boolean; tiers: RoutePriceTier[] }>;
+  }>,
+  periods: PriceMatrixPeriod[],
+): Promise<PriceMatrixWeightTable[]> {
+  const grouped = new Map<number, typeof bundles>();
+  for (const bundle of bundles) {
+    if (bundle.price_set_id == null || bundle.byPeriod.size === 0) continue;
+    const list = grouped.get(bundle.price_set_id) ?? [];
+    list.push(bundle);
+    grouped.set(bundle.price_set_id, list);
+  }
+  const tables: PriceMatrixWeightTable[] = [];
+  for (const [setId, groups] of grouped) {
+    const set = await priceSetService.getActive(setId);
+    const pricedIds = new Set<number>();
+    let anyPallet = false;
+    for (const group of groups) {
+      for (const version of group.byPeriod.values()) {
+        if (version.pallet_trip_price != null) anyPallet = true;
+        for (const tier of version.tiers) {
+          if (tier.price_set_tier_id != null) pricedIds.add(tier.price_set_tier_id);
+        }
+      }
+    }
+    const columns: PriceMatrixWeightColumn[] = set.tiers
+      .filter((tier) => pricedIds.has(tier.id))
+      .map((tier) => {
+        if (set.pricing_mode === 'by_truck') {
+          const col = truckColumnFromTier({ ...tier, range_from: 0, price: 0 });
+          return { ...col, key: `set:${tier.id}` };
+        }
+        if (set.pricing_mode === 'by_trips') {
+          return {
+            key: `set:${tier.id}`,
+            kind: 'weight' as const,
+            label: formatTripsTierLabel({ ...tier, range_from: num(tier.range_from), price: 0 }),
+            unit_label: 'vnđ/chuyến',
+          };
+        }
+        const formatted = formatWeightTierLabel({ ...tier, range_from: num(tier.range_from), price: 0 });
+        return {
+          key: `set:${tier.id}`,
+          kind: 'weight' as const,
+          label: formatted.label,
+          hint: formatted.hint,
+          unit_label: formatted.unit_label,
+          range_from: num(tier.range_from),
+          range_to: tier.range_to,
+          pricing_unit: tier.pricing_unit,
+          min_billable_ton: tier.min_billable_ton,
+        };
+      });
+    if (anyPallet) columns.push(palletTruckColumn());
+    if (columns.length === 0) continue;
+    const rows = [...groups]
+      .sort((a, b) => (a.tinh === b.tinh ? a.name.localeCompare(b.name, 'vi') : a.tinh.localeCompare(b.tinh, 'vi')))
+      .map((group, index) => {
+        const cells: Record<string, Record<string, PriceMatrixCell>> = {};
+        for (const period of periods) {
+          const version = group.byPeriod.get(period.id);
+          const periodCells: Record<string, PriceMatrixCell> = {};
+          for (const col of columns) {
+            if (col.kind === 'pallet') {
+              periodCells[col.key] = version
+                ? matrixCell(version.pallet_trip_price, version.pallet_manual_adjusted)
+                : matrixCell(null);
+              continue;
+            }
+            const tierId = Number(col.key.replace('set:', ''));
+            const tier = version?.tiers.find((item) => item.price_set_tier_id === tierId);
+            periodCells[col.key] = tier
+              ? matrixCell(num(tier.price), Boolean(tier.is_manual_adjusted))
+              : matrixCell(null);
+          }
+          cells[String(period.id)] = periodCells;
+        }
+        return {
+          stt: index + 1,
+          route_group_id: group.id,
+          group_name: group.name,
+          is_residual: group.is_residual,
+          province_code: group.province_code,
+          tinh: group.tinh,
+          cells,
+        };
+      });
+    tables.push({
+      schema_key: `set:${setId}`,
+      schema_label: set.name,
+      price_set_id: setId,
+      pricing_mode: set.pricing_mode,
+      columns,
+      rows,
+    });
+  }
+  const modeOrder: Record<PricingMode, number> = { by_weight: 0, by_truck: 1, by_trips: 2 };
+  return tables.sort((a, b) => {
+    const modeDelta = modeOrder[a.pricing_mode ?? 'by_weight'] - modeOrder[b.pricing_mode ?? 'by_weight'];
+    return modeDelta || a.schema_label.localeCompare(b.schema_label, 'vi');
+  });
+}
+
 export const routePricingService = {
   async listProvinces(): Promise<Province[]> {
     return (await pool.query<Province>('SELECT code, name, full_name FROM provinces ORDER BY name')).rows;
@@ -538,6 +838,76 @@ export const routePricingService = {
   async listWards(provinceCode: string): Promise<Ward[]> {
     if (!provinceCode) throw err('MISSING_PROVINCE', 'Thiếu province_code');
     return (await pool.query<Ward>('SELECT code, name, full_name, province_code FROM wards WHERE province_code = $1 ORDER BY name', [provinceCode])).rows;
+  },
+
+  async listPriceBooks(): Promise<PriceBook[]> {
+    const result = await pool.query(
+      `SELECT * FROM price_books WHERE status='active' ORDER BY lower(name), id`,
+    );
+    return result.rows.map(mapPriceBook);
+  },
+  async createPriceBook(name: string, userId: number): Promise<PriceBook> {
+    const bookName = normalizeBookName(name);
+    try {
+      const result = await pool.query(
+        `INSERT INTO price_books (name, created_by, updated_by) VALUES ($1,$2,$2) RETURNING *`,
+        [bookName, userId],
+      );
+      return mapPriceBook(result.rows[0]);
+    } catch (error) {
+      if (isPgUniqueViolation(error)) throw err('DUPLICATE_PRICE_BOOK', 'Tên bảng giá đã tồn tại');
+      throw error;
+    }
+  },
+  async updatePriceBook(id: number, name: string, userId: number): Promise<PriceBook> {
+    const existing = await pool.query(`SELECT id FROM price_books WHERE id=$1 AND status='active'`, [id]);
+    if (!existing.rows[0]) throw err('PRICE_BOOK_NOT_FOUND');
+    const bookName = normalizeBookName(name);
+    try {
+      const result = await pool.query(
+        `UPDATE price_books SET name=$1, updated_by=$2 WHERE id=$3 RETURNING *`,
+        [bookName, userId, id],
+      );
+      return mapPriceBook(result.rows[0]);
+    } catch (error) {
+      if (isPgUniqueViolation(error)) throw err('DUPLICATE_PRICE_BOOK', 'Tên bảng giá đã tồn tại');
+      throw error;
+    }
+  },
+  async deletePriceBook(id: number, userId: number): Promise<void> {
+    const existing = await pool.query(`SELECT id FROM price_books WHERE id=$1 AND status='active'`, [id]);
+    if (!existing.rows[0]) throw err('PRICE_BOOK_NOT_FOUND');
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      const groups = await client.query<{ id: number }>(
+        `SELECT id FROM route_groups WHERE price_book_id=$1 AND status='active'`,
+        [id],
+      );
+      for (const group of groups.rows) {
+        const members = await client.query<{ route_id: number }>(
+          `SELECT route_id FROM route_group_members WHERE route_group_id=$1`,
+          [group.id],
+        );
+        await client.query(`DELETE FROM route_group_members WHERE route_group_id=$1`, [group.id]);
+        for (const member of members.rows) {
+          await client.query(`UPDATE delivery_routes SET status='deactive', updated_by=$1 WHERE id=$2`, [userId, member.route_id]);
+        }
+        await client.query(`UPDATE route_groups SET status='deactive', updated_by=$1 WHERE id=$2`, [userId, group.id]);
+        await client.query(`UPDATE route_price_configs SET status='deactive' WHERE route_group_id=$1`, [group.id]);
+      }
+      await client.query(
+        `UPDATE delivery_routes SET status='deactive', updated_by=$1 WHERE price_book_id=$2 AND status='active'`,
+        [userId, id],
+      );
+      await client.query(`UPDATE price_books SET status='deactive', updated_by=$1 WHERE id=$2`, [userId, id]);
+      await client.query('COMMIT');
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
   },
 
   async listAdjustmentPeriods(): Promise<AdjustmentPeriod[]> {
@@ -652,10 +1022,10 @@ export const routePricingService = {
     }
   },
 
-  async listRoutes(supplierId: number, filters: { search?: string; province_code?: string; status?: string } = {}): Promise<DeliveryRoute[]> {
-    if (!supplierId) throw err('MISSING_SUPPLIER');
-    const params: unknown[] = [supplierId, filters.status || 'active'];
-    let where = 'WHERE r.supplier_id = $1 AND r.status = $2';
+  async listRoutes(priceBookId: number, filters: { search?: string; province_code?: string; status?: string } = {}): Promise<DeliveryRoute[]> {
+    if (!priceBookId) throw err('MISSING_PRICE_BOOK');
+    const params: unknown[] = [priceBookId, filters.status || 'active'];
+    let where = 'WHERE r.price_book_id = $1 AND r.status = $2';
     if (filters.province_code) { params.push(filters.province_code); where += ` AND r.province_code = $${params.length}`; }
     if (filters.search) {
       params.push(`%${filters.search}%`);
@@ -668,9 +1038,9 @@ export const routePricingService = {
        ${where} ORDER BY r.tinh, r.phuong`, params,
     )).rows;
   },
-  async createRoute(data: { supplier_id: number; province_code: string; ward_code?: string | null; location_text?: string | null; note?: string | null }, userId: number): Promise<DeliveryRoute> {
-    const supplier = await pool.query('SELECT id FROM suppliers WHERE id = $1 AND status = $2', [data.supplier_id, 'active']);
-    if (!supplier.rows[0]) throw err('SUPPLIER_NOT_FOUND');
+  async createRoute(data: { price_book_id: number; province_code: string; ward_code?: string | null; location_text?: string | null; note?: string | null }, userId: number): Promise<DeliveryRoute> {
+    const supplier = await pool.query('SELECT id FROM price_books WHERE id = $1 AND status = $2', [data.price_book_id, 'active']);
+    if (!supplier.rows[0]) throw err('PRICE_BOOK_NOT_FOUND');
     const province = await getProvince(data.province_code);
     const destination = destinationInput(data.ward_code, data.location_text);
     if (!province) throw err('INVALID_WARD', 'Tỉnh không hợp lệ');
@@ -682,19 +1052,19 @@ export const routePricingService = {
     const note = cleanNote(data.note);
     const duplicate = await pool.query(
       `SELECT id FROM delivery_routes
-       WHERE supplier_id=$1 AND province_code=$2
+       WHERE price_book_id=$1 AND province_code=$2
          AND COALESCE(ward_code,'')=COALESCE($3,'')
          AND COALESCE(location_text,'')=COALESCE($4,'')
          AND COALESCE(NULLIF(TRIM(note),''),'')=$5
          AND status='active'`,
-      [data.supplier_id, data.province_code, destination.ward_code, destination.location_text, noteKey(note)],
+      [data.price_book_id, data.province_code, destination.ward_code, destination.location_text, noteKey(note)],
     );
     if (duplicate.rows[0]) throw err('DUPLICATE_ROUTE');
     try {
       const result = await pool.query<DeliveryRoute>(
-        `INSERT INTO delivery_routes (supplier_id, province_code, ward_code, location_text, note, tinh, phuong, created_by, updated_by)
+        `INSERT INTO delivery_routes (price_book_id, province_code, ward_code, location_text, note, tinh, phuong, created_by, updated_by)
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$8) RETURNING *`,
-        [data.supplier_id, data.province_code, destination.ward_code, destination.location_text, note, province.name, destination.phuong, userId],
+        [data.price_book_id, data.province_code, destination.ward_code, destination.location_text, note, province.name, destination.phuong, userId],
       );
       return result.rows[0];
     } catch (error) {
@@ -716,12 +1086,12 @@ export const routePricingService = {
     const note = cleanNote(data.note);
     const duplicate = await pool.query(
       `SELECT id FROM delivery_routes
-       WHERE supplier_id=$1 AND province_code=$2
+       WHERE price_book_id=$1 AND province_code=$2
          AND COALESCE(ward_code,'')=COALESCE($3,'')
          AND COALESCE(location_text,'')=COALESCE($4,'')
          AND COALESCE(NULLIF(TRIM(note),''),'')=$5
          AND status='active' AND id != $6`,
-      [existing.rows[0].supplier_id, data.province_code, destination.ward_code, destination.location_text, noteKey(note), id],
+      [existing.rows[0].price_book_id, data.province_code, destination.ward_code, destination.location_text, noteKey(note), id],
     );
     if (duplicate.rows[0]) throw err('DUPLICATE_ROUTE');
     try {
@@ -743,18 +1113,18 @@ export const routePricingService = {
     if (grouped.rows[0]) throw err('ROUTE_IN_ACTIVE_GROUP');
     await pool.query(`UPDATE delivery_routes SET status='deactive' WHERE id=$1`, [id]);
   },
-  async listGroups(supplierId: number, filters: { province_code?: string; search?: string } = {}): Promise<RouteGroup[]> {
-    if (!supplierId) throw err('MISSING_SUPPLIER');
-    const params: unknown[] = [supplierId];
-    let where = `WHERE g.supplier_id=$1 AND g.status='active'`;
+  async listGroups(priceBookId: number, filters: { province_code?: string; search?: string } = {}): Promise<RouteGroup[]> {
+    if (!priceBookId) throw err('MISSING_PRICE_BOOK');
+    const params: unknown[] = [priceBookId];
+    let where = `WHERE g.price_book_id=$1 AND g.status='active'`;
     if (filters.province_code) { params.push(filters.province_code); where += ` AND g.province_code=$${params.length}`; }
     if (filters.search) { params.push(`%${filters.search}%`); where += ` AND g.name ILIKE $${params.length}`; }
     const groups = await pool.query(`SELECT * FROM route_groups g ${where} ORDER BY g.tinh,g.name`, params);
     return Promise.all(groups.rows.map(mapGroup));
   },
-  async createGroup(data: { supplier_id: number; province_code: string; ward_codes?: string[]; location_text?: string | null; note?: string | null }, userId: number): Promise<RouteGroup> {
-    const supplier = await pool.query(`SELECT id FROM suppliers WHERE id=$1 AND status='active'`, [data.supplier_id]);
-    if (!supplier.rows[0]) throw err('SUPPLIER_NOT_FOUND');
+  async createGroup(data: { price_book_id: number; province_code: string; ward_codes?: string[]; location_text?: string | null; note?: string | null }, userId: number): Promise<RouteGroup> {
+    const supplier = await pool.query(`SELECT id FROM price_books WHERE id=$1 AND status='active'`, [data.price_book_id]);
+    if (!supplier.rows[0]) throw err('PRICE_BOOK_NOT_FOUND');
     const province = await getProvince(data.province_code);
     if (!province) throw err('INVALID_WARD', 'Tỉnh không hợp lệ');
     const destinations = await resolveDestinations(data.province_code, data.ward_codes, data.location_text);
@@ -766,21 +1136,21 @@ export const routePricingService = {
       await client.query('BEGIN');
       if (residual) {
         const duplicate = await client.query(
-          `SELECT id FROM route_groups WHERE supplier_id=$1 AND province_code=$2 AND is_residual=TRUE AND status='active'
-           AND COALESCE(NULLIF(TRIM(note),''),'')=$3 FOR UPDATE`, [data.supplier_id, data.province_code, noteKey(note)],
+          `SELECT id FROM route_groups WHERE price_book_id=$1 AND province_code=$2 AND is_residual=TRUE AND status='active'
+           AND COALESCE(NULLIF(TRIM(note),''),'')=$3 FOR UPDATE`, [data.price_book_id, data.province_code, noteKey(note)],
         );
         if (duplicate.rows[0]) throw err('DUPLICATE_RESIDUAL_GROUP');
       }
       const group = await client.query(
-        `INSERT INTO route_groups (supplier_id,name,province_code,tinh,is_residual,note,created_by,updated_by)
+        `INSERT INTO route_groups (price_book_id,name,province_code,tinh,is_residual,note,created_by,updated_by)
          VALUES ($1,$2,$3,$4,$5,$6,$7,$7) RETURNING *`,
-        [data.supplier_id, name, data.province_code, province.name, residual, note, userId],
+        [data.price_book_id, name, data.province_code, province.name, residual, note, userId],
       );
       for (const destination of destinations) {
         const route = await client.query(
-          `INSERT INTO delivery_routes (supplier_id,province_code,ward_code,location_text,note,tinh,phuong,created_by,updated_by)
+          `INSERT INTO delivery_routes (price_book_id,province_code,ward_code,location_text,note,tinh,phuong,created_by,updated_by)
            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$8) RETURNING id`,
-          [data.supplier_id, data.province_code, destination.ward_code, destination.location_text, note, province.name, destination.phuong, userId],
+          [data.price_book_id, data.province_code, destination.ward_code, destination.location_text, note, province.name, destination.phuong, userId],
         );
         await client.query(`INSERT INTO route_group_members (route_group_id,route_id) VALUES ($1,$2)`, [group.rows[0].id, route.rows[0].id]);
       }
@@ -815,9 +1185,9 @@ export const routePricingService = {
       await client.query('BEGIN');
       if (residual) {
         const duplicate = await client.query(
-          `SELECT id FROM route_groups WHERE supplier_id=$1 AND province_code=$2 AND is_residual=TRUE AND status='active'
+          `SELECT id FROM route_groups WHERE price_book_id=$1 AND province_code=$2 AND is_residual=TRUE AND status='active'
            AND id != $3 AND COALESCE(NULLIF(TRIM(note),''),'')=$4 FOR UPDATE`,
-          [existing.supplier_id, existing.province_code, id, noteKey(note)],
+          [existing.price_book_id, existing.province_code, id, noteKey(note)],
         );
         if (duplicate.rows[0]) throw err('DUPLICATE_RESIDUAL_GROUP');
       }
@@ -837,9 +1207,9 @@ export const routePricingService = {
         for (const destination of destinations) {
           if (oldKeys.has(key(destination))) continue;
           const route = await client.query(
-            `INSERT INTO delivery_routes (supplier_id,province_code,ward_code,location_text,note,tinh,phuong,created_by,updated_by)
+            `INSERT INTO delivery_routes (price_book_id,province_code,ward_code,location_text,note,tinh,phuong,created_by,updated_by)
              VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$8) RETURNING id`,
-            [existing.supplier_id, existing.province_code, destination.ward_code, destination.location_text, note, province.name, destination.phuong, userId],
+            [existing.price_book_id, existing.province_code, destination.ward_code, destination.location_text, note, province.name, destination.phuong, userId],
           );
           await client.query(`INSERT INTO route_group_members (route_group_id,route_id) VALUES ($1,$2)`, [id, route.rows[0].id]);
         }
@@ -876,12 +1246,12 @@ export const routePricingService = {
       await client.query('COMMIT');
     } catch (error) { await client.query('ROLLBACK'); throw error; } finally { client.release(); }
   },
-  async listPrices(supplierId: number, routeGroupId?: number): Promise<RoutePriceConfigSummary[]> {
-    if (!supplierId) throw err('MISSING_SUPPLIER');
-    const params: unknown[] = [supplierId];
-    let where = `WHERE g.supplier_id=$1 AND g.status='active'`;
+  async listPrices(priceBookId: number, routeGroupId?: number): Promise<RoutePriceConfigSummary[]> {
+    if (!priceBookId) throw err('MISSING_PRICE_BOOK');
+    const params: unknown[] = [priceBookId];
+    let where = `WHERE g.price_book_id=$1 AND g.status='active'`;
     if (routeGroupId) { params.push(routeGroupId); where += ` AND g.id=$${params.length}`; }
-    const groups = await pool.query(`SELECT g.id,g.name,g.is_residual,g.province_code,g.tinh,c.id AS config_id FROM route_groups g LEFT JOIN route_price_configs c ON c.route_group_id=g.id AND c.status='active' ${where} ORDER BY g.tinh,g.name`, params);
+    const groups = await pool.query(`SELECT g.id,g.name,g.is_residual,g.province_code,g.tinh,c.id AS config_id,c.price_set_id,ps.name AS price_set_name FROM route_groups g LEFT JOIN route_price_configs c ON c.route_group_id=g.id AND c.status='active' LEFT JOIN price_sets ps ON ps.id=c.price_set_id ${where} ORDER BY g.tinh,g.name`, params);
     return Promise.all(groups.rows.map(async (group) => {
       const versions = group.config_id
         ? await pool.query(
@@ -893,7 +1263,7 @@ export const routePricingService = {
       const current: RoutePriceVersion | null = open
         ? mapVersionRow(open, await loadTiers(num(open.id)))
         : null;
-      return { id: group.config_id ?? 0, route_group_id: group.id, group_name: group.name, is_residual: group.is_residual, province_code: group.province_code, tinh: group.tinh, current_version: current, version_count: versions.rows.length };
+      return { id: group.config_id ?? 0, route_group_id: group.id, group_name: group.name, is_residual: group.is_residual, province_code: group.province_code, tinh: group.tinh, price_set_id: group.price_set_id == null ? null : num(group.price_set_id), price_set_name: (group.price_set_name as string | null) ?? null, current_version: current, version_count: versions.rows.length };
     }));
   },
   async listVersions(configId: number): Promise<RoutePriceVersion[]> {
@@ -904,8 +1274,8 @@ export const routePricingService = {
     return Promise.all(versions.rows.map(async (version) => mapVersionRow(version, await loadTiers(version.id))));
   },
 
-  async getPriceMatrix(supplierId: number): Promise<PriceMatrixResponse> {
-    if (!supplierId) throw err('MISSING_SUPPLIER');
+  async getPriceMatrix(priceBookId: number): Promise<PriceMatrixResponse> {
+    if (!priceBookId) throw err('MISSING_PRICE_BOOK');
 
     const periodsResult = await pool.query(
       `SELECT id, start_date, end_date, percent, note
@@ -921,12 +1291,14 @@ export const routePricingService = {
     }));
 
     const groups = await pool.query(
-      `SELECT g.id, g.name, g.is_residual, g.province_code, g.tinh, c.id AS config_id
+      `SELECT g.id, g.name, g.is_residual, g.province_code, g.tinh, c.id AS config_id,
+              c.price_set_id, ps.name AS price_set_name, ps.pricing_mode AS set_mode, ps.has_pallet
        FROM route_groups g
        LEFT JOIN route_price_configs c ON c.route_group_id = g.id AND c.status = 'active'
-       WHERE g.supplier_id = $1 AND g.status = 'active'
+       LEFT JOIN price_sets ps ON ps.id = c.price_set_id AND ps.status = 'active'
+       WHERE g.price_book_id = $1 AND g.status = 'active'
        ORDER BY g.tinh, g.name`,
-      [supplierId],
+      [priceBookId],
     );
 
     type GroupBundle = {
@@ -935,8 +1307,21 @@ export const routePricingService = {
       is_residual: boolean;
       province_code: string;
       tinh: string;
-      absolute: { id: number; pricing_mode: PricingMode; pallet_trip_price: number; tiers: RoutePriceTier[] } | null;
-      byPeriod: Map<number, { pallet_trip_price: number; tiers: RoutePriceTier[] }>;
+      price_set_id: number | null;
+      price_set_name: string | null;
+      set_mode: PricingMode | null;
+      has_pallet: boolean;
+      absolute: {
+        id: number;
+        pricing_mode: PricingMode;
+        pallet_trip_price: number | null;
+        pallet_manual_adjusted: boolean;
+        tiers: RoutePriceTier[];
+      } | null;
+      byPeriod: Map<
+        number,
+        { pallet_trip_price: number | null; pallet_manual_adjusted: boolean; tiers: RoutePriceTier[] }
+      >;
     };
 
     const bundles: GroupBundle[] = [];
@@ -948,6 +1333,10 @@ export const routePricingService = {
         is_residual: Boolean(group.is_residual),
         province_code: String(group.province_code),
         tinh: String(group.tinh),
+        price_set_id: group.price_set_id == null ? null : num(group.price_set_id),
+        price_set_name: group.price_set_name == null ? null : String(group.price_set_name),
+        set_mode: group.set_mode == null ? null : parsePricingMode(group.set_mode),
+        has_pallet: Boolean(group.has_pallet),
         absolute: null,
         byPeriod: new Map(),
       };
@@ -959,13 +1348,19 @@ export const routePricingService = {
         for (const version of versions.rows) {
           const tiers = await loadTiers(num(version.id));
           const periodId = num(version.adjustment_period_id);
-          const pallet = num(version.pallet_trip_price);
-          bundle.byPeriod.set(periodId, { pallet_trip_price: pallet, tiers });
+          const pallet = nullableNumber(version.pallet_trip_price);
+          const palletManual = Boolean(version.pallet_manual_adjusted);
+          bundle.byPeriod.set(periodId, {
+            pallet_trip_price: pallet,
+            pallet_manual_adjusted: palletManual,
+            tiers,
+          });
           if (version.base_version_id == null) {
             bundle.absolute = {
               id: num(version.id),
               pricing_mode: parsePricingMode(version.pricing_mode ?? 'by_weight'),
               pallet_trip_price: pallet,
+              pallet_manual_adjusted: palletManual,
               tiers,
             };
           }
@@ -974,148 +1369,28 @@ export const routePricingService = {
       bundles.push(bundle);
     }
 
-    type ExactWeightBucket = {
-      schema_key: string;
-      columnKeys: string[];
-      groups: GroupBundle[];
-    };
-
-    const exactBuckets = new Map<string, ExactWeightBucket>();
-    for (const bundle of bundles) {
-      if (!bundle.absolute || bundle.absolute.pricing_mode !== 'by_weight') continue;
-      const key = tierSchemaKey(bundle.absolute.tiers);
-      let bucket = exactBuckets.get(key);
-      if (!bucket) {
-        bucket = { schema_key: key, columnKeys: tierColumnKeys(bundle.absolute.tiers), groups: [] };
-        exactBuckets.set(key, bucket);
-      }
-      bucket.groups.push(bundle);
-    }
-
-    const weight_tables: PriceMatrixWeightTable[] = mergeCompatibleWeightBuckets([...exactBuckets.values()])
-      .map((cluster) => {
-        const groups = cluster.flatMap((b) => b.groups);
-        const columns = buildWeightColumnsFromTierLists(
-          groups.map((g) => g.absolute!.tiers),
-        );
-        const schema_key = columns
-          .filter((c) => c.kind === 'weight')
-          .map((c) => c.key)
-          .join('|');
-        const sortedGroups = [...groups].sort((a, b) =>
-          a.tinh === b.tinh ? a.name.localeCompare(b.name, 'vi') : a.tinh.localeCompare(b.tinh, 'vi'),
-        );
-        const rows = sortedGroups.map((bundle, index) => {
-          const cells: Record<string, Record<string, number | null>> = {};
-          for (const period of periods) {
-            const version = bundle.byPeriod.get(period.id);
-            const periodCells: Record<string, number | null> = {};
-            for (const col of columns) {
-              if (col.kind === 'pallet') {
-                periodCells[col.key] = version ? version.pallet_trip_price : null;
-                continue;
-              }
-              if (!version) {
-                periodCells[col.key] = null;
-                continue;
-              }
-              const tier = version.tiers.find(
-                (t) =>
-                  weightTierColumnKey({
-                    range_from: num(t.range_from),
-                    range_to: nullableNumber(t.range_to),
-                    pricing_unit: t.pricing_unit,
-                    min_billable_ton: nullableNumber(t.min_billable_ton),
-                  }) === col.key,
-              );
-              periodCells[col.key] = tier ? num(tier.price) : null;
-            }
-            cells[String(period.id)] = periodCells;
-          }
-          return {
-            stt: index + 1,
-            route_group_id: bundle.id,
-            group_name: bundle.name,
-            is_residual: bundle.is_residual,
-            province_code: bundle.province_code,
-            tinh: bundle.tinh,
-            cells,
-          };
-        });
-        return {
-          schema_key,
-          schema_label: schemaLabelFromColumns(columns),
-          columns,
-          rows,
-        };
-      })
-      .sort((a, b) => {
-        if (b.rows.length !== a.rows.length) return b.rows.length - a.rows.length;
-        return a.schema_key.localeCompare(b.schema_key);
-      });
-
-    const tripBundles = bundles
-      .filter((b) => b.absolute?.pricing_mode === 'by_trips')
-      .sort((a, b) =>
-        a.tinh === b.tinh ? a.name.localeCompare(b.name, 'vi') : a.tinh.localeCompare(b.tinh, 'vi'),
-      );
-
-    const tripsRows: PriceMatrixTripsRow[] = [];
-    let tripsStt = 0;
-    for (const bundle of tripBundles) {
-      const abs = bundle.absolute!;
-      const tierRows = [...abs.tiers].sort((a, b) => num(a.range_from) - num(b.range_from));
-      for (const tier of tierRows) {
-        tripsStt += 1;
-        const cells: Record<string, number | null> = {};
-        for (const period of periods) {
-          const version = bundle.byPeriod.get(period.id);
-          if (!version) {
-            cells[String(period.id)] = null;
-            continue;
-          }
-          const matched = version.tiers.find(
-            (t) =>
-              num(t.range_from) === num(tier.range_from) &&
-              nullableNumber(t.range_to) === nullableNumber(tier.range_to),
-          );
-          cells[String(period.id)] = matched ? num(matched.price) : null;
-        }
-        tripsRows.push({
-          stt: tripsStt,
-          route_group_id: bundle.id,
-          group_name: bundle.name,
-          is_residual: bundle.is_residual,
-          province_code: bundle.province_code,
-          tinh: bundle.tinh,
-          row_kind: 'trips',
-          trips_label: formatTripsTierLabel(tier),
-          range_from: num(tier.range_from),
-          range_to: nullableNumber(tier.range_to),
-          cells,
-        });
-      }
-    }
-
+    const set_tables = await buildSetTables(bundles, periods);
     return {
       periods,
-      weight_tables,
-      trips: { rows: tripsRows },
+      set_tables,
+      weight_tables: set_tables.filter((table) => table.pricing_mode === 'by_weight'),
+      truck_tables: set_tables.filter((table) => table.pricing_mode === 'by_truck'),
+      trips: { rows: [] },
     };
   },
 
   async createAbsolutePrice(data: {
     route_group_id: number;
     adjustment_period_id: number;
-    pricing_mode: PricingMode;
-    pallet_trip_price: number;
+    price_set_id: number;
+    pallet_trip_price?: number | null;
     tiers: RoutePriceTier[];
   }, userId: number): Promise<RoutePriceVersion> {
-    const mode = parsePricingMode(data.pricing_mode);
-    validateTiers(mode, data.tiers);
-    if (!(data.pallet_trip_price >= 0) || Number.isNaN(data.pallet_trip_price)) {
-      throw err('INVALID_TIERS', 'Giá Pallet phải ≥ 0');
-    }
+    const set = await priceSetService.getActive(data.price_set_id);
+    const priced = materializePricedTiers(set, data.tiers);
+    const pallet = normalizePallet(set, data.pallet_trip_price ?? null);
+    if (priced.length === 0 && pallet == null) throw err('PRICE_NOT_POSITIVE', 'Nhập ít nhất một bậc');
+    const mode = set.pricing_mode;
     const client = await pool.connect();
     try {
       await client.query('BEGIN');
@@ -1133,47 +1408,41 @@ export const routePricingService = {
 
       const group = await client.query(`SELECT id FROM route_groups WHERE id=$1 AND status='active' FOR UPDATE`, [data.route_group_id]);
       if (!group.rows[0]) throw err('NOT_FOUND');
-      let config = await client.query(`SELECT id FROM route_price_configs WHERE route_group_id=$1 FOR UPDATE`, [data.route_group_id]);
+      let config = await client.query(`SELECT id, price_set_id FROM route_price_configs WHERE route_group_id=$1 FOR UPDATE`, [data.route_group_id]);
       if (!config.rows[0]) {
-        try { config = await client.query(`INSERT INTO route_price_configs (route_group_id,created_by) VALUES ($1,$2) RETURNING id`, [data.route_group_id, userId]); }
+        try { config = await client.query(`INSERT INTO route_price_configs (route_group_id,price_set_id,created_by) VALUES ($1,$2,$3) RETURNING id, price_set_id`, [data.route_group_id, set.id, userId]); }
         catch (error) {
           if (!isPgUniqueViolation(error)) throw error;
-          config = await client.query(`SELECT id FROM route_price_configs WHERE route_group_id=$1 FOR UPDATE`, [data.route_group_id]);
+          config = await client.query(`SELECT id, price_set_id FROM route_price_configs WHERE route_group_id=$1 FOR UPDATE`, [data.route_group_id]);
           if (!config.rows[0]) throw error;
         }
       }
       const configId = config.rows[0].id;
       const existing = await client.query(`SELECT id FROM route_price_versions WHERE price_config_id=$1 LIMIT 1 FOR UPDATE`, [configId]);
       if (existing.rows[0]) throw err('ABSOLUTE_UPDATE_FORBIDDEN');
+      await client.query(`UPDATE route_price_configs SET price_set_id=$1 WHERE id=$2`, [set.id, configId]);
 
       const absolute = await client.query(
         `INSERT INTO route_price_versions
           (price_config_id,pricing_mode,pallet_trip_price,adjustment_period_id,created_by)
          VALUES ($1,$2,$3,$4,$5) RETURNING *`,
-        [configId, mode, data.pallet_trip_price, data.adjustment_period_id, userId],
+        [configId, mode, pallet, data.adjustment_period_id, userId],
       );
-      await insertTiers(client, absolute.rows[0].id, mode, data.tiers);
+      await insertTiers(client, absolute.rows[0].id, mode, priced);
 
       let prevId = absolute.rows[0].id;
-      let prevPallet = data.pallet_trip_price;
-      let prevTiers = data.tiers.map((t) => ({ ...t }));
+      let prevPallet = pallet;
+      let prevTiers = priced.map((t) => ({ ...t }));
 
       for (const period of laterPeriods.rows) {
         const percent = num(period.percent);
         const scaledTiers = scaleTiers(prevTiers, percent);
-        const scaledPallet = roundToThousands(num(prevPallet) * (1 + percent / 100));
+        const scaledPallet = scaleNullablePallet(prevPallet, percent);
         const version = await client.query(
           `INSERT INTO route_price_versions
             (price_config_id,pricing_mode,pallet_trip_price,base_version_id,adjustment_period_id,created_by)
            VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,
-          [
-            configId,
-            mode,
-            scaledPallet,
-            prevId,
-            period.id,
-            userId,
-          ],
+          [configId, mode, scaledPallet, prevId, period.id, userId],
         );
         await insertTiers(client, version.rows[0].id, mode, scaledTiers);
         prevId = version.rows[0].id;
@@ -1193,25 +1462,30 @@ export const routePricingService = {
   async updateAbsolutePrice(
     routeGroupId: number,
     data: {
-      pricing_mode: PricingMode;
-      pallet_trip_price: number;
+      price_set_id?: number;
+      pallet_trip_price?: number | null;
       tiers: RoutePriceTier[];
     },
     userId: number,
   ): Promise<RoutePriceVersion> {
-    const mode = parsePricingMode(data.pricing_mode);
-    validateTiers(mode, data.tiers);
-    if (!(data.pallet_trip_price >= 0) || Number.isNaN(data.pallet_trip_price)) {
-      throw err('INVALID_TIERS', 'Giá Pallet phải ≥ 0');
-    }
     const client = await pool.connect();
     try {
       await client.query('BEGIN');
       const config = await client.query(
-        `SELECT id FROM route_price_configs WHERE route_group_id=$1 AND status='active' FOR UPDATE`,
+        `SELECT id, price_set_id FROM route_price_configs WHERE route_group_id=$1 AND status='active' FOR UPDATE`,
         [routeGroupId],
       );
       if (!config.rows[0]) throw err('NOT_FOUND');
+      const boundSetId = config.rows[0].price_set_id == null ? null : num(config.rows[0].price_set_id);
+      if (boundSetId == null) throw err('NOT_FOUND', 'Nhóm chưa gắn bộ giá');
+      if (data.price_set_id != null && num(data.price_set_id) !== boundSetId) {
+        throw err('PRICE_SET_LOCKED', 'Muốn đổi bộ giá, xóa giá rồi nhập lại');
+      }
+      const set = await priceSetService.getActive(boundSetId, client);
+      const priced = materializePricedTiers(set, data.tiers);
+      const pallet = normalizePallet(set, data.pallet_trip_price ?? null);
+      if (priced.length === 0 && pallet == null) throw err('PRICE_NOT_POSITIVE', 'Nhập ít nhất một bậc');
+      const mode = set.pricing_mode;
       const absolute = await client.query(
         `${VERSION_SELECT} ${VERSION_JOIN}
          WHERE v.price_config_id=$1 AND v.base_version_id IS NULL
@@ -1222,15 +1496,43 @@ export const routePricingService = {
       const absoluteId = absolute.rows[0].id;
       const basePeriodId = absolute.rows[0].adjustment_period_id;
       const baseStart = toDateOnly(absolute.rows[0].period_start_date);
+      const oldMode = parsePricingMode(absolute.rows[0].pricing_mode ?? 'by_weight');
+      const oldPallet = num(absolute.rows[0].pallet_trip_price);
+      const oldPalletManual = Boolean(absolute.rows[0].pallet_manual_adjusted);
+      const oldTiers = await loadTiers(absoluteId, client);
+      const oldByKey = new Map(
+        oldTiers.map((t) => [
+          tierFingerprint(oldMode, t),
+          { price: num(t.price), is_manual_adjusted: Boolean(t.is_manual_adjusted) },
+        ]),
+      );
 
       await client.query(
         `UPDATE route_price_versions
-         SET pricing_mode=$1, pallet_trip_price=$2
-         WHERE id=$3`,
-        [mode, data.pallet_trip_price, absoluteId],
+         SET pricing_mode=$1, pallet_trip_price=$2,
+             pallet_manual_adjusted=$3
+         WHERE id=$4`,
+        [
+          mode,
+          pallet,
+          pallet != null && oldPallet === pallet ? oldPalletManual : false,
+          absoluteId,
+        ],
       );
       await client.query(`DELETE FROM route_price_tiers WHERE price_version_id=$1`, [absoluteId]);
-      await insertTiers(client, absoluteId, mode, data.tiers);
+      await insertTiers(client, absoluteId, mode, priced);
+
+      const insertedTiers = await loadTiers(absoluteId, client);
+      for (const tier of insertedTiers) {
+        const prev = oldByKey.get(tierFingerprint(mode, tier));
+        const keep =
+          prev != null && num(prev.price) === num(tier.price) && Boolean(prev.is_manual_adjusted);
+        if (keep) {
+          await client.query(`UPDATE route_price_tiers SET is_manual_adjusted=TRUE WHERE id=$1`, [
+            tier.id,
+          ]);
+        }
+      }
 
       const later = await client.query(
         `SELECT v.id FROM route_price_versions v
@@ -1249,16 +1551,19 @@ export const routePricingService = {
           [baseStart],
         );
         let prevId = absoluteId;
-        let prevPallet = data.pallet_trip_price;
-        let prevTiers = data.tiers.map((t) => ({ ...t }));
+        let prevPallet = pallet;
+        let prevTiers = priced.map((t) => ({ ...t, is_manual_adjusted: false }));
         for (const period of laterPeriods.rows) {
           const percent = num(period.percent);
-          const scaledTiers = scaleTiers(prevTiers, percent);
-          const scaledPallet = roundToThousands(num(prevPallet) * (1 + percent / 100));
+          const scaledTiers = scaleTiers(prevTiers, percent).map((t) => ({
+            ...t,
+            is_manual_adjusted: false,
+          }));
+          const scaledPallet = scaleNullablePallet(prevPallet, percent);
           const version = await client.query(
             `INSERT INTO route_price_versions
-              (price_config_id,pricing_mode,pallet_trip_price,base_version_id,adjustment_period_id,created_by)
-             VALUES ($1,$2,$3,$4,$5,$6) RETURNING id`,
+              (price_config_id,pricing_mode,pallet_trip_price,base_version_id,adjustment_period_id,created_by,pallet_manual_adjusted)
+             VALUES ($1,$2,$3,$4,$5,$6,FALSE) RETURNING id`,
             [
               config.rows[0].id,
               mode,
@@ -1285,50 +1590,255 @@ export const routePricingService = {
     }
   },
 
-  async lookup(params: { supplier_id: number; province_code?: string; ward_code?: string; location_text?: string; note?: string; tinh?: string; phuong?: string; weight_mt?: number; trips_per_vehicle_day?: number | null; is_pallet?: boolean; as_of?: string }): Promise<LookupResult> {
-    if (!params.supplier_id) throw err('MISSING_SUPPLIER');
-    let provinceCode = params.province_code;
-    let wardCode = params.ward_code;
-    if (!provinceCode && params.tinh) provinceCode = (await pool.query<{ code: string }>(`SELECT code FROM provinces WHERE name ILIKE $1 OR full_name ILIKE $1 LIMIT 1`, [params.tinh.trim()])).rows[0]?.code;
-    if (!provinceCode && params.phuong) {
-      const route = await pool.query<{ province_code: string; ward_code: string | null }>(`SELECT province_code,ward_code FROM delivery_routes WHERE supplier_id=$1 AND status='active' AND (phuong ILIKE $2 OR location_text ILIKE $2) LIMIT 1`, [params.supplier_id, params.phuong.trim()]);
-      provinceCode = route.rows[0]?.province_code; wardCode ||= route.rows[0]?.ward_code ?? undefined;
+  async deleteGroupPrices(routeGroupId: number): Promise<void> {
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      const config = await client.query(
+        `SELECT id FROM route_price_configs WHERE route_group_id=$1 FOR UPDATE`,
+        [routeGroupId],
+      );
+      if (!config.rows[0]) throw err('NOT_FOUND', 'Nhóm chưa có giá');
+      const versions = await client.query(
+        `SELECT id FROM route_price_versions WHERE price_config_id=$1`,
+        [config.rows[0].id],
+      );
+      await deleteVersionsByIds(client, versions.rows.map((row) => num(row.id)));
+      await client.query(`UPDATE route_price_configs SET price_set_id=NULL WHERE id=$1`, [config.rows[0].id]);
+      await client.query('COMMIT');
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
     }
-    if (!wardCode && params.phuong && provinceCode) wardCode = (await pool.query<{ code: string }>(`SELECT code FROM wards WHERE province_code=$1 AND (name ILIKE $2 OR full_name ILIKE $2) LIMIT 1`, [provinceCode, params.phuong.trim()])).rows[0]?.code;
-    if (!provinceCode) throw err('NOT_FOUND', 'Không tìm thấy tỉnh');
-    const note = noteKey(params.note);
-    const member = await pool.query(
-      `SELECT g.id,g.name,g.is_residual FROM delivery_routes r JOIN route_group_members m ON m.route_id=r.id JOIN route_groups g ON g.id=m.route_group_id AND g.status='active'
-       WHERE r.supplier_id=$1 AND r.province_code=$2 AND r.status='active' AND COALESCE(NULLIF(TRIM(r.note),''),'')=$3 AND COALESCE(NULLIF(TRIM(g.note),''),'')=$3
-       AND (($4::text IS NOT NULL AND r.ward_code=$4) OR ($5::text IS NOT NULL AND LOWER(TRIM(r.location_text))=LOWER(TRIM($5)) ) OR ($6::text IS NOT NULL AND LOWER(TRIM(r.location_text))=LOWER(TRIM($6)))) LIMIT 1`,
-      [params.supplier_id, provinceCode, note, wardCode ?? null, params.location_text ?? null, params.phuong ?? null],
-    );
-    const group = member.rows[0] ?? (await pool.query(
-      `SELECT id,name,is_residual FROM route_groups WHERE supplier_id=$1 AND province_code=$2 AND is_residual=TRUE AND status='active' AND COALESCE(NULLIF(TRIM(note),''),'')=$3 LIMIT 1`,
-      [params.supplier_id, provinceCode, note],
-    )).rows[0];
-    if (!group) throw err('NOT_FOUND', 'Không tìm thấy nhóm giá');
-    const config = await pool.query(`SELECT id FROM route_price_configs WHERE route_group_id=$1 AND status='active'`, [group.id]);
-    if (!config.rows[0]) throw err('NOT_FOUND', 'Nhóm chưa có bảng giá');
-    const asOf = params.as_of || new Date().toISOString().slice(0, 10);
-    const version = await pool.query(
-      `${VERSION_SELECT} ${VERSION_JOIN}
-       WHERE v.price_config_id=$1 AND p.start_date <= $2::date AND (p.end_date IS NULL OR p.end_date > $2::date)
-       ORDER BY p.start_date DESC LIMIT 1`,
-      [config.rows[0].id, asOf],
-    );
-    if (!version.rows[0]) throw err('NOT_FOUND', 'Không có phiên bản giá hiệu lực');
-    const value = version.rows[0];
-    const mode = parsePricingMode(value.pricing_mode ?? 'by_weight');
-    const pallet = num(value.pallet_trip_price);
-    const effectiveFrom = toDateOnly(value.period_start_date);
-    if (params.is_pallet) return { route_group_id: group.id, group_name: group.name, is_residual: group.is_residual, price_version_id: value.id, effective_from: effectiveFrom, is_pallet: true, khung_label: 'Pallet', don_vi: 'Chuyến', pricing_unit: 'chuyen', price: pallet, billable_ton: null, pallet_trip_price: pallet };
-    if (mode === 'by_weight' && (params.weight_mt == null || Number.isNaN(params.weight_mt))) {
-      throw err('INVALID_TIERS', 'Thiếu weight_mt');
+  },
+
+  async manualAdjustVersion(
+    versionId: number,
+    data: {
+      pallet_trip_price: number | null;
+      tiers: { id: number; price: number }[];
+      added_tiers?: { price_set_tier_id: number; price: number }[];
+    },
+    _userId: number,
+  ): Promise<RoutePriceVersion> {
+    for (const tier of data.tiers) {
+      if (!(num(tier.price) > 0) || Number.isNaN(num(tier.price))) {
+        throw err('PRICE_NOT_POSITIVE', 'Giá phải lớn hơn 0');
+      }
     }
-    const weight = params.weight_mt ?? 0;
-    const tier = matchTier(mode, await loadTiers(value.id), weight, params.trips_per_vehicle_day);
-    const billable = tier.pricing_unit === 'tan' ? Math.max(weight, num(tier.min_billable_ton ?? weight)) : null;
-    return { route_group_id: group.id, group_name: group.name, is_residual: group.is_residual, price_version_id: value.id, effective_from: effectiveFrom, is_pallet: false, khung_label: khungLabel(mode, tier), don_vi: tier.pricing_unit === 'chuyen' ? 'Chuyến' : 'Tấn', pricing_unit: tier.pricing_unit, price: num(tier.price), billable_ton: billable, pallet_trip_price: pallet };
+
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      const versionRes = await client.query(
+        `${VERSION_SELECT} ${VERSION_JOIN} WHERE v.id=$1 FOR UPDATE OF v`,
+        [versionId],
+      );
+      if (!versionRes.rows[0]) throw err('NOT_FOUND');
+      const row = versionRes.rows[0];
+      const mode = parsePricingMode(row.pricing_mode ?? 'by_weight');
+      const oldPallet = nullableNumber(row.pallet_trip_price);
+      const incomingPallet = data.pallet_trip_price == null ? null : num(data.pallet_trip_price);
+      const addingPallet = oldPallet == null && incomingPallet != null;
+      if (oldPallet != null && !(incomingPallet != null && incomingPallet > 0)) {
+        throw err('PRICE_NOT_POSITIVE', 'Giá phải lớn hơn 0');
+      }
+      if (addingPallet && !(incomingPallet != null && incomingPallet > 0)) {
+        throw err('PRICE_NOT_POSITIVE', 'Giá phải lớn hơn 0');
+      }
+      const configId = num(row.price_config_id);
+      const baseStart = toDateOnly(row.period_start_date);
+      const existingTiers = await loadTiers(versionId, client);
+
+      if (data.tiers.length !== existingTiers.length) {
+        throw err('INVALID_TIERS', 'Danh sách bậc không khớp');
+      }
+      const addedIncoming = data.added_tiers ?? [];
+      let addedPriced: RoutePriceTier[] = [];
+      if (addedIncoming.length > 0 || addingPallet) {
+        const configSet = await client.query(
+          `SELECT price_set_id FROM route_price_configs WHERE id=$1`,
+          [configId],
+        );
+        const setId = configSet.rows[0]?.price_set_id;
+        if (setId == null) throw err('NOT_FOUND', 'Nhóm chưa gắn bộ giá');
+        const set = await priceSetService.getActive(num(setId), client);
+        if (addingPallet && !set.has_pallet) {
+          throw err('PALLET_NOT_IN_SET', 'Bộ giá không có pallet');
+        }
+        if (addedIncoming.length > 0) {
+          addedPriced = materializePricedTiers(set, addedIncoming);
+          const existingSetIds = new Set(
+            existingTiers
+              .map((t) => (t.price_set_tier_id == null ? null : num(t.price_set_tier_id)))
+              .filter((id): id is number => id != null),
+          );
+          for (const tier of addedPriced) {
+            if (tier.price_set_tier_id == null || existingSetIds.has(num(tier.price_set_tier_id))) {
+              throw err('INVALID_TIERS', 'Bậc đã có trên kỳ này');
+            }
+          }
+        }
+      }
+      const byId = new Map(existingTiers.map((t) => [num(t.id), t]));
+      const seen = new Set<number>();
+      for (const incoming of data.tiers) {
+        const id = num(incoming.id);
+        if (!byId.has(id)) throw err('INVALID_TIERS', 'Bậc không thuộc phiên bản này');
+        if (seen.has(id)) throw err('INVALID_TIERS', 'Bậc trùng id');
+        seen.add(id);
+      }
+
+      const palletChanged = oldPallet !== incomingPallet;
+      const changedKeys = new Set<string>();
+      if (palletChanged) changedKeys.add('pallet');
+
+      const nextTierPrices = new Map<number, number>();
+      for (const incoming of data.tiers) {
+        const id = num(incoming.id);
+        const old = byId.get(id)!;
+        nextTierPrices.set(id, num(incoming.price));
+        if (num(old.price) !== num(incoming.price)) {
+          changedKeys.add(tierFingerprint(mode, old));
+        }
+      }
+
+      await client.query(
+        `UPDATE route_price_versions
+         SET pallet_trip_price=$1,
+             pallet_manual_adjusted = CASE WHEN $2 THEN TRUE ELSE pallet_manual_adjusted END
+         WHERE id=$3`,
+        [incomingPallet, palletChanged, versionId],
+      );
+
+      for (const incoming of data.tiers) {
+        const id = num(incoming.id);
+        const old = byId.get(id)!;
+        const priceChanged = num(old.price) !== num(incoming.price);
+        await client.query(
+          `UPDATE route_price_tiers
+           SET price=$1,
+               is_manual_adjusted = CASE WHEN $2 THEN TRUE ELSE is_manual_adjusted END
+           WHERE id=$3`,
+          [incoming.price, priceChanged, id],
+        );
+      }
+
+      for (const tier of addedPriced) {
+        await insertCopiedTier(client, versionId, mode, tier, num(tier.price), true);
+        changedKeys.add(tierFingerprint(mode, tier));
+      }
+
+      if (changedKeys.size > 0 || addedPriced.length > 0) {
+        const laterPeriods = await client.query(
+          `SELECT p.* FROM route_pricing_adjustment_periods p
+           WHERE p.start_date > $1::date
+           ORDER BY p.start_date ASC`,
+          [baseStart],
+        );
+
+        let prevPallet: number | null = incomingPallet;
+        let prevTierByKey = new Map(
+          existingTiers.map((t) => {
+            const key = tierFingerprint(mode, t);
+            const price = nextTierPrices.get(num(t.id)) ?? num(t.price);
+            return [key, price] as const;
+          }),
+        );
+        for (const added of addedPriced) {
+          prevTierByKey.set(tierFingerprint(mode, added), num(added.price));
+        }
+
+        for (const period of laterPeriods.rows) {
+          const percent = num(period.percent);
+          const laterVersion = await client.query(
+            `SELECT v.* FROM route_price_versions v
+             WHERE v.price_config_id=$1 AND v.adjustment_period_id=$2
+             FOR UPDATE`,
+            [configId, period.id],
+          );
+          if (!laterVersion.rows[0]) continue;
+          const laterId = num(laterVersion.rows[0].id);
+          const laterTiers = await loadTiers(laterId, client);
+          const nextPrevTier = new Map(prevTierByKey);
+
+          if (changedKeys.has('pallet') && prevPallet != null) {
+            const scaledPallet = scaleNullablePallet(prevPallet, percent);
+            await client.query(
+              `UPDATE route_price_versions
+               SET pallet_trip_price=$1, pallet_manual_adjusted=FALSE
+               WHERE id=$2`,
+              [scaledPallet, laterId],
+            );
+            prevPallet = scaledPallet;
+          } else {
+            prevPallet = nullableNumber(laterVersion.rows[0].pallet_trip_price);
+          }
+
+          const laterBySetId = new Map(
+            laterTiers
+              .filter((t) => t.price_set_tier_id != null)
+              .map((t) => [num(t.price_set_tier_id), t] as const),
+          );
+          for (const added of addedPriced) {
+            const setTierId = num(added.price_set_tier_id);
+            const key = tierFingerprint(mode, added);
+            const prevPrice = prevTierByKey.get(key);
+            if (prevPrice == null) continue;
+            const scaled = roundToThousands(prevPrice * (1 + percent / 100));
+            const existingLater = laterBySetId.get(setTierId);
+            if (existingLater?.id != null) {
+              await client.query(
+                `UPDATE route_price_tiers SET price=$1, is_manual_adjusted=FALSE WHERE id=$2`,
+                [scaled, existingLater.id],
+              );
+            } else {
+              await insertCopiedTier(client, laterId, mode, added, scaled, false);
+            }
+            nextPrevTier.set(key, scaled);
+          }
+
+          for (const laterTier of laterTiers) {
+            const key = tierFingerprint(mode, laterTier);
+            if (!changedKeys.has(key)) {
+              nextPrevTier.set(key, num(laterTier.price));
+              continue;
+            }
+            const prevPrice = prevTierByKey.get(key);
+            if (prevPrice == null) continue;
+            const scaled = roundToThousands(prevPrice * (1 + percent / 100));
+            await client.query(
+              `UPDATE route_price_tiers
+               SET price=$1, is_manual_adjusted=FALSE
+               WHERE id=$2`,
+              [scaled, laterTier.id],
+            );
+            nextPrevTier.set(key, scaled);
+          }
+          prevTierByKey = nextPrevTier;
+        }
+      }
+
+      await client.query('COMMIT');
+      return mapVersionRow(await loadVersionRow(versionId), await loadTiers(versionId));
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  },
+
+  listPriceSets: () => priceSetService.list(),
+  createPriceSet: priceSetService.create.bind(priceSetService),
+  renamePriceSet: priceSetService.rename.bind(priceSetService),
+  addPriceSetTier: priceSetService.addTier.bind(priceSetService),
+  replacePriceSetStructure: priceSetService.replaceStructure.bind(priceSetService),
+  deactivatePriceSet: priceSetService.deactivate.bind(priceSetService),
+
+  async lookup(_params?: unknown): Promise<LookupResult> {
+    throw err('LOOKUP_DEFERRED', 'Lookup sẽ được cập nhật sau khi chuyển sang bảng giá');
   },
 };

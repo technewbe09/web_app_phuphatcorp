@@ -633,6 +633,7 @@ customers (
   tuyen_phuong VARCHAR(255),                  -- Tuyến-phường (nullable)
   tuyen_cu VARCHAR(255),                      -- Tuyến cũ (nullable)
   dia_chi_giao_hang TEXT,                     -- Địa chỉ giao hàng (nullable)
+  diem_giao_hang_tinh_phi VARCHAR(255),       -- Điểm giao hàng tính phí (nullable, optional text)
   boc_xep BOOLEAN NOT NULL DEFAULT TRUE,      -- Có bốc xếp không
   status VARCHAR(20) NOT NULL DEFAULT 'active', -- 'active' | 'deactive'
   created_by INTEGER FK→users.id,
@@ -647,11 +648,12 @@ customers (
 - BR-003: Create → 409 nếu diem_tra_hang đã tồn tại (active record)
 - BR-004: Update → 409 nếu diem_tra_hang conflict với record khác
 - BR-005: Upload fail-fast — nếu bất kỳ dòng nào lỗi → không insert gì cả, trả 422 + error list
-- BR-006: Cột boc_xep trong Excel: "Không"/"Khong" (case-insensitive) → false; rỗng/other → true
+- BR-006: `boc_xep` không còn được form hoặc upload ghi. Cột DB giữ default. Cờ trên UI đã bỏ. Có bốc xếp chỉ biết qua lookup phụ phí.
 - BR-007: Excel column order (positional, col index từ 0): col0=Điểm trả hàng, col1=Tuyến-phường, col2=Tuyến-cũ, col3=bỏ qua, col4=Tên khách hàng, col5=Địa chỉ giao hàng, col6=Bốc xếp
 - BR-008: fetchAll → chỉ trả active records
 - BR-009: Liên kết N-N với `suppliers` qua junction table `customer_suppliers`, tự động populate khi import `delivery_data` (match `ten_kh` → `ten_khach_hang`, `ma_ncc` → `supplier_code`)
 - BR-010: Response `list()` include `suppliers: [{ supplier_code, name }]` dạng JSON array
+- BR-011: `diem_giao_hang_tinh_phi` optional text (VARCHAR 255). Rỗng / whitespace → `null`. Không unique, không FK. Excel: map nếu có header “Điểm giao hàng tính phí” (alias GHTP); thiếu cột → `null`, không fail.
 
 **Junction table — `customer_suppliers`:**
 ```sql
@@ -691,7 +693,8 @@ User chọn/kéo thả .xlsx
 **Files:**
 ```
 backend/src/migrations/012_create_customers.sql
-backend/src/migrations/019_create_customer_suppliers.sql
+backend/src/migrations/020_add_supplier_code_to_customers.sql
+backend/src/migrations/043_add_diem_giao_hang_tinh_phi_to_customers.sql
 backend/src/services/customerService.ts
 backend/src/services/deliveryDataService.ts  (gọi populateCustomerSuppliers sau import)
 backend/src/controllers/customerController.ts
@@ -788,6 +791,80 @@ frontend/src/components/accounting-data/InvoiceNumbersPopup.tsx
 **Permissions:** Same as weight-adjustments — `accounting_data.view` / `accounting_data.manage`
 
 **Access:** Route `/vehicle-data/driver-invoices`, sidebar menu "Quản lý dữ liệu xe" → "Hóa đơn tài xế"
+
+---
+
+### 11.4 Lên bảng kê thô 5 nhà & Xử lý ND-MCC (/accounting-data/bang-ke-tho)
+
+**Mục đích:** Lưu trữ các đợt file Excel sau bước xử lý dữ liệu giao hàng 5 nhà (chứa sheet `Processed`), tự động bóc tách và sinh bảng kê thô 8 sheets cho 2 nhà cung cấp ND-MCC (MCC `2000000007` & NDFC `2000000008`) kèm tra cứu khách hàng, giá cước và biểu phụ phí.
+
+**Data model:**
+- `bang_ke_tho_batches`: Quản lý đợt upload (file gốc lưu tại MinIO `batches/{batch_id}/input.xlsx`).
+- `bang_ke_tho_outputs`: Trạng thái bảng kê theo nhà (`nd_mcc`, `clv`, `calofic`). Trạng thái: `pending` | `ready` | `failed`. File output lưu tại `batches/{batch_id}/outputs/{house_code}.xlsx`.
+
+**Quy tắc sinh sheets ND-MCC:**
+- **Toàn vẹn Workbook Output:** File output chỉ giữ lại các sheets cơ sở (`NCC`, `Sheet1`, `Processed`, và sinh `Processed v2`) từ file input (tự động xóa bỏ các sheets không thuộc scope như `VFM`, `CLV`, `STHI`, `Process 1-8`, `Sheet31-8`, v.v.), và sinh thêm 8 sheets bảng kê nghiệp vụ ND-MCC (tổng cộng 12 sheets theo thứ tự chuẩn):
+1. `NCC`
+2. `Sheet1`
+3. `Processed`
+4. `Processed v2`: Nhân bản từ `Processed`, ép kiểu số (`number`) cho các cột text số lượng/trọng lượng (O, P, Q), hoán đổi cột `5 nhà` trước cột `CLF` (header màu xanh lá `#00B050`, chữ trắng in đậm), thêm cột `Gạo` sau `NDFC`, xác định lại `Khung giá` theo tải trọng thực của chuyến xe từ cột `5 nhà` (tô nền vàng `#FFE599` và gắn Cell Note lưu khung giá cũ khi thay đổi).
+5. `MCC (goc)`: Chi tiết từng dòng sản phẩm MCC (68 cột, công thức Excel chuẩn: Hóa đơn, Round MT, Tấn/Hóa đơn, Tấn/Chuyến, Đơn giá vận chuyển, Phụ phí, Thành tiền check, Thành tiền hóa đơn, 5 nhà).
+6. `MCC-clv`: Tổng hợp 1 dòng/hóa đơn nhánh kho Hiệp Phước (Slot `CALOFIC HP`).
+7. `MCC (uni)`: Tổng hợp 1 dòng/hóa đơn nhánh kho Unidepot (Slot `WH Unidepot`, Site `UNI-MCC`).
+8. `MCC (tt)`: Tổng hợp 1 dòng/hóa đơn nhánh tiếp thị / chuyển tải (Slot `UNI 1`).
+9. `NDFC (goc)`: Chi tiết từng dòng sản phẩm NDFC (68 cột).
+10. `NDFC-clv`: Tổng hợp nhánh kho Hiệp Phước (Slot `CALOFIC HP`).
+11. `NDFC (uni)`: Tổng hợp nhánh kho Unidepot (Slot `UNI 3`, Site `UNI-NDFC`).
+12. `NDFC (tt)`: Tổng hợp nhánh tiếp thị / chuyển tải (Slot `UNI 1`).
+
+- **Bố cục 2 Bảng trên cùng sheet (Table A & Table B):**
+  - **Bảng A (> 2.5 tấn):** Nhóm theo chuyến xe (`truckNo` + `invoiceDateIso`). Ngay sau mỗi chuyến xe có dòng `Tổng cộng` từng xe. Cuối Bảng A có dòng `TỔNG CỘNG A` với công thức chia đôi `=SUM(...)/2`.
+  - **Khoảng cách:** 6 dòng trống giữa Bảng A và Bảng B.
+  - **Bảng B (`≤2.5 tấn`):** Lặp lại dòng Header, danh sách hóa đơn liên tục và kết thúc bằng dòng `TỔNG CỘNG B` với công thức `=SUM(...)` tính trực tiếp.
+  - **Quy tắc Khung giá Pallet:** Các sub-sheet tóm tắt hiển thị text `'Pallet'` tại cột Khung giá (cột 11), cột Hóa đơn tự động sinh `(Pallet)`, đồng thời ô Khung giá được gắn Note lưu trữ khung giá gốc chi tiết ban đầu.
+
+**Lookup Rules:**
+- Khách hàng: Tra cứu `customers` theo cặp `(ten_khach_hang, dia_chi_giao_hang)` lấy `diem_tra_hang` (Đại lý), `tuyen_phuong` (Điểm giao hàng thực tế), `diem_giao_hang_tinh_phi` (Điểm tính phí). Sử dụng tiện ích `addressMatcher`:
+  - Chuẩn hóa khoảng trắng, dấu phân cách, bỏ tiền tố "thửa đất số ...".
+  - So khớp chuỗi con (`substring match`) và độ trùng lặp từ khóa (`token overlap >= 75%`).
+  - Đánh dấu Khớp một phần (Partial match): tô nền vàng `#FFF2CC` và gắn Note ghi rõ địa chỉ gốc từ DB trên ô `Địa chỉ giao hàng` của cả `Processed` và `Processed v2`.
+- Giá cước: Tra cứu `route_pricing` theo Điểm tính phí, Khung giá (`≤2.5 tấn`, `>8-16 tấn`, `>16-23 tấn`, `>23 tấn`), Ngày hóa đơn, ưu tiên Price Book theo nhà và slot. Để trống (`null`) nếu không tìm thấy.
+- Phụ phí: Tra cứu `customer_surcharge_rules` lấy phí bốc xếp, chuyển tải, ghép điểm. Để trống (`null`) nếu không tìm thấy.
+
+**API Endpoints:**
+```
+GET    /api/bang-ke-tho/batches                     → Danh sách đợt (accounting_data.view)
+POST   /api/bang-ke-tho/batches                     → Upload đợt mới (accounting_data.manage)
+GET    /api/bang-ke-tho/batches/:id/files/input     → Tải file input gốc (accounting_data.view)
+POST   /api/bang-ke-tho/batches/:id/process-nd-mcc  → Kích hoạt xử lý bảng kê ND-MCC (accounting_data.manage)
+GET    /api/bang-ke-tho/batches/:id/files/:houseCode→ Tải file output nhà (accounting_data.view)
+DELETE /api/bang-ke-tho/batches/:id                 → Xóa đợt (accounting_data.manage)
+```
+
+**Files:**
+```
+backend/src/constants/bangKeTho.ts
+backend/src/services/bangKeTho/index.ts
+backend/src/services/bangKeTho/ndMccEngine.ts
+backend/src/services/bangKeTho/pricingLookup.ts
+backend/src/services/bangKeTho/processedV2.ts
+backend/src/utils/addressMatcher.ts
+backend/src/utils/routeMatcher.ts
+backend/src/controllers/bangKeThoController.ts
+backend/src/routes/bangKeTho.ts
+backend/src/__tests__/bangKeThoNdMccEngine.test.ts
+backend/src/__tests__/bangKeThoProcessedV2.test.ts
+backend/src/__tests__/addressMatcher.test.ts
+backend/src/__tests__/bangKeThoService.test.ts
+frontend/src/api/bangKeThoApi.ts
+frontend/src/hooks/useBangKeTho.ts
+frontend/src/components/bang-ke-tho/BangKeThoHouseCell.tsx
+frontend/src/components/bang-ke-tho/BangKeThoTable.tsx
+frontend/src/pages/admin/accounting-data/BangKeThoPage.tsx
+```
+
+**Access:** Route `/accounting-data/bang-ke-tho`, sidebar menu "Dữ liệu kế toán" → "Lên bảng kê thô 5 nhà".  
+**Permissions:** `accounting_data.view` (xem/tải), `accounting_data.manage` (upload/xử lý/xóa).
 
 ---
 
@@ -1021,32 +1098,47 @@ frontend/src/components/admin/data-scope/DataScopeBadge.tsx
 
 ## 11. Giá theo tuyến (`route_pricing`)
 
-Menu sidebar top-level **Giá theo tuyến** — không nằm trong accordion.
+Menu sidebar accordion **Quản lý giá cước vận tải** (không phải mục top-level). Bốn route: `/route-pricing/periods`, `/sets`, `/routes`, `/matrix`. `/route-pricing` redirect theo `?tab=` cũ.
 
-### 11.1 Giá theo tuyến (/route-pricing)
+### 11.1 Giá theo tuyến
 
-**Mục đích:** Quản lý kỳ điều chỉnh giá, nhóm tuyến theo NCC, bảng giá gốc / điều chỉnh theo kỳ, xem ma trận giá, và lookup phục vụ Delivery Import.
+**Mục đích:** Catalog **bộ giá** (khung, không chứa số), kỳ điều chỉnh global, nhóm tuyến theo **bảng giá**, giá gốc / điều chỉnh theo kỳ, ma trận theo bộ. Lookup Delivery Import **chưa** gắn (501 LOOKUP_DEFERRED).
 
 **Data model — bảng chính:**
 ```sql
+price_books (
+  id, name VARCHAR unique active (lower trim), status, created_by, updated_by, ...
+)
 route_pricing_adjustment_periods (
   id, start_date DATE, end_date DATE nullable,  -- end_date do BE tự quản
   percent NUMERIC ≠ 0, note TEXT, created_by, updated_by, created_at, updated_at
 )
 route_groups (
-  id, supplier_id, name, province_code, tinh, is_residual,
+  id, price_book_id, name, province_code, tinh, is_residual,
   note TEXT, status, created_by, updated_by, ...
 )
 delivery_routes (… ward_code XOR location_text, note …) + route_group_members
-route_price_configs (id, route_group_id, status, …)
+price_sets (
+  id, name, pricing_mode, has_pallet, fingerprint TEXT, status active|deactive, audit…
+  UNIQUE lower(trim(name)) WHERE active; UNIQUE fingerprint WHERE active
+)
+price_set_tiers (
+  id, price_set_id, sort_order, range_from, range_to, pricing_unit, min_billable_ton, label
+)
+route_price_configs (id, route_group_id, price_set_id NULL FK, status, …)
 route_price_versions (
-  id, price_config_id, pricing_mode ('by_weight'|'by_trips'),
-  pallet_trip_price, base_version_id nullable,
+  id, price_config_id, pricing_mode ('by_weight'|'by_trips'|'by_truck'),
+  pallet_trip_price NUMERIC NULL,  -- NULL = không có pallet; cấm 0 mới
+  pallet_manual_adjusted BOOLEAN DEFAULT FALSE,
+  base_version_id nullable,
   adjustment_period_id NOT NULL FK → periods,
   created_by, created_at
 )
 route_price_tiers (
-  id, price_version_id, range_from, range_to, pricing_unit, price, min_billable_ton, sort_order
+  id, price_version_id, price_set_tier_id NOT NULL FK,
+  range_from, range_to, pricing_unit, price, min_billable_ton, sort_order, label,
+  is_manual_adjusted BOOLEAN DEFAULT FALSE
+  -- range/label copy từ bộ; nguồn sự thật là price_set_tiers
 )
 ```
 
@@ -1054,43 +1146,54 @@ route_price_tiers (
 - BR-001: Kỳ điều chỉnh là master **global**; UI không nhập `end_date` (BE đóng kỳ trước khi tạo kỳ mới).
 - BR-002: Thêm kỳ = apply `%` mọi version đang mở toàn hệ thống; không sửa kỳ — muốn đổi thì xóa kỳ gần nhất rồi tạo lại.
 - BR-003: Xóa kỳ gần nhất = rollback (xóa versions gắn kỳ + mở lại kỳ trước).
-- BR-004: Nhóm tuyến scoped theo NCC; đích = Phường/Xã **XOR** Địa điểm text **XOR** Còn lại tỉnh; `note` optional (ảnh hưởng tên + unique).
+- BR-004: Nhóm tuyến scoped theo **bảng giá** (`price_books`); đích = Phường/Xã **XOR** Địa điểm text **XOR** Còn lại tỉnh; `note` optional (ảnh hưởng tên + unique). User tạo/đặt tên bảng giá tự do.
 - BR-005: Mỗi nhóm chỉ nhập **bảng giá gốc** 1 lần; bắt buộc chọn `adjustment_period_id` (kỳ gốc); BE cascade tạo version cho mọi kỳ `start > kỳ gốc`.
 - BR-006: Version gắn `adjustment_period_id`; ngày hiệu lực / `%` derive từ kỳ (không lưu trùng trên version). Không có cột `note` trên `route_price_versions` — ghi chú chỉ ở kỳ / nhóm / tuyến.
-- BR-007: Sửa giá gốc → recompute cascade các kỳ sau.
-- BR-008: Tab **Bảng giá** = ma trận (`GET /prices/matrix`): weight gom schema exact hoặc tập con (cột = union, ô thiếu trống) + Pallet cuối; trips = hàng tuyến×bậc (không Pallet), cột = kỳ.
-- BR-009: Tab **Quản lý giá** = CRUD/lịch sử version (badge mode + gốc/điều chỉnh ±%).
-- BR-010: Delivery Import lookup qua `GET /route-pricing/lookup` (`weight_mt` / `trips_per_vehicle_day`, `note` nhóm/tuyến).
+- BR-007: Sửa giá gốc → recompute cascade các kỳ sau (xóa + rebuild; không gắn dấu mới; giữ dấu absolute chỉ khi giá không đổi).
+- BR-008: **Bảng giá** (`/route-pricing/matrix`) = `GET /prices/matrix?price_book_id=`. Một `set_tables[]` entry mỗi bộ có nhóm trong book (thứ tự weight, truck, trips, rồi tên). Cột = bậc (và pallet cuối nếu có nhóm có số). Ô thiếu `null`, UI hiện `-`. Không gom fingerprint / tập con. `weight_tables` / `truck_tables` là filter của `set_tables`. `trips.rows` luôn rỗng. Highlight khi `manual_adjusted`.
+- BR-009: **Quản lý tuyến → Quản lý giá** = lịch sử version (badge mode + gốc/điều chỉnh ±%) + tên bộ + bút chì điều chỉnh kỳ. **Bộ giá** là catalog riêng (`/route-pricing/sets`), không scope bảng giá.
+- BR-010: `GET /route-pricing/lookup` **deferred** (501 LOOKUP_DEFERRED) — CR riêng.
+- BR-011: Giá đã lưu phải `> 0`. Ô không gửi = không record. Pallet chỉ khi bộ `has_pallet`; không gửi = NULL. Không lưu `0` mới. Manual adjust: sửa bậc đã có, `added_tiers` cho bậc chưa có, không xóa bậc trên kỳ lẻ. Cờ `pallet_manual_adjusted` / `is_manual_adjusted`. Card vẫn hiện badge “Pallet được điều chỉnh về 0” nếu dữ liệu cũ có giá 0.
 
 **Flow — sử dụng chính:**
 ```
-Tab Kỳ điều chỉnh (global, không cần chọn NCC)
+Kỳ điều chỉnh (global, không cần chọn bảng giá)
   → Thêm kỳ (start_date, %, note?) → BE đóng kỳ trước + apply % mọi version mở
   → Chỉ xóa được kỳ gần nhất (= rollback)
 
-Chọn NCC
-  → Tab Nhóm tuyến: tạo/sửa nhóm (phường XOR location XOR residual + note)
-  → Tab Quản lý giá: Thêm bảng giá gốc (kỳ gốc + by_weight|by_trips + tiers + pallet)
-        → BE cascade versions kỳ sau
-      → Sửa giá gốc → recompute cascade
-  → Tab Bảng giá: xem ma trận weight_tables[] + trips.rows
+Bộ giá (catalog global)
+  → Tạo khung (tên + mode + bậc + cờ pallet). Cấm trùng / tập con.
+  → Bộ đang gắn nhóm: chỉ đổi tên hoặc thêm bậc. Muốn sửa cấu trúc / ngừng dùng: chưa ai gắn.
 
-Delivery Import
-  → GET /api/route-pricing/lookup
+Chọn Bảng giá → Quản lý tuyến
+  → Tab Tuyến: tạo/sửa nhóm (phường XOR location XOR residual + note)
+  → Tab Quản lý giá: chọn bộ + nhập số các bậc cần dùng (không tự thêm bậc)
+        → BE gắn price_set_id + cascade chỉ bậc có số
+      → Sửa giá gốc → confirm recascade (kỳ sau tạo lại, mất chỉnh tay)
+      → Xóa giá → gỡ bộ, giữ nhóm, nhập lại bộ khác
+      → Bút chì kỳ → sửa bậc đã có; thêm bậc/pallet chưa có từ kỳ đó, kỳ sau scale %
+Bảng giá (ma trận): một bảng mỗi bộ trong book, cột đã lọc
 ```
 
 **API Endpoints:**
 ```
+GET/POST/PUT/DELETE /api/route-pricing/price-books
 GET/POST/DELETE /api/route-pricing/adjustment-periods
 GET             /api/route-pricing/geo/provinces
 GET             /api/route-pricing/geo/wards?province_code=
 GET/POST/PUT/DELETE /api/route-pricing/routes
 GET/POST/PUT/DELETE /api/route-pricing/groups
+GET/POST        /api/route-pricing/price-sets
+PUT             /api/route-pricing/price-sets/:id
+POST            /api/route-pricing/price-sets/:id/tiers
+DELETE          /api/route-pricing/price-sets/:id
 GET/POST        /api/route-pricing/prices
-GET             /api/route-pricing/prices/matrix?supplier_id=
+GET             /api/route-pricing/prices/matrix?price_book_id=
 PUT             /api/route-pricing/prices/groups/:routeGroupId/absolute
+DELETE          /api/route-pricing/prices/groups/:routeGroupId
+PUT             /api/route-pricing/prices/versions/:versionId/manual-adjust
 GET             /api/route-pricing/prices/:configId/versions
-GET             /api/route-pricing/lookup
+GET             /api/route-pricing/lookup   -- 501 LOOKUP_DEFERRED
 ```
 
 **Files:**
@@ -1098,19 +1201,41 @@ GET             /api/route-pricing/lookup
 backend/src/migrations/040_create_route_pricing.sql
 backend/src/migrations/041_seed_route_pricing_permissions.sql
 backend/src/migrations/042_route_pricing_adjustment_periods.sql
+backend/src/migrations/044_route_pricing_price_books.sql
+backend/src/migrations/045_route_pricing_by_truck.sql
+backend/src/migrations/046_route_pricing_manual_adjust.sql
+backend/src/migrations/055_route_pricing_price_sets.sql
 backend/src/services/routePricingService.ts
+backend/src/services/priceSetService.ts
 backend/src/controllers/routePricingController.ts
 backend/src/routes/routePricing.ts
 backend/src/types/routePricing.ts
 backend/src/__tests__/routePricingService.test.ts
+backend/src/__tests__/priceSetService.test.ts
 frontend/src/api/routePricingApi.ts
 frontend/src/hooks/useRoutePricing.ts
 frontend/src/pages/route-pricing/RoutePricingPage.tsx
+frontend/src/pages/route-pricing/PriceSetsTab.tsx
+frontend/src/pages/route-pricing/PriceSetFormModal.tsx
+frontend/src/pages/route-pricing/PriceFormModal.tsx
 frontend/src/pages/route-pricing/PriceMatrixTab.tsx
+frontend/src/pages/route-pricing/PeriodPriceAdjustModal.tsx
+frontend/src/pages/route-pricing/priceDisplay.ts
 ```
 
-**Access:** `route_pricing.view` (xem) / `route_pricing.manage` (CRUD). Route: `/route-pricing`  
-**BA / UI:** `docs/ba/20260711_route-pricing-analysis.md`, `docs/ba/20260731_route-pricing-price-matrix-view-analysis.md`, `docs/ui/20260731_route-pricing-adjustment-periods-cr-ui-spec.md`, `docs/ui/20260731_route-pricing-price-matrix-view-ui-spec.md`
+**Access:** `route_pricing.view` (xem) / `route_pricing.manage` (CRUD).  
+**BA / UI (hiện tại):** `docs/ba/20260917_route-pricing-price-sets-analysis.md`, `docs/ui/20260917_route-pricing-price-sets-ui-spec.md`. Spec 2026-07-11 và 2026-09-15 là lịch sử; phần giá `0` / tự thêm bậc đã bị bộ giá thay.
+
+### 11.2 Phụ phí giao hàng (`/route-pricing/surcharges`)
+
+**Mục đích:** Biểu phí theo khách: bốc xếp (đồng/tấn), phụ phí giao hàng và chuyển tải (đồng/chuyến). Không thuộc bảng giá tuyến, không ăn kỳ %. Chưa gắn xử lý data giao hàng.
+
+**Data model:** `customer_surcharge_rules` — tên khách, `customer_id` null = mặc định đại lý, loại phí, vùng, khung xe, số nguyên ≥ 0, `start_date` / `end_date`. Migration `056_customer_surcharge_rules.sql`.
+
+**Business rules:** Xem `docs/ba/20260917_customer-surcharges-analysis.md`. Điểm trả thắng đại lý nếu còn rule hiệu lực đúng ngày của loại phí đó. Không khớp rule thì `rate` null, không trả 0. Nhà cung cấp không nằm trên rule. Form và bảng hiện tên nhà cung cấp lúc đọc. Tra cứu có `supplier_code` tùy chọn để tách điểm cùng địa chỉ. Tạo một lần được nhiều tên đại lý, một transaction, cùng bộ số. Xóa cứng từng bản ghi, không mở lại bản ghi cũ; audit chỉ khi xóa thành công. Tra cứu POST `/api/route-pricing/surcharges/lookup` (quyền view). `GET /route-pricing/lookup` vẫn 501.
+
+**Access:** `route_pricing.view` / `route_pricing.manage`. Menu accordion Quản lý giá cước vận tải.  
+**BA / UI:** `docs/ba/20260917_customer-surcharges-analysis.md`, `docs/ui/20260917_customer-surcharges-ui-spec.md`.
 
 ---
 

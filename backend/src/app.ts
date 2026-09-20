@@ -33,6 +33,7 @@ app.use(
       }
     },
     credentials: true,
+    exposedHeaders: ['Content-Disposition'],
   }),
 );
 app.use(
