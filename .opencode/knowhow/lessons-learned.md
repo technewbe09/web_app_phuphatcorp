@@ -46,6 +46,18 @@ description: Ghi lại các bài học kinh nghiệm, bug đã fix, và pitfalls
 - **Cần chú ý:** Dữ liệu đã lưu vẫn đúng; chỉ lớp đọc bị lệch. Rule tạo lúc bug còn hiệu lực có thể chồng kỳ thật (ví dụ cùng combo, kỳ cũ kết thúc 17/9 và kỳ mới bắt đầu 17/9).
 
 ---
+## Change: Dedicated MinIO Bucket/Prefix for Ticket Attachments (`MINIO_BUCKET_TICKET_ATTACHEMENTS`)
+- **Ngày:** 2026-09-13
+- **Feature:** Theo dõi hóa đơn (`invoice_tracking`), MinIO Storage Configuration
+- **Mô tả:** Chuyển toàn bộ tệp đính kèm của chức năng Theo dõi hóa đơn sang lưu trữ tại bucket / thư mục riêng biệt theo biến môi trường `MINIO_BUCKET_TICKET_ATTACHEMENTS` (ví dụ: `phuphatcorp-inspections/ticket_attachments`).
+- **Giải pháp:**
+  - Cập nhật `env.ts` nạp `env.minio.ticketAttachmentsBucket` từ `MINIO_BUCKET_TICKET_ATTACHEMENTS` (kèm fallback `MINIO_BUCKET_TICKET_ATTACHMENTS` / `MINIO_BUCKET`).
+  - Nâng cấp `storageService` hỗ trợ tham số `bucketLocation` tùy biến: tự động phân tách `bucketName` và `prefix`, đảm bảo khởi tạo bucket (`ensureBucket`), tải lên (`upload`), phát sinh URL (`getPublicUrl`), lấy stream (`getStream`), xóa tệp (`delete`) vào đúng vị trí chỉ định.
+  - Cập nhật `invoiceTrackingService.uploadDocuments` và `invoiceTrackingService.serveFile` truyền `env.minio.ticketAttachmentsBucket`.
+  - Cập nhật `server.ts` tự động `ensureBucket` cho bucket tệp đính kèm khi ứng dụng khởi động.
+- **Files sửa:** `backend/src/config/env.ts`, `backend/src/services/storageService.ts`, `backend/src/services/invoiceTrackingService.ts`, `backend/src/server.ts`.
+
+---
 ## Feature: "Download All" Attached Documents in TicketDetailModal
 - **Ngày:** 2026-09-13
 - **Feature:** Theo dõi hóa đơn (`TicketDetailModal`)

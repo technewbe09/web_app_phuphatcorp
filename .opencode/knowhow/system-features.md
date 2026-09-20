@@ -974,7 +974,7 @@ frontend/src/pages/dispatch/SchedulePage.tsx
 - Tự động thực thi phân quyền dữ liệu (Data Scope).
 
 **Lưu trữ MinIO & Sao chép chứng từ cùng ngày (Zero Storage Duplication):**
-- Tệp chứng từ mới tải lên được lưu trực tiếp vào MinIO Object Storage (`phuphatcorp-inspections` bucket) thay vì lưu chuỗi Base64 dài trong PostgreSQL. Hỗ trợ tương thích ngược dữ liệu cũ.
+- Tệp chứng từ mới tải lên được lưu trực tiếp vào MinIO Object Storage theo cấu hình `MINIO_BUCKET_TICKET_ATTACHEMENTS` (ví dụ: `phuphatcorp-inspections/ticket_attachments` hoặc bucket riêng) thay vì lưu chuỗi Base64 dài trong PostgreSQL. Hỗ trợ tương thích ngược dữ liệu cũ.
 - Tài xế có thể sao chép bộ ảnh chứng từ từ chuyến xe khác cùng ngày (`CopyDocumentsModal`).
 - Cơ chế sao chép chỉ tạo tham chiếu (reference metadata), trỏ chung 1 object key trong MinIO, hoàn toàn không nhân bản file hay tốn dung lượng lưu trữ.
 - Hiển thị huy hiệu `🔗 Từ xe [Biển số]` trên hình ảnh và Lightbox Viewer để phân biệt nguồn gốc chứng từ.

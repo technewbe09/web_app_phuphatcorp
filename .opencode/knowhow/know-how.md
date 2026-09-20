@@ -149,6 +149,14 @@ DB_SSL=false
 JWT_SECRET=<secret>
 JWT_EXPIRES_IN=15m
 JWT_REFRESH_EXPIRES_IN=7d
+MINIO_ENDPOINT=minio-superadmin.hostarax.com
+MINIO_PORT=443
+MINIO_USE_SSL=true
+MINIO_ACCESS_KEY=<secret>
+MINIO_SECRET_KEY=<secret>
+MINIO_BUCKET=phuphatcorp-inspections
+MINIO_BUCKET_TICKET_ATTACHEMENTS=phuphatcorp-inspections/ticket_attachments
+MINIO_PUBLIC_URL=https://minio-superadmin.hostarax.com
 ```
 
 ### Frontend (frontend/.env)

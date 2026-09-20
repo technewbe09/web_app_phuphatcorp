@@ -20,18 +20,29 @@ function getClient(): Minio.Client {
 }
 
 export interface UploadResult {
-  filename: string;
-  objectKey: string;
+  filename: string;       // unique stored filename (e.g. "123456-123456.pdf")
+  objectKey: string;      // full MinIO object key (e.g. "bucket/123456-123456.pdf")
+}
+
+function parseBucketLocation(location?: string): { bucketName: string; prefix: string } {
+  const raw = location || env.minio.bucket;
+  const parts = raw.split('/');
+  const bucketName = parts[0];
+  const prefix = parts.slice(1).join('/');
+  return {
+    bucketName,
+    prefix: prefix ? (prefix.endsWith('/') ? prefix : `${prefix}/`) : '',
+  };
 }
 
 export const storageService = {
-  async ensureBucket(bucket?: string): Promise<void> {
+  async ensureBucket(bucketLocation?: string): Promise<void> {
     const cl = getClient();
-    const name = bucket ?? env.minio.bucket;
-    const exists = await cl.bucketExists(name);
+    const { bucketName } = parseBucketLocation(bucketLocation);
+    const exists = await cl.bucketExists(bucketName);
     if (!exists) {
-      await cl.makeBucket(name);
-      console.log(`[MinIO] Created bucket: ${name}`);
+      await cl.makeBucket(bucketName);
+      console.log(`[MinIO] Created bucket: ${bucketName}`);
     }
   },
 
@@ -66,32 +77,48 @@ export const storageService = {
     }
   },
 
-  async upload(buffer: Buffer, originalname: string, mimetype: string): Promise<UploadResult> {
+  async upload(buffer: Buffer, originalname: string, mimetype: string, bucketLocation?: string): Promise<UploadResult> {
     const cl = getClient();
+    const { bucketName, prefix } = parseBucketLocation(bucketLocation);
     const ext = path.extname(originalname);
-    const filename = `${Date.now()}-${Math.round(Math.random() * 1e9)}${ext}`;
+    const baseFilename = `${Date.now()}-${Math.round(Math.random() * 1e9)}${ext}`;
+    const objectKey = `${prefix}${baseFilename}`;
 
-    await cl.putObject(env.minio.bucket, filename, buffer, buffer.length, {
+    await cl.putObject(bucketName, objectKey, buffer, buffer.length, {
       'Content-Type': mimetype,
     });
 
     return {
-      filename,
-      objectKey: `${env.minio.bucket}/${filename}`,
+      filename: baseFilename,
+      objectKey: `${bucketName}/${objectKey}`,
     };
   },
 
-  async getStream(filename: string): Promise<{ stream: NodeJS.ReadableStream; stat: Minio.BucketItemStat }> {
-    return this.getObjectStream(env.minio.bucket, filename);
-  },
-
-  async delete(filename: string): Promise<void> {
-    await this.deleteObject(env.minio.bucket, filename);
-  },
-
-  async getPublicUrl(filename: string): Promise<string> {
+  async getStream(filename: string, bucketLocation?: string): Promise<{ stream: NodeJS.ReadableStream; stat: Minio.BucketItemStat }> {
     const cl = getClient();
-    const url = await cl.presignedGetObject(env.minio.bucket, filename, 24 * 60 * 60);
+    const { bucketName, prefix } = parseBucketLocation(bucketLocation);
+    const objectKey = filename.startsWith(prefix) ? filename : `${prefix}${filename}`;
+    const stat = await cl.statObject(bucketName, objectKey);
+    const stream = await cl.getObject(bucketName, objectKey);
+    return { stream, stat };
+  },
+
+  async delete(filename: string, bucketLocation?: string): Promise<void> {
+    const cl = getClient();
+    const { bucketName, prefix } = parseBucketLocation(bucketLocation);
+    const objectKey = filename.startsWith(prefix) ? filename : `${prefix}${filename}`;
+    try {
+      await cl.removeObject(bucketName, objectKey);
+    } catch {
+      // Missing object is fine
+    }
+  },
+
+  async getPublicUrl(filename: string, bucketLocation?: string): Promise<string> {
+    const cl = getClient();
+    const { bucketName, prefix } = parseBucketLocation(bucketLocation);
+    const objectKey = filename.startsWith(prefix) ? filename : `${prefix}${filename}`;
+    const url = await cl.presignedGetObject(bucketName, objectKey, 24 * 60 * 60);
 
     if (env.minio.publicUrl) {
       const pub = env.minio.publicUrl.replace(/\/$/, '');
