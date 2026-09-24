@@ -87,7 +87,7 @@ const FAQS = [
   {
     question: 'Làm thế nào để tôi có thể đăng ký tài khoản sử dụng hệ thống?',
     answer:
-      'Hệ thống PhuPhatCorp phục vụ cho cán bộ điều hành, kế toán, tài xế và đối tác của công ty. Bạn có thể bấm nút "Đăng ký" trên giao diện hoặc liên hệ trực tiếp qua số hotline +84 0924 462 355 / email nguyenphuchung09@gmail.com để quản trị viên phê duyệt quyền truy cập phù hợp.',
+      'Hệ thống PhuPhatCorp phục vụ cho cán bộ điều hành, kế toán, tài xế và đối tác của công ty. Bạn có thể bấm nút "Đăng ký" trên giao diện hoặc liên hệ trực tiếp qua số hotline +84 924 462 355 / email nguyenphuchung09@gmail.com để quản trị viên phê duyệt quyền truy cập phù hợp.',
   },
   {
     question: 'Khách hàng hoặc tài xế có thể xem chứng từ chuyến đi mà không cần tài khoản không?',
@@ -97,7 +97,7 @@ const FAQS = [
   {
     question: 'Khi gặp sự cố phát sinh ngoài giờ làm việc, tôi cần liên hệ kênh nào?',
     answer:
-      'Tổng đài hotline kỹ thuật +84 0924 462 355 hoạt động 24/7 đối với các trường hợp khẩn cấp về điều phối xe trên đường, sự cố giao nhận hàng hóa hoặc lỗi gián đoạn truy cập hệ thống.',
+      'Tổng đài hotline kỹ thuật +84 924 462 355 hoạt động 24/7 đối với các trường hợp khẩn cấp về điều phối xe trên đường, sự cố giao nhận hàng hóa hoặc lỗi gián đoạn truy cập hệ thống.',
   },
   {
     question: 'Hệ thống có hỗ trợ tùy chỉnh bảng giá cước và phụ phí cho từng khách hàng không?',
@@ -771,6 +771,9 @@ export function SupportPage() {
               <a href="#contact" className="hover:text-neutral-900 dark:hover:text-neutral-100 transition-colors">
                 Thông tin liên hệ
               </a>
+              <Link to="/privacy" className="hover:text-neutral-900 dark:hover:text-neutral-100 transition-colors">
+                Chính sách Quyền riêng tư
+              </Link>
             </div>
           </div>
 

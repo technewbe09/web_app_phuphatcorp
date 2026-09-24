@@ -31,5 +31,28 @@
             "type": "image/png",
             "purpose": "maskable"
         }
+    ],
+    "screenshots": [
+        {
+            "src": "screenshots/screenshot-1-dispatch.png",
+            "sizes": "1080x1920",
+            "type": "image/png",
+            "form_factor": "narrow",
+            "label": "Điều hành & Lịch đi hàng"
+        },
+        {
+            "src": "screenshots/screenshot-2-fleet.png",
+            "sizes": "1080x1920",
+            "type": "image/png",
+            "form_factor": "narrow",
+            "label": "Quản lý Đội xe & Bảo dưỡng"
+        },
+        {
+            "src": "screenshots/screenshot-3-accounting.png",
+            "sizes": "1080x1920",
+            "type": "image/png",
+            "form_factor": "narrow",
+            "label": "Đối soát Kế toán & Chứng từ"
+        }
     ]
 }

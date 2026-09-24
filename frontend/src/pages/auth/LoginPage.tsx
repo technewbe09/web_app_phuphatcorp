@@ -98,12 +98,15 @@ export function LoginPage() {
               Đăng ký
             </Link>
           </p>
-          <p className="text-xs text-neutral-500 dark:text-neutral-400">
-            Cần trợ giúp hoặc liên hệ?{' '}
+          <div className="flex items-center gap-3 text-xs text-neutral-500 dark:text-neutral-400">
             <Link to="/support" className="text-neutral-700 dark:text-neutral-300 font-medium hover:underline">
               Trung tâm hỗ trợ
             </Link>
-          </p>
+            <span>•</span>
+            <Link to="/privacy" className="text-neutral-700 dark:text-neutral-300 font-medium hover:underline">
+              Chính sách bảo mật
+            </Link>
+          </div>
         </div>
       </CardContent>
     </Card>
