@@ -157,12 +157,20 @@ export function RegisterPage() {
           </Button>
         </form>
 
-        <p className="mt-6 text-center text-sm text-neutral-600 dark:text-neutral-400">
-          Đã có tài khoản?{' '}
-          <Link to="/login" className="text-neutral-900 dark:text-neutral-100 font-medium hover:underline">
-            Đăng nhập
-          </Link>
-        </p>
+        <div className="mt-6 pt-4 border-t border-neutral-100 dark:border-neutral-800 flex flex-col items-center gap-2 text-sm text-neutral-600 dark:text-neutral-400">
+          <p>
+            Đã có tài khoản?{' '}
+            <Link to="/login" className="text-neutral-900 dark:text-neutral-100 font-medium hover:underline">
+              Đăng nhập
+            </Link>
+          </p>
+          <p className="text-xs text-neutral-500 dark:text-neutral-400">
+            Cần trợ giúp hoặc liên hệ?{' '}
+            <Link to="/support" className="text-neutral-700 dark:text-neutral-300 font-medium hover:underline">
+              Trung tâm hỗ trợ
+            </Link>
+          </p>
+        </div>
       </CardContent>
     </Card>
   );

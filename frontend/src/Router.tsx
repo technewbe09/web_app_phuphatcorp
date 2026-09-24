@@ -36,6 +36,7 @@ import { RoutePricingPage } from './pages/route-pricing/RoutePricingPage';
 import { CustomerSurchargesPage } from './pages/route-pricing/CustomerSurchargesPage';
 import InvoiceTrackingPage from './pages/invoice-tracking/InvoiceTrackingPage';
 import PublicTicketViewPage from './pages/invoice-tracking/PublicTicketViewPage';
+import { SupportPage } from './pages/support/SupportPage';
 import { DataScopeManagementPage } from './pages/admin/DataScopeManagementPage';
 import { WorkflowManagementPage } from './pages/admin/WorkflowManagementPage';
 
@@ -71,6 +72,7 @@ export function Router() {
     <BrowserRouter>
       <Routes>
         {/* Public routes */}
+        <Route path="/support" element={<SupportPage />} />
         <Route path="/shared/invoice-tracking/:token" element={<PublicTicketViewPage />} />
         <Route element={<AuthLayout />}>
           <Route path="/login" element={<LoginPage />} />

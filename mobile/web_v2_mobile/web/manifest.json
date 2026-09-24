@@ -1,11 +1,11 @@
 {
-    "name": "web_v2_mobile",
-    "short_name": "web_v2_mobile",
+    "name": "PhuPhatCorp Mobile",
+    "short_name": "PhuPhatCorp Mobile",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#ffffff",
     "theme_color": "#ffffff",
-    "description": "A new Flutter project.",
+    "description": "PhuPhatCorp Mobile App",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [
