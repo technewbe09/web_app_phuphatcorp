@@ -5,6 +5,17 @@ description: Ghi lại các bài học kinh nghiệm, bug đã fix, và pitfalls
 # Lessons Learned — PhuPhatCorp
 
 ---
+## Rule: Kiểm tra & Tự động bỏ qua chuyến xe trùng lặp khi Import nhiều lần trong ngày
+- **Ngày:** 2026-09-30
+- **Severity:** Medium
+- **Feature liên quan:** Bảng điều phối xe (`dispatchScheduleService` & `ImportDispatchExcelModal`)
+- **Mô tả:** Khi người điều phối import file Excel nhiều lần trong 1 ngày, hệ thống đối soát từng chuyến theo composite key toàn bộ thông tin: `ngày` + `loại tuyến` + `cỡ xe` + `biển số chuẩn hóa` + `điểm nhận` + `tấn` + `CAN` + `ghi chú`.
+- **Thực hiện:**
+  - **Frontend (`ImportDispatchExcelModal.tsx`)**: Đối soát dữ liệu đọc được từ Excel với danh sách chuyến xe đã ghi nhận trong ngày (`existingSchedules`) và các dòng trùng lặp nội bộ trong file. Đánh dấu trạng thái màu cam `"Đã tồn tại trên hệ thống (Sẽ bỏ qua)"` / `"Trùng lặp trong file (Sẽ bỏ qua)"`, hiển thị badge thống kê số chuyến mới và số chuyến trùng. Nút bấm xác nhận hiển thị rõ: `Xác nhận Import (X chuyến mới) — Bỏ qua Y trùng`.
+  - **Backend (`dispatchScheduleService.ts`)**: Trong `createBatch`, truy vấn trước các bản ghi trong ngày (`ngay = ANY($1)`) và duy trì `Set` các key đã tồn tại + `Set` các key trong batch để bỏ qua việc `INSERT` chuyến trùng lặp, đảm bảo an toàn dữ liệu và không tạo thừa ticket cho tài xế.
+- **Files:** `backend/src/services/dispatchScheduleService.ts`, `backend/src/__tests__/dispatchScheduleService.test.ts`, `frontend/src/components/dispatch/ImportDispatchExcelModal.tsx`, `frontend/src/pages/dispatch/SchedulePage.tsx`, `frontend/src/i18n/vi.json`, `frontend/src/i18n/en.json`.
+
+---
 ## Bug: `Cannot find module 'exceljs'` khi khởi động backend
 - **Ngày:** 2026-09-20
 - **Severity:** High
