@@ -18,6 +18,36 @@ export function normalizePlateNumber(raw: string): string {
   return cleaned;
 }
 
+export function normalizeStringValue(val: string | null | undefined): string {
+  if (val == null) return '';
+  return String(val)
+    .replace(/\u00a0/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+export function makeDispatchScheduleKey(item: {
+  ngay?: string;
+  loai_tuyen?: string;
+  loai_xe?: string;
+  bien_so?: string;
+  diem_nhan?: string;
+  tan?: string | null;
+  can?: string | null;
+  ghi_chu?: string | null;
+}): string {
+  const ngay = (item.ngay || '').split('T')[0];
+  const loai_tuyen = normalizeStringValue(item.loai_tuyen);
+  const loai_xe = normalizeStringValue(item.loai_xe);
+  const bien_so = normalizePlateNumber(item.bien_so || '');
+  const diem_nhan = normalizeStringValue(item.diem_nhan).toUpperCase();
+  const tan = normalizeStringValue(item.tan).replace(',', '.');
+  const can = normalizeStringValue(item.can).toUpperCase();
+  const ghi_chu = normalizeStringValue(item.ghi_chu);
+
+  return `${ngay}|${loai_tuyen}|${loai_xe}|${bien_so}|${diem_nhan}|${tan}|${can}|${ghi_chu}`;
+}
+
 export interface DispatchSchedule {
   id: number;
   ngay: string;
@@ -184,13 +214,50 @@ export const dispatchScheduleService = {
     items: CreateDispatchScheduleBatchItem[],
     userId: number | null,
   ): Promise<DispatchSchedule[]> {
+    if (!items || items.length === 0) {
+      return [];
+    }
+
     const client = await pool.connect();
     try {
       await client.query('BEGIN');
       const results: DispatchSchedule[] = [];
       const missingDriverPlates: string[] = [];
 
+      // Query existing schedules for the dates in this batch to check for duplicates
+      const uniqueDates = Array.from(new Set(items.map((i) => i.ngay).filter(Boolean)));
+      const existingRes = await client.query<{
+        ngay: string;
+        loai_tuyen: string;
+        loai_xe: string;
+        bien_so: string;
+        diem_nhan: string;
+        tan: string | null;
+        can: string | null;
+        ghi_chu: string | null;
+      }>(
+        `SELECT to_char(ngay, 'YYYY-MM-DD') AS ngay, loai_tuyen, loai_xe, bien_so, diem_nhan, tan, can, ghi_chu
+         FROM dispatch_schedules
+         WHERE ngay = ANY($1)`,
+        [uniqueDates],
+      );
+
+      const existingKeys = new Set<string>();
+      for (const r of existingRes.rows) {
+        existingKeys.add(makeDispatchScheduleKey(r));
+      }
+
+      const seenBatchKeys = new Set<string>();
+
       for (const item of items) {
+        const itemKey = makeDispatchScheduleKey(item);
+
+        // Skip if duplicate with existing DB records or already seen in this batch
+        if (existingKeys.has(itemKey) || seenBatchKeys.has(itemKey)) {
+          continue;
+        }
+        seenBatchKeys.add(itemKey);
+
         const bien_so = item.bien_so ? normalizePlateNumber(item.bien_so) : item.bien_so;
         let vehicle_id = item.vehicle_id ?? null;
         let driver_id = item.driver_id ?? null;

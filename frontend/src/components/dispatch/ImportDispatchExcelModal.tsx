@@ -1,4 +1,4 @@
-import { useState, useRef, useMemo } from 'react';
+import { useState, useRef, useMemo, useEffect, useCallback } from 'react';
 import * as XLSX from 'xlsx';
 import {
   Upload,
@@ -12,6 +12,7 @@ import {
   Calendar,
   AlertCircle,
   UserX,
+  Copy,
 } from 'lucide-react';
 import { Modal } from '../ui/Modal';
 import { Button } from '../ui/Button';
@@ -19,7 +20,7 @@ import { useI18n } from '../../i18n/useI18n';
 import { cn } from '../../utils/cn';
 import { useGetVehicles } from '../../hooks/useVehicleCatalog';
 import { useGetDrivers } from '../../hooks/useDrivers';
-import type { CreateDispatchScheduleBatchItem } from '../../api/dispatchApi';
+import type { CreateDispatchScheduleBatchItem, DispatchSchedule } from '../../api/dispatchApi';
 
 type LoaiTuyen = 'Tuyến cố định' | 'Tuyến ngoài';
 type LoaiXe = 'Xe lớn' | 'Xe nhỏ';
@@ -30,6 +31,7 @@ interface ImportDispatchExcelModalProps {
   selectedDate: string;
   loaiTuyen: LoaiTuyen;
   loaiXe?: LoaiXe;
+  existingSchedules?: DispatchSchedule[];
   onSubmit: (items: CreateDispatchScheduleBatchItem[]) => Promise<void>;
   isSubmitting: boolean;
 }
@@ -43,6 +45,8 @@ interface ParsedDispatchRow {
   can: string;
   ghiChu: string;
   isValid: boolean;
+  isDuplicate: boolean;
+  duplicateType?: 'db' | 'file';
   isMissingDriver: boolean;
   errorMessage?: string;
   vehicleId: number | null;
@@ -88,19 +92,56 @@ function normalizeHeader(val: unknown): string {
     .trim();
 }
 
+function normalizeStringField(val: string | null | undefined): string {
+  if (!val) return '';
+  return String(val)
+    .replace(/\u00a0/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function makeTripCompositeKey(item: {
+  loai_tuyen?: string;
+  loai_xe?: string;
+  bien_so?: string;
+  diem_nhan?: string;
+  tan?: string | null;
+  can?: string | null;
+  ghi_chu?: string | null;
+}): string {
+  const loai_tuyen = normalizeStringField(item.loai_tuyen);
+  const loai_xe = normalizeStringField(item.loai_xe);
+  const bien_so = formatPlateNumber(item.bien_so || '');
+  const diem_nhan = normalizeStringField(item.diem_nhan).toUpperCase();
+  const tan = normalizeStringField(item.tan).replace(',', '.');
+  const can = normalizeStringField(item.can).toUpperCase();
+  const ghi_chu = normalizeStringField(item.ghi_chu);
+
+  return `${loai_tuyen}|${loai_xe}|${bien_so}|${diem_nhan}|${tan}|${can}|${ghi_chu}`;
+}
+
 export function ImportDispatchExcelModal({
   isOpen,
   onClose,
   selectedDate,
   loaiTuyen,
   loaiXe: initialLoaiXe = 'Xe nhỏ',
+  existingSchedules = [],
   onSubmit,
   isSubmitting,
 }: ImportDispatchExcelModalProps) {
   const { t } = useI18n();
   const [file, setFile] = useState<File | null>(null);
   const [selectedLoaiXe, setSelectedLoaiXe] = useState<LoaiXe>(initialLoaiXe);
-  const [parsedRows, setParsedRows] = useState<ParsedDispatchRow[]>([]);
+  const [rawFileRows, setRawFileRows] = useState<{
+    headerRowIndex: number;
+    colNoiGiao: number;
+    colTan: number;
+    colSoXe: number;
+    colCan: number;
+    colGhiChu: number;
+    rawData: unknown[][];
+  } | null>(null);
   const [fileError, setFileError] = useState<string>('');
   const [isDragOver, setIsDragOver] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -139,15 +180,37 @@ export function ImportDispatchExcelModal({
     return map;
   }, [activeDrivers]);
 
+  // Existing schedules composite key set for the given date
+  const existingKeysSet = useMemo(() => {
+    const set = new Set<string>();
+    existingSchedules.forEach((s) => {
+      const key = makeTripCompositeKey({
+        loai_tuyen: s.loai_tuyen,
+        loai_xe: s.loai_xe,
+        bien_so: s.bien_so,
+        diem_nhan: s.diem_nhan,
+        tan: s.tan,
+        can: s.can,
+        ghi_chu: s.ghi_chu,
+      });
+      set.add(key);
+    });
+    return set;
+  }, [existingSchedules]);
+
+  useEffect(() => {
+    setSelectedLoaiXe(initialLoaiXe);
+  }, [initialLoaiXe]);
+
   const handleClose = () => {
     setFile(null);
-    setParsedRows([]);
+    setRawFileRows(null);
     setFileError('');
     setIsDragOver(false);
     onClose();
   };
 
-  const parseExcel = async (f: File) => {
+  const parseExcelFile = async (f: File) => {
     try {
       setFileError('');
       const buffer = await f.arrayBuffer();
@@ -199,9 +262,7 @@ export function ImportDispatchExcelModal({
         }
       }
 
-      // Fallback to standard columns if header is row 2
       if (headerRowIndex === -1) {
-        // Fallback default index: STT=0, NƠI GIAO=1, TẤN=2, SỐ XE=3, CAN=4, GHI CHÚ=5
         headerRowIndex = 1;
         colNoiGiao = 1;
         colTan = 2;
@@ -210,81 +271,132 @@ export function ImportDispatchExcelModal({
         colGhiChu = 5;
       }
 
-      const rows: ParsedDispatchRow[] = [];
-
-      for (let r = headerRowIndex + 1; r < rawData.length; r++) {
-        const row = rawData[r];
-        if (!Array.isArray(row)) continue;
-
-        // Skip completely empty row
-        const hasContent = row.some((cell) => cell != null && String(cell).trim() !== '');
-        if (!hasContent) continue;
-
-        const rawPlate = colSoXe !== -1 && row[colSoXe] != null ? String(row[colSoXe]) : '';
-        const cleanPlate = cleanPlateString(rawPlate);
-        const normPlate = normalizePlateForMatch(cleanPlate);
-
-        const rawNoiGiao = colNoiGiao !== -1 && row[colNoiGiao] != null ? String(row[colNoiGiao]) : '';
-        const rawTan = colTan !== -1 && row[colTan] != null ? String(row[colTan]) : '';
-        const rawCan = colCan !== -1 && row[colCan] != null ? String(row[colCan]) : '';
-        const rawGhiChu = colGhiChu !== -1 && row[colGhiChu] != null ? String(row[colGhiChu]) : '';
-
-        const isPlateMissing = !cleanPlate;
-        const isDiemNhanMissing = !rawNoiGiao.trim();
-
-        // Check against driver mapping and vehicle catalog
-        const driverInfo = normPlate ? driverByPlateMap.get(normPlate) : undefined;
-        const matchedVehicle = normPlate ? vehicleMap.get(normPlate) : undefined;
-
-        const vehicleId = driverInfo?.vehicleId ?? (matchedVehicle ? matchedVehicle.id : null);
-        const driverId = driverInfo?.driverUserId ?? null;
-        const driverName = driverInfo?.driverName ?? (matchedVehicle?.driver_name && matchedVehicle.driver_name !== 'Chưa có tên' ? matchedVehicle.driver_name : '');
-        const isCompanyVehicle = Boolean(vehicleId);
-
-        let errorMessage: string | undefined;
-        let isValid = true;
-        let isMissingDriver = false;
-
-        if (isPlateMissing) {
-          isValid = false;
-          errorMessage = t('dispatch.importModal.errorMissingPlate' as never) || 'Thiếu biển số xe (bắt buộc)';
-        } else if (isDiemNhanMissing) {
-          isValid = false;
-          errorMessage = 'Thiếu nơi giao / điểm nhận hàng';
-        } else if (!driverId) {
-          isValid = false;
-          isMissingDriver = true;
-          errorMessage = `Chưa có tài xế (driver_id) được phân công trong hệ thống`;
-        }
-
-        rows.push({
-          rowNumber: r + 1,
-          rawPlate,
-          cleanPlate,
-          diemNhan: rawNoiGiao.trim(),
-          tan: rawTan.trim(),
-          can: rawCan.trim(),
-          ghiChu: rawGhiChu.trim(),
-          isValid,
-          isMissingDriver,
-          errorMessage,
-          vehicleId,
-          driverId,
-          driverName,
-          isCompanyVehicle,
-        });
-      }
-
-      if (rows.length === 0) {
-        setFileError(t('dispatch.importModal.noValidData' as never) || 'Không tìm thấy dòng dữ liệu nào.');
-      }
-
-      setParsedRows(rows);
+      setRawFileRows({
+        headerRowIndex,
+        colNoiGiao,
+        colTan,
+        colSoXe,
+        colCan,
+        colGhiChu,
+        rawData,
+      });
     } catch (err) {
       console.error('Failed to parse excel:', err);
       setFileError('Không thể đọc file Excel. Vui lòng kiểm tra lại định dạng file.');
     }
   };
+
+  // Compute parsedRows reactively from rawFileRows + existingKeysSet + driver mappings
+  const parsedRows: ParsedDispatchRow[] = useMemo(() => {
+    if (!rawFileRows) return [];
+
+    const { headerRowIndex, colNoiGiao, colTan, colSoXe, colCan, colGhiChu, rawData } = rawFileRows;
+    const currentLoaiXe = loaiTuyen === 'Tuyến ngoài' ? selectedLoaiXe : initialLoaiXe;
+    const rows: ParsedDispatchRow[] = [];
+    const seenInFileKeys = new Set<string>();
+
+    for (let r = headerRowIndex + 1; r < rawData.length; r++) {
+      const row = rawData[r];
+      if (!Array.isArray(row)) continue;
+
+      const hasContent = row.some((cell) => cell != null && String(cell).trim() !== '');
+      if (!hasContent) continue;
+
+      const rawPlate = colSoXe !== -1 && row[colSoXe] != null ? String(row[colSoXe]) : '';
+      const cleanPlate = cleanPlateString(rawPlate);
+      const normPlate = normalizePlateForMatch(cleanPlate);
+
+      const rawNoiGiao = colNoiGiao !== -1 && row[colNoiGiao] != null ? String(row[colNoiGiao]) : '';
+      const rawTan = colTan !== -1 && row[colTan] != null ? String(row[colTan]) : '';
+      const rawCan = colCan !== -1 && row[colCan] != null ? String(row[colCan]) : '';
+      const rawGhiChu = colGhiChu !== -1 && row[colGhiChu] != null ? String(row[colGhiChu]) : '';
+
+      const isPlateMissing = !cleanPlate;
+      const isDiemNhanMissing = !rawNoiGiao.trim();
+
+      const driverInfo = normPlate ? driverByPlateMap.get(normPlate) : undefined;
+      const matchedVehicle = normPlate ? vehicleMap.get(normPlate) : undefined;
+
+      const vehicleId = driverInfo?.vehicleId ?? (matchedVehicle ? matchedVehicle.id : null);
+      const driverId = driverInfo?.driverUserId ?? null;
+      const driverName =
+        driverInfo?.driverName ??
+        (matchedVehicle?.driver_name && matchedVehicle.driver_name !== 'Chưa có tên'
+          ? matchedVehicle.driver_name
+          : '');
+      const isCompanyVehicle = Boolean(vehicleId);
+
+      const tripKey = makeTripCompositeKey({
+        loai_tuyen: loaiTuyen,
+        loai_xe: currentLoaiXe,
+        bien_so: cleanPlate,
+        diem_nhan: rawNoiGiao,
+        tan: rawTan,
+        can: rawCan,
+        ghi_chu: rawGhiChu,
+      });
+
+      let errorMessage: string | undefined;
+      let isValid = true;
+      let isMissingDriver = false;
+      let isDuplicate = false;
+      let duplicateType: 'db' | 'file' | undefined;
+
+      if (isPlateMissing) {
+        isValid = false;
+        errorMessage = t('dispatch.importModal.errorMissingPlate' as never) || 'Thiếu biển số xe (bắt buộc)';
+      } else if (isDiemNhanMissing) {
+        isValid = false;
+        errorMessage = 'Thiếu nơi giao / điểm nhận hàng';
+      } else if (!driverId) {
+        isValid = false;
+        isMissingDriver = true;
+        errorMessage = 'Chưa có tài xế (driver_id) được phân công';
+      } else if (existingKeysSet.has(tripKey)) {
+        isValid = false;
+        isDuplicate = true;
+        duplicateType = 'db';
+        errorMessage = t('dispatch.importModal.duplicateInDb' as never) || 'Đã tồn tại trên hệ thống (Sẽ bỏ qua)';
+      } else if (seenInFileKeys.has(tripKey)) {
+        isValid = false;
+        isDuplicate = true;
+        duplicateType = 'file';
+        errorMessage = t('dispatch.importModal.duplicateInFile' as never) || 'Trùng lặp trong file (Sẽ bỏ qua)';
+      } else {
+        seenInFileKeys.add(tripKey);
+      }
+
+      rows.push({
+        rowNumber: r + 1,
+        rawPlate,
+        cleanPlate,
+        diemNhan: rawNoiGiao.trim(),
+        tan: rawTan.trim(),
+        can: rawCan.trim(),
+        ghiChu: rawGhiChu.trim(),
+        isValid,
+        isDuplicate,
+        duplicateType,
+        isMissingDriver,
+        errorMessage,
+        vehicleId,
+        driverId,
+        driverName,
+        isCompanyVehicle,
+      });
+    }
+
+    return rows;
+  }, [
+    rawFileRows,
+    loaiTuyen,
+    selectedLoaiXe,
+    initialLoaiXe,
+    existingKeysSet,
+    driverByPlateMap,
+    vehicleMap,
+    t,
+  ]);
 
   const handleFileChange = (f: File) => {
     if (!f.name.match(/\.(xlsx|xls)$/i)) {
@@ -296,11 +408,12 @@ export function ImportDispatchExcelModal({
       return;
     }
     setFile(f);
-    parseExcel(f);
+    parseExcelFile(f);
   };
 
-  const validRows = useMemo(() => parsedRows.filter((r) => r.isValid), [parsedRows]);
-  const errorRows = useMemo(() => parsedRows.filter((r) => !r.isValid), [parsedRows]);
+  const validRows = useMemo(() => parsedRows.filter((r) => r.isValid && !r.isDuplicate), [parsedRows]);
+  const duplicateRows = useMemo(() => parsedRows.filter((r) => r.isDuplicate), [parsedRows]);
+  const errorRows = useMemo(() => parsedRows.filter((r) => !r.isValid && !r.isDuplicate), [parsedRows]);
 
   // List of unique plate numbers that cannot be inserted due to missing driver
   const uniqueMissingDriverPlates = useMemo(() => {
@@ -457,7 +570,7 @@ export function ImportDispatchExcelModal({
                 type="button"
                 onClick={() => {
                   setFile(null);
-                  setParsedRows([]);
+                  setRawFileRows(null);
                   setFileError('');
                 }}
                 className="p-1 text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-200 rounded-lg hover:bg-neutral-200 dark:hover:bg-neutral-700 transition"
@@ -470,9 +583,16 @@ export function ImportDispatchExcelModal({
             {/* Parsing summary badges */}
             <div className="flex flex-wrap items-center gap-2">
               <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-green-50 text-green-700 dark:bg-green-950/50 dark:text-green-300 border border-green-200 dark:border-green-800">
-                <CheckCircle2 className="w-3.5 h-3.5" />
-                {validRows.length} chuyến hợp lệ (sẵn sàng insert)
+                <CheckCircle2 className="w-3.5 h-3.5 text-green-600" />
+                {validRows.length} chuyến mới hợp lệ (Sẽ insert)
               </span>
+
+              {duplicateRows.length > 0 && (
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-amber-50 text-amber-800 dark:bg-amber-950/50 dark:text-amber-300 border border-amber-300 dark:border-amber-800">
+                  <Copy className="w-3.5 h-3.5 text-amber-600" />
+                  {duplicateRows.length} chuyến trùng lặp (Sẽ bỏ qua)
+                </span>
+              )}
 
               {uniqueMissingDriverPlates.length > 0 && (
                 <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-red-50 text-red-700 dark:bg-red-950/50 dark:text-red-300 border border-red-200 dark:border-red-800">
@@ -488,6 +608,23 @@ export function ImportDispatchExcelModal({
                 </span>
               )}
             </div>
+
+            {/* Warning block for duplicate rows */}
+            {duplicateRows.length > 0 && (
+              <div className="p-3.5 bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-800/80 rounded-xl space-y-1 text-xs text-amber-900 dark:text-amber-200">
+                <div className="font-bold flex items-center gap-1.5 text-xs sm:text-sm text-amber-800 dark:text-amber-300">
+                  <Copy className="w-4 h-4 text-amber-600 shrink-0" />
+                  <span>
+                    {t('dispatch.importModal.duplicateWarningTitle', { count: duplicateRows.length } as never) ||
+                      `Phát hiện ${duplicateRows.length} chuyến xe bị trùng lặp (Sẽ bỏ qua):`}
+                  </span>
+                </div>
+                <p className="leading-relaxed text-neutral-700 dark:text-neutral-300 pl-5.5">
+                  {t('dispatch.importModal.duplicateWarningDesc' as never) ||
+                    'Các chuyến xe này đã tồn tại trên hệ thống hoặc trùng lặp trong file. Hệ thống sẽ tự động bỏ qua để tránh tạo thừa dữ liệu / ticket cho tài xế.'}
+                </p>
+              </div>
+            )}
 
             {/* Prominent Warning for Missing Drivers */}
             {uniqueMissingDriverPlates.length > 0 && (
@@ -541,7 +678,7 @@ export function ImportDispatchExcelModal({
                       Ghi chú
                     </th>
                     <th className="text-left px-3 py-2.5 text-xs font-semibold text-neutral-500 uppercase whitespace-nowrap">
-                      Trạng thái Insert
+                      Trạng thái
                     </th>
                   </tr>
                 </thead>
@@ -553,14 +690,18 @@ export function ImportDispatchExcelModal({
                         'transition-colors',
                         r.isValid
                           ? 'hover:bg-neutral-50/60 dark:hover:bg-neutral-800/40'
-                          : 'bg-red-50/50 dark:bg-red-950/25',
+                          : r.isDuplicate
+                            ? 'bg-amber-50/60 dark:bg-amber-950/20 text-amber-900 dark:text-amber-200'
+                            : 'bg-red-50/50 dark:bg-red-950/25',
                       )}
                     >
                       <td className="px-3 py-2 text-neutral-500 font-mono text-xs">{r.rowNumber}</td>
                       <td className="px-3 py-2 font-semibold">
                         {r.cleanPlate ? (
                           <div className="flex items-center gap-1.5">
-                            <span className={cn(r.isMissingDriver && 'text-red-700 dark:text-red-300 font-bold')}>{r.cleanPlate}</span>
+                            <span className={cn(r.isMissingDriver && 'text-red-700 dark:text-red-300 font-bold')}>
+                              {r.cleanPlate}
+                            </span>
                             {r.isCompanyVehicle ? (
                               <span className="text-[10px] px-1.5 py-0.5 rounded bg-sky-100 dark:bg-sky-950 text-sky-700 dark:text-sky-300 font-medium">
                                 Xe nhà
@@ -600,7 +741,12 @@ export function ImportDispatchExcelModal({
                         {r.isValid ? (
                           <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-green-700 dark:text-green-400">
                             <CheckCircle2 className="w-3.5 h-3.5 text-green-500" />
-                            Sẽ insert ({r.driverName})
+                            Mới (Sẽ insert)
+                          </span>
+                        ) : r.isDuplicate ? (
+                          <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-700 dark:text-amber-400">
+                            <Copy className="w-3.5 h-3.5 text-amber-500" />
+                            {r.errorMessage}
                           </span>
                         ) : (
                           <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-red-600 dark:text-red-400">
@@ -621,7 +767,7 @@ export function ImportDispatchExcelModal({
                 variant="outline"
                 onClick={() => {
                   setFile(null);
-                  setParsedRows([]);
+                  setRawFileRows(null);
                   setFileError('');
                 }}
                 disabled={isSubmitting}
@@ -648,9 +794,11 @@ export function ImportDispatchExcelModal({
                   <Upload className="w-4 h-4 mr-1.5" />
                   {isSubmitting
                     ? t('dispatch.importModal.submitting' as never) || 'Đang import...'
-                    : errorRows.length > 0
-                      ? `Xác nhận Import (${validRows.length} chuyến hợp lệ) — Bỏ qua ${errorRows.length} lỗi`
-                      : `Xác nhận Import (${validRows.length} chuyến)`}
+                    : validRows.length === 0
+                      ? t('dispatch.importModal.allDuplicates' as never) || 'Tất cả chuyến trong file đã tồn tại'
+                      : duplicateRows.length > 0
+                        ? `Xác nhận Import (${validRows.length} chuyến mới) — Bỏ qua ${duplicateRows.length} trùng`
+                        : `Xác nhận Import (${validRows.length} chuyến mới)`}
                 </Button>
               </div>
             </div>

@@ -172,18 +172,20 @@ describe('dispatchScheduleService.createBatch', () => {
 
   it('creates multiple trips in a transaction when all drivers are found', async () => {
     mockClient.query.mockResolvedValueOnce(undefined); // 1. BEGIN
+    // 2. Existing schedules lookup (empty for this date)
+    mockClient.query.mockResolvedValueOnce({ rows: [] });
     // Item 1: driver lookup for vehicle_id 1
-    mockClient.query.mockResolvedValueOnce({ rows: [{ user_id: 84, full_name: 'Tài xế 1' }] }); // 2. driver lookup
+    mockClient.query.mockResolvedValueOnce({ rows: [{ user_id: 84, full_name: 'Tài xế 1' }] }); // 3. driver lookup
     // Item 1: INSERT
-    mockClient.query.mockResolvedValueOnce({ rows: [{ ...mockScheduleRow, id: 1, vehicle_id: 1, driver_id: 84 }] }); // 3. INSERT item 1
+    mockClient.query.mockResolvedValueOnce({ rows: [{ ...mockScheduleRow, id: 1, vehicle_id: 1, driver_id: 84 }] }); // 4. INSERT item 1
     // Item 2: vehicle lookup for 51H-678.90
-    mockClient.query.mockResolvedValueOnce({ rows: [{ id: 2, driver_name: 'Tài xế 2' }] }); // 4. vehicle lookup item 2
+    mockClient.query.mockResolvedValueOnce({ rows: [{ id: 2, driver_name: 'Tài xế 2' }] }); // 5. vehicle lookup item 2
     // Item 2: driver lookup for vehicle_id 2
-    mockClient.query.mockResolvedValueOnce({ rows: [{ user_id: 85, full_name: 'Tài xế 2' }] }); // 5. driver lookup item 2
+    mockClient.query.mockResolvedValueOnce({ rows: [{ user_id: 85, full_name: 'Tài xế 2' }] }); // 6. driver lookup item 2
     // Item 2: INSERT
-    mockClient.query.mockResolvedValueOnce({ rows: [{ ...mockScheduleRow, id: 2, vehicle_id: 2, driver_id: 85 }] }); // 6. INSERT item 2
+    mockClient.query.mockResolvedValueOnce({ rows: [{ ...mockScheduleRow, id: 2, vehicle_id: 2, driver_id: 85 }] }); // 7. INSERT item 2
     // COMMIT
-    mockClient.query.mockResolvedValueOnce(undefined); // 7. COMMIT
+    mockClient.query.mockResolvedValueOnce(undefined); // 8. COMMIT
 
     const items = [
       {
@@ -210,14 +212,101 @@ describe('dispatchScheduleService.createBatch', () => {
     expect(mockClient.release).toHaveBeenCalled();
   });
 
+  it('skips duplicate items that already exist in DB for that date', async () => {
+    mockClient.query.mockResolvedValueOnce(undefined); // 1. BEGIN
+    // 2. Existing schedules lookup returns Item 1 already in DB
+    mockClient.query.mockResolvedValueOnce({
+      rows: [
+        {
+          ngay: '2026-04-07',
+          loai_tuyen: 'Tuyến cố định',
+          loai_xe: 'Xe nhỏ',
+          bien_so: '51H12345',
+          diem_nhan: 'Kho A',
+          tan: '5.5',
+          can: null,
+          ghi_chu: null,
+        },
+      ],
+    });
+    // Item 2: vehicle lookup for 51H-678.90 (Item 1 is skipped, so no lookup/insert for Item 1)
+    mockClient.query.mockResolvedValueOnce({ rows: [{ id: 2, driver_name: 'Tài xế 2' }] });
+    // Item 2: driver lookup for vehicle_id 2
+    mockClient.query.mockResolvedValueOnce({ rows: [{ user_id: 85, full_name: 'Tài xế 2' }] });
+    // Item 2: INSERT
+    mockClient.query.mockResolvedValueOnce({ rows: [{ ...mockScheduleRow, id: 2, vehicle_id: 2, driver_id: 85 }] });
+    // COMMIT
+    mockClient.query.mockResolvedValueOnce(undefined);
+
+    const items = [
+      {
+        ngay: '2026-04-07',
+        loai_tuyen: 'Tuyến cố định' as const,
+        loai_xe: 'Xe nhỏ' as const,
+        bien_so: '51H-123.45',
+        tai_xe: 'Nguyễn Văn A',
+        vehicle_id: 1,
+        diem_nhan: 'Kho A',
+        tan: '5.5',
+      },
+      {
+        ngay: '2026-04-07',
+        loai_tuyen: 'Tuyến cố định' as const,
+        loai_xe: 'Xe lớn' as const,
+        bien_so: '51H-678.90',
+        diem_nhan: 'Kho B',
+      },
+    ];
+
+    const result = await dispatchScheduleService.createBatch(items, 1);
+
+    // Only 1 item was inserted (item 2), item 1 was skipped
+    expect(result).toHaveLength(1);
+    expect(result[0].id).toBe(2);
+    expect(mockClient.release).toHaveBeenCalled();
+  });
+
+  it('skips duplicate items that appear multiple times in the same batch', async () => {
+    mockClient.query.mockResolvedValueOnce(undefined); // 1. BEGIN
+    // 2. Existing schedules lookup (empty)
+    mockClient.query.mockResolvedValueOnce({ rows: [] });
+    // Item 1: driver lookup for vehicle_id 1
+    mockClient.query.mockResolvedValueOnce({ rows: [{ user_id: 84, full_name: 'Tài xế 1' }] });
+    // Item 1: INSERT
+    mockClient.query.mockResolvedValueOnce({ rows: [{ ...mockScheduleRow, id: 1, vehicle_id: 1, driver_id: 84 }] });
+    // Item 2 is identical to Item 1 -> skipped
+    // COMMIT
+    mockClient.query.mockResolvedValueOnce(undefined);
+
+    const identicalItem = {
+      ngay: '2026-04-07',
+      loai_tuyen: 'Tuyến cố định' as const,
+      loai_xe: 'Xe nhỏ' as const,
+      bien_so: '51H-123.45',
+      tai_xe: 'Nguyễn Văn A',
+      vehicle_id: 1,
+      diem_nhan: 'Kho A',
+    };
+
+    const items = [identicalItem, identicalItem];
+
+    const result = await dispatchScheduleService.createBatch(items, 1);
+
+    // Only 1 item was inserted, duplicate 2nd row in batch was skipped
+    expect(result).toHaveLength(1);
+    expect(mockClient.release).toHaveBeenCalled();
+  });
+
   it('throws error and lists unassigned plate numbers when driver_id is missing', async () => {
     mockClient.query.mockResolvedValueOnce(undefined); // 1. BEGIN
+    // 2. Existing lookup (empty)
+    mockClient.query.mockResolvedValueOnce({ rows: [] });
     // Item 1: vehicle lookup for 99Z-111.11 -> none
-    mockClient.query.mockResolvedValueOnce({ rows: [] }); // 2. vehicle lookup item 1
+    mockClient.query.mockResolvedValueOnce({ rows: [] }); // 3. vehicle lookup item 1
     // Item 2: vehicle lookup for 99Z-222.22 -> none
-    mockClient.query.mockResolvedValueOnce({ rows: [] }); // 3. vehicle lookup item 2
+    mockClient.query.mockResolvedValueOnce({ rows: [] }); // 4. vehicle lookup item 2
     // ROLLBACK
-    mockClient.query.mockResolvedValueOnce(undefined); // 4. ROLLBACK
+    mockClient.query.mockResolvedValueOnce(undefined); // 5. ROLLBACK
 
     const items = [
       {
@@ -245,8 +334,8 @@ describe('dispatchScheduleService.createBatch', () => {
 
   it('rolls back on DB error', async () => {
     mockClient.query.mockResolvedValueOnce(undefined); // 1. BEGIN
-    // Item 1: vehicle lookup for 51H-123.45 fails
-    mockClient.query.mockRejectedValueOnce(new Error('DB error')); // 2. vehicle lookup throws
+    // 2. Existing lookup throws error
+    mockClient.query.mockRejectedValueOnce(new Error('DB error'));
     mockClient.query.mockResolvedValueOnce(undefined); // 3. ROLLBACK
 
     const items = [

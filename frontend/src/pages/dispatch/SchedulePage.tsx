@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Plus, Calendar, RefreshCw, Car, Truck, Navigation } from 'lucide-react';
 import { useI18n } from '../../i18n/useI18n';
 import { Button } from '../../components/ui/Button';
@@ -46,6 +46,11 @@ export function SchedulePage() {
   const batchCreateSchedule = useBatchCreateDispatchSchedule();
   const updateSchedule = useUpdateDispatchSchedule();
   const deleteSchedule = useDeleteDispatchSchedule();
+
+  const allExistingSchedules = useMemo(
+    () => [...(data?.xe_nho || []), ...(data?.xe_lon || []), ...(data?.tuyen_ngoai || [])],
+    [data],
+  );
 
   const showToast = (msg: string, isError = false) => {
     if (isError) {
@@ -345,6 +350,7 @@ export function SchedulePage() {
         selectedDate={selectedDate}
         loaiTuyen={importContext.loaiTuyen}
         loaiXe={importContext.loaiXe}
+        existingSchedules={allExistingSchedules}
         onSubmit={handleImportSubmit}
         isSubmitting={batchCreateSchedule.isPending}
       />
