@@ -6,7 +6,6 @@ import { Button } from '../ui/Button';
 import { SearchableSelect, type SearchableSelectOption } from '../ui/SearchableSelect';
 import { cn } from '../../utils/cn';
 import { useGetVehicles } from '../../hooks/useVehicleCatalog';
-import { useGetDeliveryPoints } from '../../hooks/useDeliveryPoints';
 import { driverApi, type VehicleDriver } from '../../api/driverApi';
 import type { CreateDispatchScheduleBatchItem } from '../../api/dispatchApi';
 
@@ -70,9 +69,6 @@ export function CreateScheduleModal({
   const { data: vehiclesData } = useGetVehicles('', 'active', undefined, 1, 200);
   const vehicles = vehiclesData?.vehicles ?? [];
 
-  const { data: deliveryPointsData } = useGetDeliveryPoints('', 1, 200);
-  const deliveryPoints = deliveryPointsData?.items ?? [];
-
   const [driversByVehicle, setDriversByVehicle] = useState<Map<number, VehicleDriver[]>>(new Map());
 
   const vehicleOptions: SearchableSelectOption[] = useMemo(
@@ -82,15 +78,6 @@ export function CreateScheduleModal({
         label: `${v.plate_number}${v.driver_name ? ` (${v.driver_name})` : ''}`,
       })),
     [vehicles],
-  );
-
-  const deliveryPointOptions: SearchableSelectOption[] = useMemo(
-    () =>
-      deliveryPoints.map((dp) => ({
-        value: dp.code,
-        label: dp.address ? `${dp.code} - ${dp.address}` : dp.code,
-      })),
-    [deliveryPoints],
   );
 
   useEffect(() => {
@@ -432,15 +419,21 @@ export function CreateScheduleModal({
                     <label className="block text-xs font-semibold text-neutral-700 dark:text-neutral-300 mb-1">
                       {t('dispatch.createModal.diemNhan' as never)} <span className="text-red-500">*</span>
                     </label>
-                    <SearchableSelect
-                      options={deliveryPointOptions}
+                    <input
+                      type="text"
                       value={trip.diem_nhan}
-                      onChange={(val) => handleTripFieldChange(trip.id, 'diem_nhan', val)}
-                      placeholder={t('dispatch.createModal.diemNhanPlaceholder' as never)}
-                      searchPlaceholder="Tìm điểm nhận hàng..."
-                      clearable
-                      error={errors[`trip-${index}-diem_nhan`]}
+                      onChange={(e) => handleTripFieldChange(trip.id, 'diem_nhan', e.target.value)}
+                      placeholder={t('dispatch.createModal.diemNhanPlaceholder' as never) || 'Nhập điểm nhận hàng'}
+                      className={cn(
+                        'w-full px-3 py-2 rounded-lg border text-base sm:text-sm bg-white dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100 outline-none h-11',
+                        errors[`trip-${index}-diem_nhan`]
+                          ? 'border-red-400 focus:border-red-500'
+                          : 'border-neutral-300 dark:border-neutral-600',
+                      )}
                     />
+                    {errors[`trip-${index}-diem_nhan`] && (
+                      <p className="mt-1 text-xs text-red-500">{errors[`trip-${index}-diem_nhan`]}</p>
+                    )}
                   </div>
 
                   <div className="grid grid-cols-2 gap-2">
@@ -565,15 +558,21 @@ export function CreateScheduleModal({
                       )}
                     </td>
                     <td className="px-2 py-2 min-w-[200px]">
-                      <SearchableSelect
-                        options={deliveryPointOptions}
+                      <input
+                        type="text"
                         value={trip.diem_nhan}
-                        onChange={(val) => handleTripFieldChange(trip.id, 'diem_nhan', val)}
-                        placeholder={t('dispatch.createModal.diemNhanPlaceholder' as never)}
-                        searchPlaceholder="Tìm điểm nhận..."
-                        clearable
-                        error={errors[`trip-${index}-diem_nhan`]}
+                        onChange={(e) => handleTripFieldChange(trip.id, 'diem_nhan', e.target.value)}
+                        placeholder={t('dispatch.createModal.diemNhanPlaceholder' as never) || 'Nhập điểm nhận'}
+                        className={cn(
+                          'w-full px-2 py-2 rounded-lg border text-sm bg-white dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100 outline-none transition-colors',
+                          errors[`trip-${index}-diem_nhan`]
+                            ? 'border-red-400 focus:border-red-500'
+                            : 'border-neutral-300 dark:border-neutral-600 focus:border-neutral-500 dark:focus:border-neutral-400',
+                        )}
                       />
+                      {errors[`trip-${index}-diem_nhan`] && (
+                        <p className="mt-0.5 text-xs text-red-500">{errors[`trip-${index}-diem_nhan`]}</p>
+                      )}
                     </td>
                     <td className="px-2 py-2 w-[100px]">
                       <input
