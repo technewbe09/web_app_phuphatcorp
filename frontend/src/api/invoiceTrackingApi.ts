@@ -98,6 +98,17 @@ export interface ReviewRequest {
   supplement_note?: string;
 }
 
+export interface BatchFinishRequest {
+  ticket_ids: number[];
+}
+
+export interface BatchFinishResponse {
+  success_count: number;
+  updated_ids: number[];
+  failed_count: number;
+  errors: Array<{ id: number; error: string }>;
+}
+
 export interface InvoiceTrackingHistoryItem {
   id: number;
   action: string;
@@ -250,6 +261,14 @@ export const invoiceTrackingApi = {
   review: async (id: number, data: ReviewRequest): Promise<InvoiceTrackingTicket> => {
     const res = await axiosClient.put<{ success: boolean; data: InvoiceTrackingTicket }>(
       `/invoice-tracking/${id}/review`,
+      data,
+    );
+    return res.data.data;
+  },
+
+  batchFinish: async (data: BatchFinishRequest): Promise<BatchFinishResponse> => {
+    const res = await axiosClient.post<{ success: boolean; data: BatchFinishResponse }>(
+      '/invoice-tracking/batch-finish',
       data,
     );
     return res.data.data;

@@ -104,6 +104,13 @@ export const invoiceTrackingStatisticsSchema: ValidationChain[] = [
   query('ghi_chu').optional().isString().trim(),
 ];
 
+export const invoiceTrackingBatchReviewSchema: ValidationChain[] = [
+  body('ticket_ids')
+    .isArray({ min: 1, max: 100 })
+    .withMessage('ticket_ids phải là mảng chứa từ 1 đến 100 ID chuyến xe'),
+  body('ticket_ids.*').isInt({ min: 1 }).withMessage('ID chuyến xe phải là số nguyên dương'),
+];
+
 export const invoiceTrackingController = {
   async list(req: AuthRequest, res: Response): Promise<void> {
     try {
@@ -272,6 +279,18 @@ export const invoiceTrackingController = {
       sendSuccess(res, ticket, 'Thông tin chứng từ chuyến hàng');
     } catch (err) {
       handleControllerError(res, err, 'Không thể tải thông tin chuyến hàng');
+    }
+  },
+
+  async batchFinish(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      const { ticket_ids } = req.body;
+      const dispatcherId = req.user!.userId;
+      const currentUser = getCurrentUser(req);
+      const result = await invoiceTrackingService.batchFinish(ticket_ids, dispatcherId, currentUser, req.dataScope);
+      sendSuccess(res, result, `Đã phê duyệt hoàn thành ${result.success_count} chuyến xe thành công`);
+    } catch (err) {
+      handleControllerError(res, err, 'Không thể phê duyệt hàng loạt chuyến xe');
     }
   },
 };

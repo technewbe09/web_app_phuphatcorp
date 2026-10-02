@@ -5,6 +5,7 @@ import {
   type InvoiceTrackingStatisticsFilters,
   type CopyDocumentsRequest,
   type ReviewRequest,
+  type BatchFinishRequest,
 } from '../api/invoiceTrackingApi';
 
 export function useInvoiceTracking(filters: InvoiceTrackingFilters) {
@@ -80,6 +81,16 @@ export function useReviewTicket() {
       queryClient.invalidateQueries({ queryKey: ['invoice-tracking'] });
       queryClient.invalidateQueries({ queryKey: ['invoice-tracking', 'detail', variables.id] });
       queryClient.invalidateQueries({ queryKey: ['invoice-tracking', 'history', variables.id] });
+    },
+  });
+}
+
+export function useBatchFinishTickets() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: BatchFinishRequest) => invoiceTrackingApi.batchFinish(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['invoice-tracking'] });
     },
   });
 }

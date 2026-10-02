@@ -8,6 +8,7 @@ import {
   invoiceTrackingCopySchema,
   invoiceTrackingReviewSchema,
   invoiceTrackingStatisticsSchema,
+  invoiceTrackingBatchReviewSchema,
 } from '../controllers/invoiceTrackingController';
 import { validate } from '../middleware/validate';
 import { authenticateToken, requirePermission } from '../middleware/auth';
@@ -36,6 +37,7 @@ router.use(resolveDataScope('invoice_tracking'));
 
 router.get('/', requirePermission('invoice_tracking.view'), ...validate(invoiceTrackingListSchema), invoiceTrackingController.list);
 router.get('/statistics', requirePermission('invoice_tracking.view'), ...validate(invoiceTrackingStatisticsSchema), invoiceTrackingController.getStatistics);
+router.post('/batch-finish', requirePermission('invoice_tracking.manage'), ...validate(invoiceTrackingBatchReviewSchema), invoiceTrackingController.batchFinish);
 router.get('/:id', requirePermission('invoice_tracking.view'), ...validate(invoiceTrackingDetailSchema), invoiceTrackingController.getById);
 router.get('/:id/history', requirePermission('invoice_tracking.view'), ...validate(invoiceTrackingDetailSchema), invoiceTrackingController.getHistory);
 router.get('/:id/copyable-tickets', requirePermission('invoice_tracking.view'), ...validate(invoiceTrackingDetailSchema), invoiceTrackingController.getCopyableTickets);
