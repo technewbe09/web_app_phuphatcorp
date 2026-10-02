@@ -5,6 +5,13 @@ description: Ghi lại các bài học kinh nghiệm, bug đã fix, và pitfalls
 # Lessons Learned — PhuPhatCorp
 
 ---
+## Change: Đổi ô nhập "Điểm nhận hàng" sang Text Input tự do trong Tạo/Sửa chuyến xe
+- **Ngày:** 2026-10-02
+- **Feature:** Bảng điều phối xe (`CreateScheduleModal.tsx`, `EditScheduleModal.tsx`)
+- **Mô tả:** Chuyển trường nhập liệu "Điểm nhận hàng" (`diem_nhan`) từ `SearchableSelect` (chọn từ danh mục điểm nhận hàng) thành ô nhập văn bản tự do (`<input type="text" ...>`) ở cả giao diện tạo mới chuyến (mobile + desktop) và modal sửa chuyến xe, tạo sự linh hoạt tối đa khi nhập điểm giao nhận thực tế.
+- **Files liên quan:** `frontend/src/components/dispatch/CreateScheduleModal.tsx`, `frontend/src/components/dispatch/EditScheduleModal.tsx`, `frontend/src/i18n/vi.json`, `frontend/src/i18n/en.json`.
+
+---
 ## Feature: Quick Approval Tab & Batch Finish for Invoice Tracking
 - **Ngày:** 2026-10-02
 - **Feature:** Theo dõi hóa đơn (`invoice_tracking`), Phê duyệt nhanh & Batch Approve
