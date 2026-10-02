@@ -55,31 +55,21 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (modalContext) => UploadDocumentsModal(
-        onUpload: (files, driverNote) async {
-          Navigator.of(modalContext).pop();
-          try {
-            final provider = screenContext.read<InvoiceTrackingProvider>();
-            await provider.uploadDocuments(
-              id: widget.ticketId,
-              files: files,
-              driverNote: driverNote,
-            );
-            if (!mounted) return;
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Tải lên chứng từ thành công!'),
-                backgroundColor: Colors.green,
-              ),
-            );
-          } catch (e) {
-            if (!mounted) return;
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text('Tải lên thất bại: $e'),
-                backgroundColor: AppColors.red600,
-              ),
-            );
-          }
+        onUpload: (files, driverNote, onProgress) async {
+          final provider = screenContext.read<InvoiceTrackingProvider>();
+          await provider.uploadDocuments(
+            id: widget.ticketId,
+            files: files,
+            driverNote: driverNote,
+            onProgress: onProgress,
+          );
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Tải lên chứng từ thành công!'),
+              backgroundColor: Colors.green,
+            ),
+          );
         },
       ),
     );

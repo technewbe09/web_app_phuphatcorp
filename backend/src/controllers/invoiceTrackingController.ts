@@ -55,8 +55,8 @@ export const invoiceTrackingDetailSchema: ValidationChain[] = [
 export const invoiceTrackingUploadSchema: ValidationChain[] = [
   param('id').isInt({ min: 1 }).withMessage('ID không hợp lệ'),
   body('files')
-    .isArray({ min: 1, max: 10 })
-    .withMessage('files phải là array từ 1 đến 10 phần tử'),
+    .isArray({ min: 1 })
+    .withMessage('files phải là array ít nhất 1 phần tử'),
   body('files.*.file_name').notEmpty().withMessage('file_name là bắt buộc').isString(),
   body('files.*.mime_type')
     .notEmpty()

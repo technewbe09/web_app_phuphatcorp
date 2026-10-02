@@ -403,10 +403,6 @@ export const invoiceTrackingService = {
       throw new InvoiceTrackingError('NO_FILES', 'Phải có ít nhất 1 file', 400);
     }
 
-    if (files.length > 10) {
-      throw new InvoiceTrackingError('TOO_MANY_FILES', 'Tối đa 10 files mỗi lần upload', 400);
-    }
-
     const allowedMimes = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
     const processedDocuments: DocumentFile[] = [];
     const now = new Date().toISOString();

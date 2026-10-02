@@ -204,7 +204,7 @@ Ticket có badge "Yêu cầu bổ sung" (đỏ)
 │ ┌─ Drag & Drop Zone ──────────────┐│
 │ │  Kéo thả file hoặc click chọn   ││
 │ │  Hỗ trợ: JPG, PNG, PDF          ││
-│ │  Tối đa: 10 files, 5MB/file     ││
+│ │  Không giới hạn, 50MB/file      ││
 │ └─────────────────────────────────┘│
 │                                     │
 │ Selected files:                     │
@@ -392,13 +392,13 @@ invoice_tracking.action.retry = "Thử lại"
 invoice_tracking.upload.title = "Upload chứng từ"
 invoice_tracking.upload.dropzone = "Kéo thả file hoặc click chọn"
 invoice_tracking.upload.supported = "Hỗ trợ: JPG, PNG, PDF"
-invoice_tracking.upload.max = "Tối đa: 10 files, 5MB/file"
+invoice_tracking.upload.max = "Không giới hạn số lượng ảnh, tối đa 50MB/file"
 invoice_tracking.upload.note_label = "Ghi chú"
 invoice_tracking.upload.note_placeholder = "Nhập ghi chú (tùy chọn)..."
 invoice_tracking.upload.submit = "Gửi chứng từ"
-invoice_tracking.upload.error.size = "File '{name}' vượt quá 5MB"
+invoice_tracking.upload.error.size = "File '{name}' vượt quá 50MB"
 invoice_tracking.upload.error.type = "Chỉ chấp nhận JPG, PNG, PDF"
-invoice_tracking.upload.error.count = "Tối đa 10 files mỗi lần upload"
+invoice_tracking.upload.uploading_progress = "Đang tải lên {current}/{total} tệp..."
 
 invoice_tracking.supplement.title = "Yêu cầu bổ sung chứng từ"
 invoice_tracking.supplement.note_label = "Ghi chú bổ sung (bắt buộc)"
