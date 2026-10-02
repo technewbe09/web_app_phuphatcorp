@@ -1080,6 +1080,11 @@
       "noDocuments": "Chưa có chứng từ",
       "noNotes": "Không có ghi chú"
     },
+    "viewer": {
+      "rotateLeft": "Xoay trái 90° (L)",
+      "rotateRight": "Xoay phải 90° (R)",
+      "resetRotation": "Đặt lại góc xoay (0°)"
+    },
     "action": {
       "upload": "Upload chứng từ",
       "finish": "Hoàn thành",
