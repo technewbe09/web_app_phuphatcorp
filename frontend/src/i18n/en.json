@@ -1067,6 +1067,11 @@
       "noDocuments": "No documents uploaded",
       "noNotes": "No notes"
     },
+    "viewer": {
+      "rotateLeft": "Rotate Left 90° (L)",
+      "rotateRight": "Rotate Right 90° (R)",
+      "resetRotation": "Reset Rotation (0°)"
+    },
     "action": {
       "upload": "Upload Documents",
       "finish": "Finish",

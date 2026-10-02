@@ -1,6 +1,17 @@
-import { useEffect, useCallback } from 'react';
-import { FileText, X, Download, ExternalLink, ChevronLeft, ChevronRight, Copy } from 'lucide-react';
+import { useState, useEffect, useCallback } from 'react';
+import {
+  FileText,
+  X,
+  Download,
+  ExternalLink,
+  ChevronLeft,
+  ChevronRight,
+  Copy,
+  RotateCw,
+  RotateCcw,
+} from 'lucide-react';
 import { type DocumentFile, invoiceTrackingApi } from '../../api/invoiceTrackingApi';
+import { useI18n } from '../../i18n/useI18n';
 
 interface DocumentViewerModalProps {
   document: DocumentFile | null;
@@ -15,6 +26,9 @@ export function DocumentViewerModal({
   onClose,
   onNavigate,
 }: DocumentViewerModalProps) {
+  const { t } = useI18n();
+  const [rotation, setRotation] = useState<number>(0);
+
   const currentIndex =
     doc && documents.length > 0
       ? documents.findIndex(
@@ -29,6 +43,11 @@ export function DocumentViewerModal({
   const hasPrev = hasMultiple && currentIndex > 0;
   const hasNext = hasMultiple && currentIndex < documents.length - 1;
 
+  // Reset rotation when switching documents
+  useEffect(() => {
+    setRotation(0);
+  }, [doc?.filename, doc?.original_filename, doc?.file_name]);
+
   const handlePrev = useCallback(() => {
     if (hasPrev && onNavigate) {
       onNavigate(documents[currentIndex - 1]);
@@ -41,7 +60,21 @@ export function DocumentViewerModal({
     }
   }, [hasNext, onNavigate, documents, currentIndex]);
 
-  // Handle Keyboard navigation (ESC, ArrowLeft, ArrowRight)
+  const handleRotateRight = useCallback(() => {
+    setRotation((prev) => (prev + 90) % 360);
+  }, []);
+
+  const handleRotateLeft = useCallback(() => {
+    setRotation((prev) => (prev - 90 + 360) % 360);
+  }, []);
+
+  const handleResetRotation = useCallback(() => {
+    setRotation(0);
+  }, []);
+
+  const isImage = doc?.mime_type?.startsWith('image/');
+
+  // Handle Keyboard navigation (ESC, ArrowLeft, ArrowRight, R/L for rotate)
   useEffect(() => {
     if (!doc) return;
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -51,17 +84,20 @@ export function DocumentViewerModal({
         handlePrev();
       } else if (e.key === 'ArrowRight') {
         handleNext();
+      } else if (isImage && (e.key === 'r' || e.key === 'R')) {
+        handleRotateRight();
+      } else if (isImage && (e.key === 'l' || e.key === 'L')) {
+        handleRotateLeft();
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [doc, onClose, handlePrev, handleNext]);
+  }, [doc, onClose, handlePrev, handleNext, isImage, handleRotateRight, handleRotateLeft]);
 
   if (!doc) return null;
 
   const fileName = doc.original_filename || doc.file_name || 'Chứng từ';
   const fileUrl = doc.filename ? `/api/invoice-tracking/files/${doc.filename}` : null;
-  const isImage = doc.mime_type?.startsWith('image/');
 
   const handleDownload = () => {
     invoiceTrackingApi.downloadDocumentFile(doc, fileName);
@@ -102,7 +138,7 @@ export function DocumentViewerModal({
       >
         {/* Header */}
         <div className="flex items-center justify-between p-3 sm:px-4 border-b border-neutral-200 dark:border-neutral-800">
-          <div className="flex items-center gap-2 truncate max-w-[200px] sm:max-w-md">
+          <div className="flex items-center gap-2 truncate max-w-[180px] sm:max-w-md">
             {hasMultiple && (
               <span className="px-2 py-0.5 rounded-full bg-neutral-100 dark:bg-neutral-800 text-[11px] font-mono font-semibold text-neutral-600 dark:text-neutral-300 shrink-0">
                 {currentIndex + 1} / {documents.length}
@@ -120,6 +156,41 @@ export function DocumentViewerModal({
           </div>
 
           <div className="flex items-center gap-1 shrink-0">
+            {/* Image Rotation Controls */}
+            {isImage && (
+              <>
+                <button
+                  type="button"
+                  onClick={handleRotateLeft}
+                  className="p-1.5 rounded-lg text-neutral-500 hover:text-neutral-700 dark:text-neutral-400 dark:hover:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition cursor-pointer"
+                  title={t('invoice_tracking.viewer.rotateLeft' as never) || 'Xoay trái 90° (L)'}
+                  aria-label="Xoay trái 90°"
+                >
+                  <RotateCcw className="h-4 w-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={handleRotateRight}
+                  className="p-1.5 rounded-lg text-neutral-500 hover:text-neutral-700 dark:text-neutral-400 dark:hover:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition cursor-pointer"
+                  title={t('invoice_tracking.viewer.rotateRight' as never) || 'Xoay phải 90° (R)'}
+                  aria-label="Xoay phải 90°"
+                >
+                  <RotateCw className="h-4 w-4" />
+                </button>
+                {rotation !== 0 && (
+                  <button
+                    type="button"
+                    onClick={handleResetRotation}
+                    className="px-2 py-0.5 rounded-md bg-neutral-100 hover:bg-neutral-200 dark:bg-neutral-800 dark:hover:bg-neutral-700 text-neutral-700 dark:text-neutral-300 text-xs font-mono font-medium transition cursor-pointer"
+                    title={t('invoice_tracking.viewer.resetRotation' as never) || 'Đặt lại góc xoay ban đầu (0°)'}
+                    aria-label="Đặt lại góc xoay"
+                  >
+                    {rotation}°
+                  </button>
+                )}
+              </>
+            )}
+
             {doc.mime_type === 'application/pdf' && (
               <button
                 type="button"
@@ -178,7 +249,10 @@ export function DocumentViewerModal({
               <img
                 src={fileUrl || `data:${doc.mime_type};base64,${doc.file_data}`}
                 alt={fileName}
-                className="max-h-[75vh] w-auto max-w-full object-contain rounded-lg transition-all duration-150 select-none"
+                style={{
+                  transform: `rotate(${rotation}deg)`,
+                }}
+                className="max-h-[75vh] w-auto max-w-full object-contain rounded-lg transition-transform duration-200 ease-in-out select-none"
               />
             ) : (
               <div className="flex h-56 w-72 flex-col items-center justify-center gap-3 text-center p-4">

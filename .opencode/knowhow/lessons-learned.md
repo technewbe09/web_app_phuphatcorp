@@ -5,6 +5,20 @@ description: Ghi lại các bài học kinh nghiệm, bug đã fix, và pitfalls
 # Lessons Learned — PhuPhatCorp
 
 ---
+## Feature: Image Rotation Control in DocumentViewerModal
+- **Ngày:** 2026-10-02
+- **Feature:** Theo dõi hóa đơn (`DocumentViewerModal`, Lightbox Image Viewer)
+- **Mô tả:** Hỗ trợ xoay hình ảnh $90^\circ, 180^\circ, 270^\circ, 0^\circ$ trực tiếp trên modal xem ảnh chi tiết giúp giải quyết việc ảnh hóa đơn tài xế chụp dọc/ngược khó đọc trên màn hình máy tính.
+- **Thực hiện:**
+  - `DocumentViewerModal.tsx`:
+    - Thêm các nút xoay: `RotateCcw` (Xoay trái $90^\circ$), `RotateCw` (Xoay phải $90^\circ$) và nút huy hiệu hiển thị góc xoay (ví dụ `90°`) để đặt lại về ban đầu ($0^\circ$).
+    - Hỗ trợ phím tắt bàn phím: Phím `R` / `r` để xoay phải, phím `L` / `l` để xoay trái.
+    - Tự động đặt lại góc xoay về $0^\circ$ khi chuyển qua ảnh khác (Next/Back) hoặc đổi tệp.
+    - Hiệu ứng chuyển động mượt mà với CSS transition `transition-transform duration-200 ease-in-out`.
+    - Tự động ẩn các nút xoay khi tệp đang xem là tài liệu PDF.
+- **Files:** `frontend/src/components/invoice-tracking/DocumentViewerModal.tsx`, `frontend/src/i18n/vi.json`, `frontend/src/i18n/en.json`.
+
+---
 ## Rule: Kiểm tra & Tự động bỏ qua chuyến xe trùng lặp khi Import nhiều lần trong ngày
 - **Ngày:** 2026-09-30
 - **Severity:** Medium
