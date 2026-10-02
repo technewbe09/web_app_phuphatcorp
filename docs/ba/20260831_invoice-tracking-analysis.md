@@ -95,7 +95,7 @@ created ──[tài xế upload]──→ pending_review
 - AC-02.3: Sau upload, `invoice_status` tự động chuyển sang `pending_review`
 - AC-02.4: `driver_note` được cập nhật nếu tài xế nhập ghi chú
 - AC-02.5: File được lưu trữ (base64 hoặc presigned URL — TBD ở Tech Lead)
-- AC-02.6: Validation: max 10 files, mỗi file ≤ 5MB, chỉ chấp nhận image/pdf
+- AC-02.6: Validation: Không giới hạn số lượng files (hỗ trợ Progressive/Chunk upload), mỗi file ≤ 50MB, chỉ chấp nhận image/pdf
 
 ### UC-03: Dispatcher duyệt ticket (Finish)
 
@@ -233,7 +233,7 @@ created ──[tài xế upload]──→ pending_review
 - **BR-003:** Review (finish/request_supplement) chỉ allowed khi status = `pending_review`
 - **BR-004:** `supplement_note` bắt buộc khi action = `request_supplement`
 - **BR-005:** Documents là append-only (không xóa individual document qua API này)
-- **BR-006:** Max 10 files per upload, mỗi file ≤ 5MB
+- **BR-006:** Không giới hạn số lượng files per upload (sử dụng cơ chế chunking/tiến độ tải lên), mỗi file ≤ 50MB
 - **BR-007:** Accepted MIME types: `image/jpeg`, `image/png`, `image/webp`, `application/pdf`
 - **BR-008:** `invoice_status` transitions enforced at service layer (state machine validation)
 - **BR-009:** Migration phải idempotent (ALTER TABLE ADD COLUMN IF NOT EXISTS)

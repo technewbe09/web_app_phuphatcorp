@@ -1,3 +1,4 @@
+import type { AxiosProgressEvent } from 'axios';
 import axiosClient from './axiosClient';
 
 export interface DocumentFile {
@@ -226,6 +227,7 @@ export const invoiceTrackingApi = {
   uploadDocuments: async (
     id: number,
     data: FormData | { files: File[]; driver_note?: string },
+    onUploadProgress?: (progressEvent: AxiosProgressEvent) => void,
   ): Promise<InvoiceTrackingTicket> => {
     let body: FormData;
     if (data instanceof FormData) {
@@ -238,7 +240,10 @@ export const invoiceTrackingApi = {
     const res = await axiosClient.post<{ success: boolean; data: InvoiceTrackingTicket }>(
       `/invoice-tracking/${id}/documents`,
       body,
-      { headers: { 'Content-Type': 'multipart/form-data' } },
+      {
+        headers: { 'Content-Type': 'multipart/form-data' },
+        onUploadProgress,
+      },
     );
     return res.data.data;
   },

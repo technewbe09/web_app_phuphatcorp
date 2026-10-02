@@ -161,6 +161,7 @@ class InvoiceTrackingProvider extends ChangeNotifier {
     required int id,
     required List<DocumentFile> files,
     String? driverNote,
+    void Function(int current, int total, double progress)? onProgress,
   }) async {
     _isActionSubmitting = true;
     notifyListeners();
@@ -170,6 +171,7 @@ class InvoiceTrackingProvider extends ChangeNotifier {
         id: id,
         files: files,
         driverNote: driverNote,
+        onProgress: onProgress,
       );
 
       _selectedTicket = updatedTicket;

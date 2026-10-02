@@ -228,3 +228,43 @@ describe('invoiceTrackingService.batchFinish', () => {
     expect(res.errors).toHaveLength(2);
   });
 });
+
+describe('invoiceTrackingService.uploadDocuments', () => {
+  it('allows uploading more than 10 files without throwing TOO_MANY_FILES', async () => {
+    mockPool.query.mockResolvedValueOnce({ rows: [mockTicketRow] } as never);
+    jest.spyOn(workflowService, 'authorizeAction').mockResolvedValue({ authorized: true });
+    jest.spyOn(workflowService, 'getNextStatus').mockResolvedValue('pending_review');
+
+    // Create 15 mock files
+    const mockFiles = Array.from({ length: 15 }, (_, i) => ({
+      filename: `doc_${i + 1}.jpg`,
+      original_filename: `doc_${i + 1}.jpg`,
+      mime_type: 'image/jpeg',
+      file_size: 1024,
+    }));
+
+    mockPool.query.mockResolvedValueOnce({
+      rows: [
+        {
+          ...mockTicketRow,
+          invoice_status: 'pending_review',
+          documents: mockFiles,
+        },
+      ],
+    } as never);
+
+    const res = await invoiceTrackingService.uploadDocuments(
+      10,
+      mockFiles,
+      'Gửi 15 ảnh hóa đơn',
+      undefined,
+      { userId: 1, role: 'ADMIN' }
+    );
+
+    expect(res.invoice_status).toBe('pending_review');
+    expect(mockPool.query).toHaveBeenCalledWith(
+      expect.stringContaining('UPDATE dispatch_schedules'),
+      expect.arrayContaining([expect.stringContaining('doc_15.jpg')]),
+    );
+  });
+});

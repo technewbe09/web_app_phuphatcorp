@@ -6,8 +6,14 @@ import '../../../data/models/invoice_tracking_ticket.dart';
 import '../../../widgets/custom_button.dart';
 import '../../../widgets/custom_text_field.dart';
 
+typedef UploadProgressCallback = void Function(int current, int total, double progress);
+
 class UploadDocumentsModal extends StatefulWidget {
-  final Function(List<DocumentFile> files, String? driverNote) onUpload;
+  final Future<void> Function(
+    List<DocumentFile> files,
+    String? driverNote,
+    UploadProgressCallback onProgress,
+  ) onUpload;
   final bool isLoading;
 
   const UploadDocumentsModal({
@@ -25,6 +31,10 @@ class _UploadDocumentsModalState extends State<UploadDocumentsModal> {
   final List<DocumentFile> _selectedFiles = [];
   final TextEditingController _noteController = TextEditingController();
   String? _errorMessage;
+  bool _isUploading = false;
+  double _uploadProgress = 0.0;
+  int _uploadedCurrent = 0;
+  int _uploadTotal = 0;
 
   @override
   void dispose() {
@@ -33,6 +43,7 @@ class _UploadDocumentsModalState extends State<UploadDocumentsModal> {
   }
 
   Future<void> _pickImage(ImageSource source) async {
+    if (_isUploading || widget.isLoading) return;
     try {
       if (source == ImageSource.camera) {
         final XFile? photo = await _picker.pickImage(
@@ -84,12 +95,14 @@ class _UploadDocumentsModalState extends State<UploadDocumentsModal> {
   }
 
   void _removeFile(int index) {
+    if (_isUploading || widget.isLoading) return;
     setState(() {
       _selectedFiles.removeAt(index);
     });
   }
 
-  void _handleSubmit() {
+  Future<void> _handleSubmit() async {
+    if (_isUploading || widget.isLoading) return;
     if (_selectedFiles.isEmpty) {
       setState(() {
         _errorMessage = 'Vui lòng chọn hoặc chụp ít nhất 1 hình ảnh chứng từ.';
@@ -97,12 +110,45 @@ class _UploadDocumentsModalState extends State<UploadDocumentsModal> {
       return;
     }
 
-    widget.onUpload(_selectedFiles, _noteController.text.trim());
+    setState(() {
+      _isUploading = true;
+      _uploadProgress = 0.0;
+      _uploadedCurrent = 0;
+      _uploadTotal = _selectedFiles.length;
+      _errorMessage = null;
+    });
+
+    try {
+      await widget.onUpload(
+        _selectedFiles,
+        _noteController.text.trim(),
+        (current, total, progress) {
+          if (mounted) {
+            setState(() {
+              _uploadedCurrent = current;
+              _uploadTotal = total;
+              _uploadProgress = progress;
+            });
+          }
+        },
+      );
+      if (mounted) {
+        Navigator.of(context).pop();
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isUploading = false;
+          _errorMessage = e.toString().replaceAll('Exception: ', '');
+        });
+      }
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final isBusy = _isUploading || widget.isLoading;
 
     return Container(
       decoration: BoxDecoration(
@@ -147,7 +193,7 @@ class _UploadDocumentsModalState extends State<UploadDocumentsModal> {
                 ),
                 IconButton(
                   icon: const Icon(Icons.close, size: 20),
-                  onPressed: () => Navigator.of(context).pop(),
+                  onPressed: isBusy ? null : () => Navigator.of(context).pop(),
                 ),
               ],
             ),
@@ -183,7 +229,7 @@ class _UploadDocumentsModalState extends State<UploadDocumentsModal> {
               children: [
                 Expanded(
                   child: OutlinedButton.icon(
-                    onPressed: () => _pickImage(ImageSource.camera),
+                    onPressed: isBusy ? null : () => _pickImage(ImageSource.camera),
                     icon: const Icon(Icons.camera_alt_outlined, size: 20),
                     label: const Text('Chụp ảnh'),
                     style: OutlinedButton.styleFrom(
@@ -195,7 +241,7 @@ class _UploadDocumentsModalState extends State<UploadDocumentsModal> {
                 const SizedBox(width: 12),
                 Expanded(
                   child: OutlinedButton.icon(
-                    onPressed: () => _pickImage(ImageSource.gallery),
+                    onPressed: isBusy ? null : () => _pickImage(ImageSource.gallery),
                     icon: const Icon(Icons.photo_library_outlined, size: 20),
                     label: const Text('Thư viện'),
                     style: OutlinedButton.styleFrom(
@@ -247,21 +293,22 @@ class _UploadDocumentsModalState extends State<UploadDocumentsModal> {
                             ),
                           ),
                         ),
-                        Positioned(
-                          top: 2,
-                          right: 2,
-                          child: GestureDetector(
-                            onTap: () => _removeFile(index),
-                            child: Container(
-                              padding: const EdgeInsets.all(3),
-                              decoration: const BoxDecoration(
-                                color: Colors.black54,
-                                shape: BoxShape.circle,
+                        if (!isBusy)
+                          Positioned(
+                            top: 2,
+                            right: 2,
+                            child: GestureDetector(
+                              onTap: () => _removeFile(index),
+                              child: Container(
+                                padding: const EdgeInsets.all(3),
+                                decoration: const BoxDecoration(
+                                  color: Colors.black54,
+                                  shape: BoxShape.circle,
+                                ),
+                                child: const Icon(Icons.close, size: 14, color: Colors.white),
                               ),
-                              child: const Icon(Icons.close, size: 14, color: Colors.white),
                             ),
                           ),
-                        ),
                       ],
                     );
                   },
@@ -276,14 +323,70 @@ class _UploadDocumentsModalState extends State<UploadDocumentsModal> {
               placeholder: 'Nhập ghi chú cho chứng từ này (nếu có)...',
               controller: _noteController,
               keyboardType: TextInputType.multiline,
+              enabled: !isBusy,
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: 16),
+
+            // Upload Progress Bar Indicator
+            if (_isUploading) ...[
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: isDark
+                      ? Theme.of(context).primaryColor.withValues(alpha: 0.15)
+                      : Theme.of(context).primaryColor.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(
+                    color: Theme.of(context).primaryColor.withValues(alpha: 0.3),
+                  ),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          'Đang tải lên ${_selectedFiles.length} ảnh...',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: isDark ? AppColors.white : Theme.of(context).primaryColor,
+                          ),
+                        ),
+                        Text(
+                          '${(_uploadProgress * 100).toInt()}%',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.bold,
+                            color: isDark ? AppColors.white : Theme.of(context).primaryColor,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(4),
+                      child: LinearProgressIndicator(
+                        value: _uploadProgress > 0 ? _uploadProgress : null,
+                        backgroundColor: isDark ? AppColors.neutral700 : AppColors.neutral200,
+                        valueColor: AlwaysStoppedAnimation<Color>(Theme.of(context).primaryColor),
+                        minHeight: 6,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+            ],
 
             // Submit Button
             CustomButton(
-              text: 'Xác nhận tải lên (${_selectedFiles.length})',
-              isLoading: widget.isLoading,
-              onPressed: _handleSubmit,
+              text: _isUploading
+                  ? 'Đang tải lên...'
+                  : 'Xác nhận tải lên (${_selectedFiles.length})',
+              isLoading: isBusy,
+              onPressed: isBusy ? null : _handleSubmit,
             ),
           ],
         ),

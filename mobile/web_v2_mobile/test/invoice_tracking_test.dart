@@ -7,6 +7,7 @@ import 'package:web_v2_mobile/data/models/invoice_tracking_ticket.dart';
 import 'package:web_v2_mobile/data/services/invoice_tracking_service.dart';
 import 'package:web_v2_mobile/providers/auth_provider.dart';
 import 'package:web_v2_mobile/providers/invoice_tracking_provider.dart';
+import 'package:web_v2_mobile/screens/invoice_tracking/dialogs/upload_documents_modal.dart';
 import 'package:web_v2_mobile/screens/invoice_tracking/ticket_detail_screen.dart';
 import 'package:web_v2_mobile/widgets/invoice_status_badge.dart';
 
@@ -127,5 +128,24 @@ void main() {
     expect(find.text('Sao chép chứng từ cùng ngày'), findsOneWidget);
     expect(find.text('Bổ sung thêm chứng từ'), findsOneWidget);
     expect(find.text('50H55116'), findsOneWidget); // source badge
+  });
+
+  testWidgets('UploadDocumentsModal displays upload form elements properly', (WidgetTester tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.lightTheme,
+        home: Scaffold(
+          body: UploadDocumentsModal(
+            onUpload: (files, note, onProgress) async {},
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('Tải lên chứng từ / hóa đơn'), findsOneWidget);
+    expect(find.text('Chụp ảnh'), findsOneWidget);
+    expect(find.text('Thư viện'), findsOneWidget);
+    expect(find.text('Ghi chú tài xế (tùy chọn)'), findsOneWidget);
+    expect(find.text('Xác nhận tải lên (0)'), findsOneWidget);
   });
 }

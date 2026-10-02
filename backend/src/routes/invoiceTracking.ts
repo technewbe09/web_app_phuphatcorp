@@ -43,7 +43,7 @@ router.get('/:id/history', requirePermission('invoice_tracking.view'), ...valida
 router.get('/:id/copyable-tickets', requirePermission('invoice_tracking.view'), ...validate(invoiceTrackingDetailSchema), invoiceTrackingController.getCopyableTickets);
 router.post('/:id/share', requirePermission('invoice_tracking.view'), ...validate(invoiceTrackingDetailSchema), invoiceTrackingController.createShareLink);
 router.post('/:id/copy-documents', requirePermission('invoice_tracking.view'), ...validate(invoiceTrackingCopySchema), invoiceTrackingController.copyDocuments);
-router.post('/:id/documents', requirePermission('invoice_tracking.view'), imageUpload.array('files', 10), invoiceTrackingController.uploadDocuments);
+router.post('/:id/documents', requirePermission('invoice_tracking.view'), imageUpload.array('files'), invoiceTrackingController.uploadDocuments);
 router.put('/:id/review', requirePermission('invoice_tracking.manage'), ...validate(invoiceTrackingReviewSchema), invoiceTrackingController.review);
 
 export default router;

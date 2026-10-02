@@ -162,14 +162,24 @@ class InvoiceTrackingService {
     required int id,
     required List<DocumentFile> files,
     String? driverNote,
+    void Function(int current, int total, double progress)? onProgress,
   }) async {
     try {
+      if (files.isEmpty) {
+        throw Exception('Phải chọn ít nhất 1 hình ảnh chứng từ');
+      }
+
       final response = await _apiClient.dio.post(
         ApiEndpoints.invoiceTrackingDocuments(id),
         data: {
           'files': files.map((f) => f.toJson()).toList(),
           if (driverNote != null && driverNote.trim().isNotEmpty)
             'driver_note': driverNote.trim(),
+        },
+        onSendProgress: (count, total) {
+          if (total > 0) {
+            onProgress?.call(count, total, count / total);
+          }
         },
       );
 

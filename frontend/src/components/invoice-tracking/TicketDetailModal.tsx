@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { useI18n } from '../../i18n/useI18n';
 import { Modal } from '../ui/Modal';
 import { Button } from '../ui/Button';
@@ -10,7 +11,7 @@ import { CopyDocumentsModal } from './CopyDocumentsModal';
 import { SupplementNoteDialog } from './SupplementNoteDialog';
 import { ConfirmFinishDialog } from './ConfirmFinishDialog';
 import { ShareTicketDialog } from './ShareTicketDialog';
-import { useUploadDocuments, useReviewTicket, useInvoiceTrackingHistory, useInvoiceTrackingDetail, useCreateShareLink } from '../../hooks/useInvoiceTracking';
+import { useReviewTicket, useInvoiceTrackingHistory, useInvoiceTrackingDetail, useCreateShareLink } from '../../hooks/useInvoiceTracking';
 import { type InvoiceTrackingTicket, type DocumentFile, invoiceTrackingApi } from '../../api/invoiceTrackingApi';
 import { formatDate, formatDateTime } from '../../utils/format';
 import { copyToClipboard } from '../../utils/clipboard';
@@ -50,11 +51,13 @@ export function TicketDetailModal({ ticket: initialTicket, isOpen, onClose }: Ti
   const [selectedHistoryDoc, setSelectedHistoryDoc] = useState<DocumentFile | null>(null);
   const [copied, setCopied] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [uploadProgress, setUploadProgress] = useState<{ current: number; total: number; percentage?: number } | null>(null);
+  const [isUploadingProgress, setIsUploadingProgress] = useState(false);
 
+  const queryClient = useQueryClient();
   const { data: detailTicket } = useInvoiceTrackingDetail(isOpen ? initialTicket?.id ?? null : null);
   const ticket = detailTicket || initialTicket;
 
-  const uploadMutation = useUploadDocuments();
   const reviewMutation = useReviewTicket();
   const shareMutation = useCreateShareLink();
   const { data: historyItems, isLoading: isLoadingHistory } = useInvoiceTrackingHistory(ticket?.id ?? null);
@@ -66,23 +69,41 @@ export function TicketDetailModal({ ticket: initialTicket, isOpen, onClose }: Ti
 
   if (!ticket) return null;
 
-  const handleUpload = (files: File[], note: string) => {
+  const handleUpload = async (files: File[], note: string) => {
     setActionError(null);
-    uploadMutation.mutate(
-      { id: ticket.id, data: { files, driver_note: note || undefined } },
-      {
-        onSuccess: () => {
-          setShowUpload(false);
-          onClose();
+    setIsUploadingProgress(true);
+    setUploadProgress({ current: files.length, total: files.length, percentage: 0 });
+
+    try {
+      await invoiceTrackingApi.uploadDocuments(
+        ticket.id,
+        { files, driver_note: note || undefined },
+        (event) => {
+          if (event.total) {
+            const pct = Math.round((event.loaded * 100) / event.total);
+            setUploadProgress({
+              current: files.length,
+              total: files.length,
+              percentage: pct,
+            });
+          }
         },
-        onError: (err: unknown) => {
-          const msg =
-            (err as { response?: { data?: { message?: string } } })?.response?.data?.message ||
-            t('invoice_tracking.message.errorUpload');
-          setActionError(msg);
-        },
-      },
-    );
+      );
+
+      queryClient.invalidateQueries({ queryKey: ['invoice-tracking'] });
+      queryClient.invalidateQueries({ queryKey: ['invoice-tracking', 'detail', ticket.id] });
+      queryClient.invalidateQueries({ queryKey: ['invoice-tracking', 'history', ticket.id] });
+      setShowUpload(false);
+      onClose();
+    } catch (err: unknown) {
+      const msg =
+        (err as { response?: { data?: { message?: string } } })?.response?.data?.message ||
+        t('invoice_tracking.message.errorUpload');
+      setActionError(msg);
+    } finally {
+      setIsUploadingProgress(false);
+      setUploadProgress(null);
+    }
   };
 
   const handleFinish = () => {
@@ -506,7 +527,8 @@ export function TicketDetailModal({ ticket: initialTicket, isOpen, onClose }: Ti
         onClose={() => setShowUpload(false)}
         onSubmit={handleUpload}
         onOpenCopyModal={() => setShowCopyModal(true)}
-        isLoading={uploadMutation.isPending}
+        isLoading={isUploadingProgress}
+        uploadProgress={uploadProgress}
       />
       <CopyDocumentsModal
         ticketId={ticket.id}

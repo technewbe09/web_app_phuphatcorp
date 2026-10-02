@@ -1107,13 +1107,13 @@
       "title": "Upload Documents",
       "dropzone": "Drag and drop files here, or click to browse",
       "supported": "Supported formats: JPG, PNG, PDF",
-      "max": "Up to 10 files, max 5MB/file",
+      "max": "Unlimited files, max 50MB/file",
       "noteLabel": "Note",
       "notePlaceholder": "Enter note (optional)...",
       "submit": "Submit Documents",
-      "errorSize": "File exceeds 5MB",
+      "errorSize": "File exceeds 50MB",
       "errorType": "Only JPG, PNG, and PDF are allowed",
-      "errorCount": "Maximum 10 files per upload"
+      "uploadingProgress": "Uploading {{total}} files..."
     },
     "supplement": {
       "title": "Request Additional Documents",

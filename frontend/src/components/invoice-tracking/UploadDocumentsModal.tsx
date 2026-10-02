@@ -16,11 +16,11 @@ interface UploadDocumentsModalProps {
   onSubmit: (files: File[], note: string) => void;
   onOpenCopyModal?: () => void;
   isLoading?: boolean;
+  uploadProgress?: { current: number; total: number; percentage?: number } | null;
 }
 
 const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
 const MAX_SIZE = 50 * 1024 * 1024; // 50MB to match backend limit
-const MAX_FILES = 10;
 
 export function UploadDocumentsModal({
   isOpen,
@@ -28,6 +28,7 @@ export function UploadDocumentsModal({
   onSubmit,
   onOpenCopyModal,
   isLoading,
+  uploadProgress,
 }: UploadDocumentsModalProps) {
   const { t } = useI18n();
   const [fileItems, setFileItems] = useState<FileItem[]>([]);
@@ -68,16 +69,6 @@ export function UploadDocumentsModal({
 
   const handleFiles = (files: FileList | File[]) => {
     const fileArray = Array.from(files);
-    const totalFiles = fileItems.length + fileArray.length;
-
-    if (totalFiles > MAX_FILES) {
-      setFileItems((prev) => [
-        ...prev,
-        { file: fileArray[0], error: t('invoice_tracking.upload.errorCount') },
-      ]);
-      return;
-    }
-
     const validated = validateAndBuildFiles(fileArray);
     setFileItems((prev) => [...prev, ...validated]);
   };
@@ -248,9 +239,32 @@ export function UploadDocumentsModal({
             onChange={(e) => setNote(e.target.value)}
             placeholder={t('invoice_tracking.upload.notePlaceholder')}
             rows={3}
-            className="w-full rounded-lg border border-neutral-300 px-3 py-2.5 text-base sm:text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-100 placeholder:text-neutral-400"
+            disabled={isLoading}
+            className="w-full rounded-lg border border-neutral-300 px-3 py-2.5 text-base sm:text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-100 placeholder:text-neutral-400 disabled:opacity-60"
           />
         </div>
+
+        {isLoading && uploadProgress && (
+          <div className="space-y-1.5 p-3 rounded-lg bg-primary/5 border border-primary/20">
+            <div className="flex justify-between text-xs font-medium text-primary">
+              <span>
+                {t('invoice_tracking.upload.uploadingProgress', {
+                  current: uploadProgress.current,
+                  total: uploadProgress.total,
+                })}
+              </span>
+              <span>{uploadProgress.percentage ?? Math.round((uploadProgress.current / uploadProgress.total) * 100)}%</span>
+            </div>
+            <div className="w-full bg-neutral-200 dark:bg-neutral-700 rounded-full h-2 overflow-hidden">
+              <div
+                className="bg-primary h-2 rounded-full transition-all duration-300 ease-out"
+                style={{
+                  width: `${uploadProgress.percentage ?? Math.round((uploadProgress.current / uploadProgress.total) * 100)}%`,
+                }}
+              />
+            </div>
+          </div>
+        )}
 
         <div className="flex flex-col-reverse sm:flex-row justify-end gap-2 pt-2">
           <Button
