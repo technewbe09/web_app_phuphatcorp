@@ -403,6 +403,7 @@ Frontend: accordion **Quản lý giá cước vận tải** → `/route-pricing/
 | POST | /invoice-tracking/:id/share | JWT + invoice_tracking.view | — | `{ success, data: { share_token } }` — Tạo / lấy mã chia sẻ công khai |
 | POST | /invoice-tracking/:id/copy-documents | JWT + invoice_tracking.view | `{ source_ticket_id, driver_note? }` | `{ success, data: InvoiceTrackingTicket }` — Sao chép chứng từ không nhân bản tệp |
 | POST | /invoice-tracking/:id/documents | JWT + invoice_tracking.view | `multipart/form-data` (files, driver_note) | `{ success, data: InvoiceTrackingTicket }` — Tải tệp lên MinIO |
+| POST | /invoice-tracking/batch-finish | JWT + invoice_tracking.manage | `{ ticket_ids: number[] }` | `{ success, data: BatchFinishResult }` — Phê duyệt hoàn thành hàng loạt |
 | PUT | /invoice-tracking/:id/review | JWT + invoice_tracking.manage | `{ action: 'finish' \| 'request_supplement', supplement_note? }` | `{ success, data: InvoiceTrackingTicket }` |
 
 ### Public Endpoints — /public

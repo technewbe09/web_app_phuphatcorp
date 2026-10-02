@@ -13,12 +13,14 @@ import {
   X,
   List,
   BarChart3,
+  Zap,
 } from 'lucide-react';
 import { useInvoiceTracking } from '../../hooks/useInvoiceTracking';
 import { useMyDataScopes } from '../../hooks/useDataScopes';
 import { InvoiceStatusBadge } from '../../components/invoice-tracking/InvoiceStatusBadge';
 import { TicketDetailModal } from '../../components/invoice-tracking/TicketDetailModal';
 import { InvoiceTrackingStatsTab } from '../../components/invoice-tracking/InvoiceTrackingStatsTab';
+import { InvoiceTrackingQuickApprovalTab } from '../../components/invoice-tracking/InvoiceTrackingQuickApprovalTab';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
 import { Select } from '../../components/ui/Select';
@@ -38,7 +40,7 @@ const PAGE_SIZE = 20;
 
 export default function InvoiceTrackingPage() {
   const { t } = useI18n();
-  const [activeTab, setActiveTab] = useState<'list' | 'stats'>('list');
+  const [activeTab, setActiveTab] = useState<'list' | 'quick_approval' | 'stats'>('list');
   const [searchInput, setSearchInput] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string[]>([]);
@@ -69,6 +71,10 @@ export default function InvoiceTrackingPage() {
   );
 
   const { data, isLoading, isError, refetch, isFetching } = useInvoiceTracking(filters);
+
+  // Query pending_review count for tab badge
+  const { data: pendingData } = useInvoiceTracking({ status: ['pending_review'], limit: 1 });
+  const pendingReviewCount = pendingData?.pagination.total ?? 0;
 
   const statusOptions = useMemo(
     () => [
@@ -141,11 +147,11 @@ export default function InvoiceTrackingPage() {
 
       {/* Tabs Switcher Navigation */}
       {(!invoiceScope || invoiceScope.scope_type !== 'none') && (
-        <div className="flex items-center gap-2 border-b border-neutral-200 dark:border-neutral-800">
+        <div className="flex items-center gap-1.5 sm:gap-2 border-b border-neutral-200 dark:border-neutral-800 overflow-x-auto">
           <button
             type="button"
             onClick={() => setActiveTab('list')}
-            className={`flex items-center gap-2 px-4 py-2.5 text-sm font-semibold border-b-2 transition-colors ${
+            className={`flex items-center gap-2 px-3 sm:px-4 py-2.5 text-xs sm:text-sm font-semibold border-b-2 transition-colors whitespace-nowrap ${
               activeTab === 'list'
                 ? 'border-neutral-900 dark:border-neutral-100 text-neutral-900 dark:text-neutral-100'
                 : 'border-transparent text-neutral-500 hover:text-neutral-700 dark:text-neutral-400 dark:hover:text-neutral-200'
@@ -156,8 +162,25 @@ export default function InvoiceTrackingPage() {
           </button>
           <button
             type="button"
+            onClick={() => setActiveTab('quick_approval')}
+            className={`flex items-center gap-2 px-3 sm:px-4 py-2.5 text-xs sm:text-sm font-semibold border-b-2 transition-colors whitespace-nowrap ${
+              activeTab === 'quick_approval'
+                ? 'border-neutral-900 dark:border-neutral-100 text-neutral-900 dark:text-neutral-100'
+                : 'border-transparent text-neutral-500 hover:text-neutral-700 dark:text-neutral-400 dark:hover:text-neutral-200'
+            }`}
+          >
+            <Zap className="w-4 h-4 text-amber-500" />
+            <span>{t('invoice_tracking.tabs.quickApproval' as never) || 'Phê duyệt nhanh'}</span>
+            {pendingReviewCount > 0 && (
+              <span className="px-1.5 py-0.5 rounded-full bg-amber-100 dark:bg-amber-950/70 text-amber-800 dark:text-amber-300 font-mono text-[11px] font-bold">
+                {pendingReviewCount}
+              </span>
+            )}
+          </button>
+          <button
+            type="button"
             onClick={() => setActiveTab('stats')}
-            className={`flex items-center gap-2 px-4 py-2.5 text-sm font-semibold border-b-2 transition-colors ${
+            className={`flex items-center gap-2 px-3 sm:px-4 py-2.5 text-xs sm:text-sm font-semibold border-b-2 transition-colors whitespace-nowrap ${
               activeTab === 'stats'
                 ? 'border-neutral-900 dark:border-neutral-100 text-neutral-900 dark:text-neutral-100'
                 : 'border-transparent text-neutral-500 hover:text-neutral-700 dark:text-neutral-400 dark:hover:text-neutral-200'
@@ -181,6 +204,8 @@ export default function InvoiceTrackingPage() {
             </p>
           </CardContent>
         </Card>
+      ) : activeTab === 'quick_approval' ? (
+        <InvoiceTrackingQuickApprovalTab />
       ) : activeTab === 'stats' ? (
         <InvoiceTrackingStatsTab />
       ) : (

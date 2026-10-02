@@ -992,7 +992,26 @@
   "invoice_tracking": {
     "tabs": {
       "list": "Danh sách ticket",
+      "quickApproval": "Phê duyệt nhanh",
       "statistics": "Thống kê"
+    },
+    "quickApproval": {
+      "title": "Phê duyệt nhanh chứng từ",
+      "subtitle": "Danh sách các chuyến xe đang chờ duyệt chứng từ",
+      "selectedCount": "Đã chọn {{count}} chuyến xe",
+      "batchApprove": "Phê duyệt hoàn thành ({{count}})",
+      "clearSelection": "Bỏ chọn",
+      "empty": "Hiện không có chuyến xe nào đang chờ duyệt.",
+      "approveSingle": "Duyệt",
+      "requestSupplementSingle": "Y/C bổ sung",
+      "confirmBatchTitle": "Xác nhận phê duyệt hàng loạt",
+      "confirmBatchMessage": "Bạn có chắc chắn muốn phê duyệt \"Hoàn thành\" cho {{count}} chuyến xe đã chọn không?",
+      "confirmBatchWarning": "Các chuyến xe này sẽ được xác nhận đủ chứng từ và chuyển sang trạng thái Hoàn thành.",
+      "successBatchMessage": "Đã phê duyệt hoàn thành thành công {{count}} chuyến xe!",
+      "selectAll": "Chọn tất cả",
+      "dateFrom": "Từ ngày",
+      "dateTo": "Đến ngày",
+      "searchPlaceholder": "Tìm theo biển số, tài xế, điểm nhận, ghi chú..."
     },
     "stats": {
       "title": "Thống kê hóa đơn theo tài xế",

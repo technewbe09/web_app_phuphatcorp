@@ -79,8 +79,8 @@ export interface PaginatedResult<T> {
 
 function logAccess(data: AccessLogData): void {
   setImmediate(() => {
-    pool
-      .query(
+    Promise.resolve(
+      pool.query(
         `INSERT INTO access_logs (user_id, method, path, status_code, ip_address, user_agent, response_time_ms)
          VALUES ($1, $2, $3, $4, $5, $6, $7)`,
         [
@@ -92,17 +92,17 @@ function logAccess(data: AccessLogData): void {
           data.userAgent ?? null,
           data.responseTimeMs,
         ],
-      )
-      .catch((err) => {
-        console.error('[auditService] Failed to log access:', err.message);
-      });
+      ),
+    ).catch((err) => {
+      console.error('[auditService] Failed to log access:', err?.message || err);
+    });
   });
 }
 
 function logAudit(data: AuditLogData): void {
   setImmediate(() => {
-    pool
-      .query(
+    Promise.resolve(
+      pool.query(
         `INSERT INTO audit_logs (user_id, username, action, entity_type, entity_id, entity_label, details, ip_address)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
         [
@@ -115,10 +115,10 @@ function logAudit(data: AuditLogData): void {
           data.details ? JSON.stringify(data.details) : null,
           data.ipAddress ?? null,
         ],
-      )
-      .catch((err) => {
-        console.error('[auditService] Failed to log audit:', err.message);
-      });
+      ),
+    ).catch((err) => {
+      console.error('[auditService] Failed to log audit:', err?.message || err);
+    });
   });
 }
 

@@ -979,7 +979,26 @@
   "invoice_tracking": {
     "tabs": {
       "list": "Ticket List",
+      "quickApproval": "Quick Approval",
       "statistics": "Statistics"
+    },
+    "quickApproval": {
+      "title": "Quick Document Approval",
+      "subtitle": "List of trips waiting for document review",
+      "selectedCount": "Selected {{count}} trips",
+      "batchApprove": "Approve Completed ({{count}})",
+      "clearSelection": "Clear",
+      "empty": "There are currently no trips waiting for review.",
+      "approveSingle": "Approve",
+      "requestSupplementSingle": "Supp. Req.",
+      "confirmBatchTitle": "Confirm Batch Approval",
+      "confirmBatchMessage": "Are you sure you want to approve \"Completed\" for {{count}} selected trips?",
+      "confirmBatchWarning": "These trips will be verified as having sufficient documents and transitioned to Completed status.",
+      "successBatchMessage": "Successfully approved {{count}} trips as Completed!",
+      "selectAll": "Select all",
+      "dateFrom": "From date",
+      "dateTo": "To date",
+      "searchPlaceholder": "Search by license plate, driver, destination, notes..."
     },
     "stats": {
       "title": "Invoice Tracking Statistics by Driver",

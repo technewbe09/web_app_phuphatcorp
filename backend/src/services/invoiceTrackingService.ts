@@ -75,6 +75,13 @@ export interface CopyableTicket {
   documents: DocumentFile[];
 }
 
+export interface BatchFinishResult {
+  success_count: number;
+  updated_ids: number[];
+  failed_count: number;
+  errors: Array<{ id: number; error: string }>;
+}
+
 export interface PublicInvoiceTicket {
   id: number;
   ngay: string;
@@ -1162,6 +1169,149 @@ export const invoiceTrackingService = {
       reviewed_at: row.reviewed_at,
       completed_at: row.completed_at,
       created_at: row.created_at,
+    };
+  },
+
+  async batchFinish(
+    ticketIds: number[],
+    dispatcherId: number,
+    currentUser?: { userId: number; role?: string; roleId?: number | null },
+    scope?: DataScope,
+  ): Promise<BatchFinishResult> {
+    const uniqueIds = Array.from(new Set(ticketIds)).filter((id) => Number.isInteger(id) && id > 0);
+
+    if (uniqueIds.length === 0) {
+      return {
+        success_count: 0,
+        updated_ids: [],
+        failed_count: 0,
+        errors: [],
+      };
+    }
+
+    if (scope && scope.type === 'none') {
+      throw new InvoiceTrackingError('FORBIDDEN', 'Bạn không có quyền thao tác trên các chuyến xe này', 403);
+    }
+
+    const conditions: string[] = ['id = ANY($1::int[])'];
+    const params: unknown[] = [uniqueIds];
+    let paramIndex = 2;
+
+    if (scope) {
+      if (scope.type === 'owner') {
+        conditions.push(`(driver_id = $${paramIndex} OR (driver_id IS NULL AND created_by = $${paramIndex}))`);
+        params.push(scope.userId);
+        paramIndex++;
+      } else if (scope.type === 'entity') {
+        if (!scope.entityIds || scope.entityIds.length === 0) {
+          throw new InvoiceTrackingError('FORBIDDEN', 'Bạn không có quyền thao tác trên các chuyến xe này', 403);
+        }
+        if (scope.entityType === 'vehicle') {
+          conditions.push(`vehicle_id = ANY($${paramIndex++})`);
+          params.push(scope.entityIds);
+        } else {
+          conditions.push(`driver_id = ANY($${paramIndex++})`);
+          params.push(scope.entityIds);
+        }
+      }
+    }
+
+    const ticketsRes = await pool.query<DispatchSchedule>(
+      `SELECT id, bien_so, ngay, invoice_status, driver_id, created_by, documents
+       FROM dispatch_schedules
+       WHERE ${conditions.join(' AND ')}`,
+      params,
+    );
+
+    const validIds: number[] = [];
+    const errors: Array<{ id: number; error: string }> = [];
+
+    for (const ticket of ticketsRes.rows) {
+      if (ticket.invoice_status !== 'pending_review') {
+        errors.push({
+          id: ticket.id,
+          error: `Ticket #${ticket.id} không ở trạng thái Chờ duyệt (hiện tại: ${ticket.invoice_status})`,
+        });
+        continue;
+      }
+
+      if (currentUser) {
+        const authResult = await workflowService.authorizeAction(
+          'invoice_tracking',
+          ticket.invoice_status,
+          'review_finish',
+          currentUser,
+          ticket,
+        );
+        if (!authResult.authorized) {
+          errors.push({
+            id: ticket.id,
+            error: authResult.reason || `Bạn không có quyền duyệt ticket #${ticket.id}`,
+          });
+          continue;
+        }
+      }
+
+      validIds.push(ticket.id);
+    }
+
+    // Identify requested IDs that were not found in scope
+    const foundIdSet = new Set(ticketsRes.rows.map((t) => t.id));
+    for (const reqId of uniqueIds) {
+      if (!foundIdSet.has(reqId)) {
+        errors.push({
+          id: reqId,
+          error: `Không tìm thấy chuyến xe #${reqId} hoặc bạn không có quyền truy cập`,
+        });
+      }
+    }
+
+    if (validIds.length === 0) {
+      return {
+        success_count: 0,
+        updated_ids: [],
+        failed_count: errors.length,
+        errors,
+      };
+    }
+
+    const updateRes = await pool.query<DispatchSchedule>(
+      `UPDATE dispatch_schedules
+       SET invoice_status = 'completed',
+           dispatcher_id = $1,
+           reviewed_at = NOW(),
+           completed_at = NOW(),
+           updated_at = NOW()
+       WHERE id = ANY($2::int[]) AND invoice_status = 'pending_review'
+       RETURNING id, bien_so, ngay`,
+      [dispatcherId, validIds],
+    );
+
+    const updatedIds = updateRes.rows.map((r) => r.id);
+
+    // Audit logs for all approved tickets
+    for (const row of updateRes.rows) {
+      auditService.logAudit({
+        userId: currentUser?.userId || dispatcherId,
+        username: currentUser?.role || 'dispatcher',
+        action: 'REVIEW_FINISH',
+        entityType: 'dispatch_schedule',
+        entityId: row.id,
+        entityLabel: `Xe ${row.bien_so} (${normalizeDateString(row.ngay)})`,
+        details: {
+          prev_status: 'pending_review',
+          new_status: 'completed',
+          is_batch: true,
+          batch_total: updatedIds.length,
+        },
+      });
+    }
+
+    return {
+      success_count: updatedIds.length,
+      updated_ids: updatedIds,
+      failed_count: errors.length,
+      errors,
     };
   },
 };

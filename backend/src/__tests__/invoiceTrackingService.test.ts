@@ -1,11 +1,13 @@
 import { invoiceTrackingService, InvoiceTrackingError } from '../services/invoiceTrackingService';
 import { workflowService } from '../services/workflowService';
+import { auditService } from '../services/auditService';
 import { pool } from './__mocks__/database';
 
 const mockPool = pool as jest.Mocked<typeof pool>;
 
 beforeEach(() => {
   jest.clearAllMocks();
+  jest.spyOn(auditService, 'logAudit').mockImplementation(() => {});
 });
 
 const mockTicketRow = {
@@ -193,5 +195,36 @@ describe('invoiceTrackingService.getOrCreateShareToken & getByShareToken', () =>
 
   it('rejects invalid or too short share token', async () => {
     await expect(invoiceTrackingService.getByShareToken('short')).rejects.toThrow('Mã chia sẻ không hợp lệ');
+  });
+});
+
+describe('invoiceTrackingService.batchFinish', () => {
+  it('returns empty result for empty ticketIds', async () => {
+    const res = await invoiceTrackingService.batchFinish([], 1);
+    expect(res.success_count).toBe(0);
+    expect(res.updated_ids).toHaveLength(0);
+  });
+
+  it('approves multiple pending tickets in batch and skips non-pending tickets', async () => {
+    jest.spyOn(workflowService, 'authorizeAction').mockResolvedValue({ authorized: true });
+
+    // Query finding 2 tickets: one pending_review, one created
+    mockPool.query.mockResolvedValueOnce({
+      rows: [
+        { ...mockTicketRow, id: 10, invoice_status: 'pending_review' },
+        { ...mockTicketRow, id: 11, invoice_status: 'created' },
+      ],
+    } as never);
+
+    // Update query returning updated id 10
+    mockPool.query.mockResolvedValueOnce({
+      rows: [{ id: 10, bien_so: '51H99999', ngay: '2026-09-13' }],
+    } as never);
+
+    const res = await invoiceTrackingService.batchFinish([10, 11, 12], 1, { userId: 1, role: 'ADMIN' });
+    expect(res.success_count).toBe(1);
+    expect(res.updated_ids).toEqual([10]);
+    expect(res.failed_count).toBe(2); // id 11 not pending, id 12 not found
+    expect(res.errors).toHaveLength(2);
   });
 });

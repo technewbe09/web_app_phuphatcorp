@@ -5,6 +5,20 @@ description: Ghi lại các bài học kinh nghiệm, bug đã fix, và pitfalls
 # Lessons Learned — PhuPhatCorp
 
 ---
+## Feature: Quick Approval Tab & Batch Finish for Invoice Tracking
+- **Ngày:** 2026-10-02
+- **Feature:** Theo dõi hóa đơn (`invoice_tracking`), Phê duyệt nhanh & Batch Approve
+- **Mô tả:** Bổ sung tab làm việc "Phê duyệt nhanh" tập trung toàn bộ các chuyến xe ở trạng thái `pending_review`, hỗ trợ phê duyệt 1-click tại dòng hoặc tick chọn hàng loạt để duyệt "Hoàn thành" cùng lúc.
+- **Giải pháp:**
+  - **Backend**: Thêm endpoint `POST /api/invoice-tracking/batch-finish` nhận danh sách `ticket_ids`, kiểm tra quyền workflow `review_finish` & Data Scope, cập nhật trạng thái đồng loạt sang `completed` và ghi nhận `audit_logs` đầy đủ.
+  - **Frontend**:
+    - `InvoiceTrackingQuickApprovalTab`: Bộ lọc tìm kiếm & khoảng ngày, checkbox chọn tất cả / từng dòng, thanh công cụ nổi (Selection Action Bar) hiển thị số lượng chọn và nút duyệt hàng loạt.
+    - `BatchApproveConfirmDialog`: Hộp thoại xác nhận trước khi thực thi duyệt hàng loạt.
+    - Cột thao tác cung cấp nút Duyệt 1-click, Yêu cầu bổ sung nhanh (`SupplementNoteDialog`) và Xem chi tiết (`TicketDetailModal`).
+    - Tab Switcher trên `InvoiceTrackingPage` tích hợp huy hiệu đếm số lượng chuyến xe đang chờ duyệt (`pending_review`).
+- **Files liên quan:** `invoiceTrackingService.ts`, `invoiceTrackingController.ts`, `routes/invoiceTracking.ts`, `invoiceTrackingApi.ts`, `useInvoiceTracking.ts`, `InvoiceTrackingQuickApprovalTab.tsx`, `BatchApproveConfirmDialog.tsx`, `InvoiceTrackingPage.tsx`, `vi.json`, `en.json`.
+
+---
 ## Feature: Image Rotation Control in DocumentViewerModal
 - **Ngày:** 2026-10-02
 - **Feature:** Theo dõi hóa đơn (`DocumentViewerModal`, Lightbox Image Viewer)

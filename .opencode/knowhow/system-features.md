@@ -985,6 +985,12 @@ frontend/src/pages/dispatch/SchedulePage.tsx
 - Người nhận không cần đăng nhập vẫn xem được thông tin chuyến xe và bộ sưu tập chứng từ / hình ảnh đính kèm.
 - Trang Public Viewer hỗ trợ Lightbox Gallery với nút Back/Next và phím điều hướng (← → Esc), xem ảnh full-size, mở PDF trong tab mới và tải tệp về máy.
 
+**Phê duyệt nhanh chứng từ (Quick Approval Tab):**
+- Tab "Phê duyệt nhanh" tập trung toàn bộ các chuyến xe / ticket đang ở trạng thái `Chờ duyệt` (`pending_review`).
+- Hỗ trợ checkbox chọn từng dòng hoặc chọn tất cả trên trang hiện tại để **Phê duyệt hoàn thành hàng loạt** (Batch Finish) qua modal xác nhận.
+- Cung cấp nút Duyệt nhanh 1-click và Yêu cầu bổ sung trực tiếp trên từng dòng bảng.
+- Hiển thị huy hiệu đếm số lượng chuyến đang chờ duyệt trên tiêu đề Tab.
+
 **API Endpoints:**
 ```
 GET    /api/invoice-tracking           → Danh sách tickets (kèm phân trang, lọc status, tìm kiếm)
@@ -996,6 +1002,7 @@ GET    /api/invoice-tracking/files/:filename → Phục vụ tệp từ MinIO qu
 POST   /api/invoice-tracking/:id/share → Tạo / lấy token chia sẻ công khai
 POST   /api/invoice-tracking/:id/copy-documents → Sao chép chứng từ từ chuyến cùng ngày
 POST   /api/invoice-tracking/:id/documents → Tải lên chứng từ mới dạng multipart/form-data lên MinIO
+POST   /api/invoice-tracking/batch-finish → Phê duyệt hoàn thành hàng loạt danh sách chuyến xe
 PUT    /api/invoice-tracking/:id/review    → Duyệt hoàn thành hoặc yêu cầu bổ sung (điều phối)
 GET    /api/public/invoice-tracking/:token → Xem thông tin & chứng từ ticket công khai (Public)
 ```
