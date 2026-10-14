@@ -2,6 +2,7 @@ import { Router } from 'express';
 import multer from 'multer';
 import { vehicleController, vehicleDeleteSchema, vehicleCreateSchema, vehicleUpdateSchema, oilIntervalSchema } from '../controllers/vehicleController';
 import { authenticateToken, requirePermission } from '../middleware/auth';
+import { resolveDataScope } from '../middleware/dataScope';
 import { validate } from '../middleware/validate';
 
 const router = Router();
@@ -21,7 +22,9 @@ const upload = multer({
 });
 
 router.use(authenticateToken);
+router.use(resolveDataScope('vehicle_data'));
 
+router.get('/my-assigned', requirePermission('vehicle_data.view'), vehicleController.myAssigned);
 router.get('/', requirePermission('catalog.view'), vehicleController.getAll);
 router.get('/:id/summary', vehicleController.summary);
 router.post('/upload', requirePermission('catalog.manage'), upload.single('file'), vehicleController.upload);

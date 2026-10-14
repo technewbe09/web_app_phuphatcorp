@@ -62,13 +62,23 @@ export const oilChangeService = {
     vehicle_id?: number;
     page?: number;
     limit?: number;
+    allowedVehicleIds?: number[];
   }): Promise<OilChangeListResult> {
+    if (params.allowedVehicleIds !== undefined && params.allowedVehicleIds.length === 0) {
+      return { records: [], total: 0, page: params.page || 1, limit: params.limit || 20 };
+    }
+
     const page = params.page || 1;
     const limit = params.limit || 20;
     const offset = (page - 1) * limit;
     const conditions: string[] = ["ocr.status != 'deleted'"];
     const queryParams: unknown[] = [];
     let paramIdx = 1;
+
+    if (params.allowedVehicleIds && params.allowedVehicleIds.length > 0) {
+      conditions.push(`ocr.vehicle_id = ANY($${paramIdx++})`);
+      queryParams.push(params.allowedVehicleIds);
+    }
 
     if (params.vehicle_id) {
       conditions.push(`ocr.vehicle_id = $${paramIdx++}`);
@@ -180,7 +190,16 @@ export const oilChangeService = {
     );
   },
 
-  async getDueVehicles(): Promise<OilChangeDueVehicle[]> {
+  async getDueVehicles(allowedVehicleIds?: number[]): Promise<OilChangeDueVehicle[]> {
+    if (allowedVehicleIds !== undefined && allowedVehicleIds.length === 0) {
+      return [];
+    }
+
+    const whereClause = (allowedVehicleIds && allowedVehicleIds.length > 0)
+      ? `WHERE v.status = 'active' AND v.id = ANY($1)`
+      : `WHERE v.status = 'active'`;
+    const params = (allowedVehicleIds && allowedVehicleIds.length > 0) ? [allowedVehicleIds] : [];
+
     const result = await pool.query<OilChangeDueVehicle>(`
       WITH
         last_oil_change AS (
@@ -233,7 +252,7 @@ export const oilChangeService = {
       FROM vehicles v
       LEFT JOIN last_oil_change loc ON v.id = loc.vehicle_id
       LEFT JOIN last_fuel lf ON v.id = lf.vehicle_id
-      WHERE v.status = 'active'
+      ${whereClause}
       ORDER BY
         CASE
           WHEN lf.odometer_new IS NULL THEN 3

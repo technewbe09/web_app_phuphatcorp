@@ -37,7 +37,15 @@ export const oilChangeController = {
       const page = parseInt(req.query.page as string, 10) || 1;
       const limit = parseInt(req.query.limit as string, 10) || 20;
 
-      const data = await oilChangeService.listAll({ vehicle_id: vehicleId, page, limit });
+      const scope = req.dataScope;
+      let allowedVehicleIds: number[] | undefined;
+      if (scope?.type === 'entity' && scope.entityType === 'vehicle') {
+        allowedVehicleIds = scope.entityIds;
+      } else if (scope?.type === 'none') {
+        allowedVehicleIds = [];
+      }
+
+      const data = await oilChangeService.listAll({ vehicle_id: vehicleId, page, limit, allowedVehicleIds });
       sendSuccess(res, data, 'Danh sách thay nhớt');
     } catch (err) {
       const error = err instanceof Error ? err.message : 'Unknown error';
@@ -158,7 +166,15 @@ export const oilChangeController = {
 
   async getDue(req: AuthRequest, res: Response): Promise<void> {
     try {
-      const vehicles = await oilChangeService.getDueVehicles();
+      const scope = req.dataScope;
+      let allowedVehicleIds: number[] | undefined;
+      if (scope?.type === 'entity' && scope.entityType === 'vehicle') {
+        allowedVehicleIds = scope.entityIds;
+      } else if (scope?.type === 'none') {
+        allowedVehicleIds = [];
+      }
+
+      const vehicles = await oilChangeService.getDueVehicles(allowedVehicleIds);
       sendSuccess(res, { vehicles }, 'Danh sách xe cần thay nhớt');
     } catch (err) {
       const error = err instanceof Error ? err.message : 'Unknown error';

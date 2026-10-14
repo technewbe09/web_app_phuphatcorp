@@ -9,6 +9,7 @@ import '../inspection/inspection_list_screen.dart';
 import '../insurance/insurance_list_screen.dart';
 import '../invoice_tracking/invoice_tracking_screen.dart';
 import '../oil_change/oil_change_screen.dart';
+import '../vehicle/my_vehicle_screen.dart';
 
 class DashboardHubTab extends StatelessWidget {
   const DashboardHubTab({super.key});
@@ -22,6 +23,7 @@ class DashboardHubTab extends StatelessWidget {
     final hasDispatch = authProvider.hasAnyPermission(['dispatch.view', 'dispatch.manage']);
     final hasInvoice = authProvider.hasAnyPermission(['invoice_tracking.view', 'invoice_tracking.manage']);
     final hasVehicleData = authProvider.hasAnyPermission(['vehicle_data.view', 'vehicle_data.manage']);
+    final isDriverOrEntityScope = user?.role == 'TAI_XE' || (user?.roleName?.contains('Tài xế') ?? false);
 
     final hasAnyModule = hasDispatch || hasInvoice || hasVehicleData;
 
@@ -174,6 +176,20 @@ class DashboardHubTab extends StatelessWidget {
                   mainAxisSpacing: 12,
                   childAspectRatio: 1.05,
                   children: [
+                    if (isDriverOrEntityScope)
+                      HubMenuCard(
+                        title: 'Xe của tôi',
+                        description: 'Xem hạn bảo hiểm, đăng kiểm & nhớt xe phụ trách',
+                        icon: Icons.directions_car_rounded,
+                        iconColor: const Color(0xFF0284C7),
+                        iconBgColor: const Color(0xFFE0F2FE),
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (_) => const MyVehicleScreen()),
+                          );
+                        },
+                      ),
                     HubMenuCard(
                       title: 'Đăng kiểm',
                       description: 'Theo dõi thời hạn và lịch sử đăng kiểm từng xe',

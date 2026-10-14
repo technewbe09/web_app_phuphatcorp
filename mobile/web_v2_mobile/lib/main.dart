@@ -7,6 +7,7 @@ import 'providers/dispatch_schedule_provider.dart';
 import 'providers/inspection_provider.dart';
 import 'providers/insurance_provider.dart';
 import 'providers/invoice_tracking_provider.dart';
+import 'providers/my_vehicle_provider.dart';
 import 'providers/oil_change_provider.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/home/home_screen.dart';
@@ -39,6 +40,9 @@ void main() async {
         ),
         ChangeNotifierProvider(
           create: (_) => OilChangeProvider(),
+        ),
+        ChangeNotifierProvider(
+          create: (_) => MyVehicleProvider(),
         ),
       ],
       child: const MyApp(),

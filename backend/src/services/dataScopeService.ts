@@ -77,6 +77,24 @@ export const dataScopeService = {
       if (roleConfigRes.rows[0]) {
         const scopeType = roleConfigRes.rows[0].scope_type;
         if (scopeType === 'entity') {
+          // If vehicle_data feature and role is entity-scoped, also check driver_vehicles for assigned vehicles
+          if (featureCode === 'vehicle_data') {
+            const driverVehicleRes = await pool.query<{ vehicle_id: number }>(
+              `SELECT dv.vehicle_id
+               FROM driver_vehicles dv
+               JOIN drivers d ON d.id = dv.driver_id
+               WHERE d.user_id = $1 AND d.status = 'active'`,
+              [userId],
+            );
+            if (driverVehicleRes.rows.length > 0) {
+              return {
+                type: 'entity',
+                userId,
+                entityType: 'vehicle',
+                entityIds: driverVehicleRes.rows.map((r) => r.vehicle_id),
+              };
+            }
+          }
           // Role is configured as entity-scoped, but user has no entity assignments -> none
           return { type: 'none', userId };
         }
