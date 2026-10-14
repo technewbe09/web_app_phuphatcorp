@@ -5,6 +5,7 @@ import '../../core/constants/app_colors.dart';
 import '../../providers/auth_provider.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/custom_button.dart';
+import '../../widgets/privacy_policy_link.dart';
 import 'dashboard_hub_tab.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -201,6 +202,8 @@ class _ProfileTab extends StatelessWidget {
                 icon: const Icon(Icons.logout, size: 18),
                 onPressed: () => authProvider.logout(),
               ),
+              const SizedBox(height: 16),
+              const PrivacyPolicyLink(),
             ],
           ),
         ),
