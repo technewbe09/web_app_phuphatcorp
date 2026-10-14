@@ -39,6 +39,7 @@ lib/
 │   │   ├── vehicle_insurance_summary.dart # Model Tóm tắt BH theo xe
 │   │   ├── oil_change_record.dart   # Model Lần thay nhớt & ListResult
 │   │   ├── oil_change_due_vehicle.dart # Model Xe cần thay nhớt & tiến độ ODO
+│   │   ├── my_vehicle_summary.dart  # Model Tổng hợp thông tin xe phụ trách
 │   │   └── vehicle_option.dart      # Model Xe cho dropdown form
 │   └── services/
 │       ├── auth_service.dart        # Service gọi API Auth
@@ -46,17 +47,21 @@ lib/
 │       ├── invoice_tracking_service.dart # Service gọi API Theo dõi HĐ
 │       ├── inspection_service.dart  # Service gọi API Quản lý đăng kiểm xe
 │       ├── insurance_service.dart   # Service gọi API Quản lý bảo hiểm xe
-│       └── oil_change_service.dart  # Service gọi API Quản lý thay nhớt
+│       ├── oil_change_service.dart  # Service gọi API Quản lý thay nhớt
+│       └── my_vehicle_service.dart  # Service gọi API Thông tin xe phụ trách
 ├── providers/
 │   ├── auth_provider.dart           # State Management cho Authentication & Phân quyền
 │   ├── dispatch_schedule_provider.dart # State Management cho Điều hành vận tải
 │   ├── invoice_tracking_provider.dart # State Management cho Theo dõi HĐ
 │   ├── inspection_provider.dart     # State Management cho Quản lý đăng kiểm
 │   ├── insurance_provider.dart      # State Management cho Quản lý bảo hiểm
-│   └── oil_change_provider.dart     # State Management cho Quản lý thay nhớt
+│   ├── oil_change_provider.dart     # State Management cho Quản lý thay nhớt
+│   └── my_vehicle_provider.dart     # State Management cho Xe phụ trách (Tài xế)
 ├── screens/
 │   ├── auth/
 │   │   └── login_screen.dart        # Màn hình Đăng nhập (chuẩn UI Web)
+│   ├── vehicle/
+│   │   └── my_vehicle_screen.dart   # Màn hình Xe của tôi (Tài xế: Hạn ĐK, BH, tiến độ ODO nhớt)
 │   ├── home/
 │   │   ├── home_screen.dart         # Màn hình chính (Bottom Navigation: Trang chủ & Tài khoản)
 │   │   └── dashboard_hub_tab.dart   # Trung tâm điều hướng phân hệ chức năng dạng lưới

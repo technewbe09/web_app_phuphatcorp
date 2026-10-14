@@ -288,4 +288,24 @@ export const vehicleController = {
       sendError(res, 'Không thể cập nhật xe', 500, error);
     }
   },
+
+  async myAssigned(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      if (!req.user) {
+        sendError(res, 'Unauthorized', 401);
+        return;
+      }
+
+      const scope = req.dataScope;
+      const isAll = req.user.role === 'ADMIN' || scope?.type === 'all';
+      const allowedIds = scope?.type === 'entity' && scope.entityType === 'vehicle' ? scope.entityIds : undefined;
+
+      const data = await vehicleService.getMyAssignedVehicles(req.user.userId, isAll, allowedIds);
+      sendSuccess(res, data, 'Danh sách xe phụ trách');
+    } catch (err) {
+      const error = err instanceof Error ? err.message : 'Unknown error';
+      sendError(res, 'Không thể tải thông tin xe phụ trách', 500, error);
+    }
+  },
 };
+

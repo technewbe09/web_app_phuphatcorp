@@ -68,6 +68,7 @@ class ApiEndpoints {
 
   // Vehicle Catalog
   static const String vehicles = '/vehicles';
+  static const String myAssignedVehicles = '/vehicles/my-assigned';
 
   // Dispatch Schedules Endpoints
   static const String dispatchSchedules = '/dispatch-schedules';

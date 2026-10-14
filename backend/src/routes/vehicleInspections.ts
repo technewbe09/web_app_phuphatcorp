@@ -8,6 +8,7 @@ import {
   inspectionImageDeleteSchema,
 } from '../controllers/inspectionController';
 import { authenticateToken, requirePermission } from '../middleware/auth';
+import { resolveDataScope } from '../middleware/dataScope';
 import { validate } from '../middleware/validate';
 
 const router = Router();
@@ -22,6 +23,7 @@ router.get('/files/:filename', inspectionController.serveFile);
 
 // All other routes require authentication
 router.use(authenticateToken);
+router.use(resolveDataScope('vehicle_data'));
 
 router.get('/', requirePermission('vehicle_data.view'), inspectionController.list);
 router.get('/summary', requirePermission('vehicle_data.view'), inspectionController.getVehicleSummary);

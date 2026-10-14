@@ -75,13 +75,23 @@ export const inspectionService = {
     search?: string;
     page?: number;
     limit?: number;
+    allowedVehicleIds?: number[];
   }): Promise<InspectionListResult> {
+    if (params.allowedVehicleIds !== undefined && params.allowedVehicleIds.length === 0) {
+      return { inspections: [], total: 0, page: params.page || 1, limit: params.limit || 20 };
+    }
+
     const page = params.page || 1;
     const limit = params.limit || 20;
     const offset = (page - 1) * limit;
     const conditions: string[] = ["ir.status != 'deleted'"];
     const queryParams: unknown[] = [];
     let paramIdx = 1;
+
+    if (params.allowedVehicleIds && params.allowedVehicleIds.length > 0) {
+      conditions.push(`ir.vehicle_id = ANY($${paramIdx++})`);
+      queryParams.push(params.allowedVehicleIds);
+    }
 
     if (params.vehicle_id) {
       conditions.push(`ir.vehicle_id = $${paramIdx++}`);
@@ -293,13 +303,23 @@ export const inspectionService = {
     status?: string;
     page?: number;
     limit?: number;
+    allowedVehicleIds?: number[];
   }): Promise<{ vehicles: VehicleInspectionSummary[]; total: number; page: number; limit: number }> {
+    if (params.allowedVehicleIds !== undefined && params.allowedVehicleIds.length === 0) {
+      return { vehicles: [], total: 0, page: params.page || 1, limit: params.limit || 20 };
+    }
+
     const page = params.page || 1;
     const limit = params.limit || 20;
     const offset = (page - 1) * limit;
     const conditions: string[] = [];
     const queryParams: unknown[] = [];
     let paramIdx = 1;
+
+    if (params.allowedVehicleIds && params.allowedVehicleIds.length > 0) {
+      conditions.push(`v.id = ANY($${paramIdx++})`);
+      queryParams.push(params.allowedVehicleIds);
+    }
 
     let whereLatest = '';
     if (params.status && params.status !== 'all') {
