@@ -456,6 +456,32 @@ export interface ParsedFileData {
   sourceBuffer?: ArrayBuffer;
 }
 
+export interface ExcludedRowDetail {
+  rawRowIndex: number;
+  sourceRowNum: number;
+  soHD: string;
+  soTauXe: string;
+  tenKH: string;
+  maHang: string;
+  tenHang: string;
+  dienGiai: string;
+  reason: string;
+}
+
+export interface ZeroWeightRowDetail {
+  rawRowIndex: number;
+  sourceRowNum: number;
+  soHD: string;
+  soTauXe: string;
+  tenKH: string;
+  maHang: string;
+  tenHang: string;
+  soLuong: number | null;
+  spTrongLuong: number | null;
+  hdTrongLuong: number | null;
+  reason: string;
+}
+
 export interface ProcessResult {
   processedRows: number;
   groupCount: number;
@@ -463,6 +489,8 @@ export interface ProcessResult {
   warnings: string[];
   outputBlob: Blob;
   outputFilename: string;
+  excludedRows?: ExcludedRowDetail[];
+  zeroWeightRows?: ZeroWeightRowDetail[];
 }
 
 export interface AdjustmentRow {
@@ -668,23 +696,74 @@ export function filterExcludedRows(rawRows: RawRow[], sourceRowNums: number[]): 
   filteredRows: RawRow[];
   filteredSourceRowNums: number[];
   excludedCount: number;
+  excludedRows: ExcludedRowDetail[];
 } {
   const filteredRows: RawRow[] = [];
   const filteredSourceRowNums: number[] = [];
+  const excludedRows: ExcludedRowDetail[] = [];
   let excludedCount = 0;
 
   rawRows.forEach((row, idx) => {
-    const dienGiai = cell(row, COL.DIEN_GIAI).toLowerCase();
-    const shouldExclude = DIEN_GIAI_EXCLUDE_KEYWORDS.some((kw) => dienGiai.includes(kw));
-    if (shouldExclude) {
+    const dienGiaiRaw = cell(row, COL.DIEN_GIAI);
+    const dienGiai = dienGiaiRaw.toLowerCase();
+    const matchedKeyword = DIEN_GIAI_EXCLUDE_KEYWORDS.find((kw) => dienGiai.includes(kw));
+    if (matchedKeyword) {
       excludedCount++;
+      excludedRows.push({
+        rawRowIndex: idx,
+        sourceRowNum: sourceRowNums[idx],
+        soHD: cell(row, COL.SO_HD),
+        soTauXe: cell(row, COL.SO_TAU_XE),
+        tenKH: cell(row, COL.TEN_KH),
+        maHang: cell(row, COL.MA_HANG),
+        tenHang: cell(row, COL.TEN_HANG_HOA),
+        dienGiai: dienGiaiRaw,
+        reason: `Diễn giải chứa "${matchedKeyword}"`,
+      });
     } else {
       filteredRows.push(row);
       filteredSourceRowNums.push(sourceRowNums[idx]);
     }
   });
 
-  return { filteredRows, filteredSourceRowNums, excludedCount };
+  return { filteredRows, filteredSourceRowNums, excludedCount, excludedRows };
+}
+
+export function detectZeroWeightRows(rawRows: RawRow[], sourceRowNums: number[]): ZeroWeightRowDetail[] {
+  const result: ZeroWeightRowDetail[] = [];
+  rawRows.forEach((row, idx) => {
+    const spTrongLuong = parseCellToNumber(row[COL.SP_TRONG_LUONG]);
+    const hdTrongLuong = parseCellToNumber(row[COL.HD_TRONG_LUONG]);
+
+    const isHdZero = hdTrongLuong === null || hdTrongLuong === 0;
+    const isSpZero = spTrongLuong === null || spTrongLuong === 0;
+
+    if (isHdZero || isSpZero) {
+      let reason = '';
+      if (isHdZero && isSpZero) {
+        reason = 'Cả SP Net và HĐ Net đều = 0';
+      } else if (isHdZero) {
+        reason = 'HĐ Trọng lượng Net = 0';
+      } else {
+        reason = 'SP Trọng lượng Net = 0';
+      }
+
+      result.push({
+        rawRowIndex: idx,
+        sourceRowNum: sourceRowNums[idx],
+        soHD: cell(row, COL.SO_HD),
+        soTauXe: cell(row, COL.SO_TAU_XE),
+        tenKH: cell(row, COL.TEN_KH),
+        maHang: cell(row, COL.MA_HANG),
+        tenHang: cell(row, COL.TEN_HANG_HOA),
+        soLuong: parseCellToNumber(row[COL.SO_LUONG]),
+        spTrongLuong,
+        hdTrongLuong,
+        reason,
+      });
+    }
+  });
+  return result;
 }
 
 export function applyAdjustments(rawRows: RawRow[], adjustments: AdjustmentRow[]): RawRow[] {
