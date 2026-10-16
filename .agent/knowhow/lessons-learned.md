@@ -5,6 +5,13 @@ description: Ghi lại các bài học kinh nghiệm, bug đã fix, và pitfalls
 # Lessons Learned — PhuPhatCorp
 
 ---
+## Rule: Lọc xe active trong Quản lý bảo hiểm, Quản lý thay nhớt và Thống kê dầu
+- **Ngày:** 2026-10-16
+- **Feature:** Quản lý bảo hiểm, Quản lý thay nhớt, Thống kê dầu
+- **Mô tả:** Các màn hình quản trị và API truy vấn dữ liệu theo xe (Bảo hiểm `insuranceService.listAll`, Thay nhớt `oilChangeService.listAll`, Thống kê dầu `fuelRecordService.getStatistics`, `getStatisticsByLocation`, `getVehiclesNeedingMonitoring`) và dropdown chọn xe trong Thống kê dầu (`FuelStatisticsPage.tsx`) phải luôn kèm điều kiện `v.status = 'active'`, tránh tình trạng hiển thị xe đã ngừng hoạt động (deactive).
+- **Files liên quan:** `backend/src/services/insuranceService.ts`, `backend/src/services/oilChangeService.ts`, `backend/src/services/fuelRecordService.ts`, `frontend/src/pages/admin/fuel-data/FuelStatisticsPage.tsx`.
+
+---
 ## Change: Đổi ô nhập "Điểm nhận hàng" sang Text Input tự do trong Tạo/Sửa chuyến xe
 - **Ngày:** 2026-10-02
 - **Feature:** Bảng điều phối xe (`CreateScheduleModal.tsx`, `EditScheduleModal.tsx`)

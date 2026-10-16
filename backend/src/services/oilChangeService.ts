@@ -71,7 +71,7 @@ export const oilChangeService = {
     const page = params.page || 1;
     const limit = params.limit || 20;
     const offset = (page - 1) * limit;
-    const conditions: string[] = ["ocr.status != 'deleted'"];
+    const conditions: string[] = ["ocr.status != 'deleted'", "v.status = 'active'"];
     const queryParams: unknown[] = [];
     let paramIdx = 1;
 
@@ -89,7 +89,7 @@ export const oilChangeService = {
 
     const countResult = await pool.query<{ count: string }>(
       `SELECT COUNT(*) as count FROM oil_change_records ocr
-       LEFT JOIN vehicles v ON ocr.vehicle_id = v.id
+       JOIN vehicles v ON ocr.vehicle_id = v.id
        ${whereClause}`,
       queryParams,
     );
@@ -97,7 +97,7 @@ export const oilChangeService = {
 
     const dataResult = await pool.query<OilChangeRecord>(
       `SELECT ${SELECT_COLS} FROM oil_change_records ocr
-       LEFT JOIN vehicles v ON ocr.vehicle_id = v.id
+       JOIN vehicles v ON ocr.vehicle_id = v.id
        ${whereClause}
        ORDER BY ocr.change_date DESC
        LIMIT $${paramIdx++} OFFSET $${paramIdx++}`,
@@ -118,6 +118,21 @@ export const oilChangeService = {
   },
 
   async create(input: CreateOilChangeInput, userId: number): Promise<OilChangeRecord> {
+    const vehicleCheck = await pool.query<{ plate_number: string; driver_name: string; status: string }>(
+      `SELECT plate_number, driver_name, status FROM vehicles WHERE id = $1`,
+      [input.vehicle_id],
+    );
+    if (!vehicleCheck.rows[0]) {
+      throw { code: 'NOT_FOUND', message: 'Không tìm thấy xe' };
+    }
+    if (vehicleCheck.rows[0].status !== 'active') {
+      throw {
+        code: 'VALIDATION_ERROR',
+        message: 'Chỉ cho phép tạo bản ghi thay nhớt cho xe đang hoạt động (active)',
+        status: 400,
+      };
+    }
+
     const result = await pool.query<OilChangeRecord>(
       `INSERT INTO oil_change_records (vehicle_id, change_date, odometer_at, oil_type, notes, created_by)
        VALUES ($1, $2, $3, $4, $5, $6)
@@ -127,15 +142,10 @@ export const oilChangeService = {
 
     const row = result.rows[0];
 
-    const vehicleResult = await pool.query<{ plate_number: string; driver_name: string }>(
-      `SELECT plate_number, driver_name FROM vehicles WHERE id = $1`,
-      [input.vehicle_id],
-    );
-
     return {
       ...row,
-      plate_number: vehicleResult.rows[0]?.plate_number,
-      driver_name: vehicleResult.rows[0]?.driver_name,
+      plate_number: vehicleCheck.rows[0].plate_number,
+      driver_name: vehicleCheck.rows[0].driver_name,
     };
   },
 

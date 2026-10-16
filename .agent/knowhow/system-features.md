@@ -1297,6 +1297,21 @@ frontend/src/pages/dashboard/tabs/FuelTab.tsx
 
 ---
 
+## 13. Phân hệ Dữ liệu xe & Nhiên liệu (Bảo hiểm, Thay nhớt, Thống kê dầu)
+
+### 13.1 Business Rules lọc trạng thái xe (Active Vehicles Only)
+- **Quản lý bảo hiểm (`/vehicle-data/insurances`):**
+  - Màn hình tổng hợp và danh sách bảo hiểm chỉ hiển thị các xe đang hoạt động (`v.status = 'active'`).
+  - Danh sách sắp hết hạn (`/vehicle-insurances/expiring`) và tạo mới bảo hiểm chỉ áp dụng cho xe đang hoạt động (`status = 'active'`).
+- **Quản lý thay nhớt (`/vehicle-data/oil-changes`):**
+  - Cả 2 tab "Lịch sử thay nhớt" và "Xe cần thay nhớt" chỉ hiển thị các xe đang hoạt động (`v.status = 'active'`).
+  - Tạo mới bản ghi thay nhớt chỉ cho phép chọn và lưu xe đang hoạt động (`status = 'active'`).
+- **Thống kê dữ liệu dầu (`/fuel-data/statistics`):**
+  - Dropdown chọn xe ở bộ lọc chỉ hiển thị danh sách xe active.
+  - Các thống kê tổng quan (Summary, Xu hướng theo tháng, Theo xe, Theo vị trí) và tab "Xe cần theo dõi", "Xe chưa đổ dầu" chỉ tổng hợp dữ liệu từ các xe đang hoạt động (`v.status = 'active'`).
+
+---
+
 - Password hash: bcrypt, 10 salt rounds, sync API
 - JWT secret: phải đủ mạnh (recommend 256+ bits), không hardcode
 - httpOnly cookie cho refreshToken: ngăn XSS đọc được
