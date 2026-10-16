@@ -84,7 +84,7 @@ export const insuranceService = {
     const page = params.page || 1;
     const limit = params.limit || 20;
     const offset = (page - 1) * limit;
-    const conditions: string[] = ["ir.status != 'deleted'"];
+    const conditions: string[] = ["ir.status != 'deleted'", "v.status = 'active'"];
     const queryParams: unknown[] = [];
     let paramIdx = 1;
 
@@ -117,7 +117,7 @@ export const insuranceService = {
 
     const countResult = await pool.query<{ count: string }>(
       `SELECT COUNT(*) as count FROM insurance_records ir
-       LEFT JOIN vehicles v ON ir.vehicle_id = v.id
+       JOIN vehicles v ON ir.vehicle_id = v.id
        ${whereClause}`,
       queryParams,
     );
@@ -125,7 +125,7 @@ export const insuranceService = {
 
     const dataResult = await pool.query<InsuranceRecord>(
       `SELECT ${SELECT_COLS} FROM insurance_records ir
-       LEFT JOIN vehicles v ON ir.vehicle_id = v.id
+       JOIN vehicles v ON ir.vehicle_id = v.id
        ${whereClause}
        ORDER BY ir.expiry_date ASC
        LIMIT $${paramIdx++} OFFSET $${paramIdx++}`,
@@ -152,12 +152,19 @@ export const insuranceService = {
   },
 
   async create(input: CreateInsuranceInput, userId: number): Promise<InsuranceRecord> {
-    const vehicleCheck = await pool.query<{ vehicle_type: string }>(
-      `SELECT vehicle_type FROM vehicles WHERE id = $1`,
+    const vehicleCheck = await pool.query<{ vehicle_type: string; status: string }>(
+      `SELECT vehicle_type, status FROM vehicles WHERE id = $1`,
       [input.vehicle_id],
     );
     if (!vehicleCheck.rows[0]) {
       throw { code: 'NOT_FOUND', message: 'Không tìm thấy xe' };
+    }
+    if (vehicleCheck.rows[0].status !== 'active') {
+      throw {
+        code: 'VALIDATION_ERROR',
+        message: 'Chỉ cho phép tạo bảo hiểm cho xe đang hoạt động (active)',
+        status: 400,
+      };
     }
     if (vehicleCheck.rows[0].vehicle_type !== 'Xe nhà') {
       throw {
@@ -274,8 +281,9 @@ export const insuranceService = {
   async getExpiring(days: number = 30): Promise<InsuranceRecord[]> {
     const result = await pool.query<InsuranceRecord>(
       `SELECT ${SELECT_COLS} FROM insurance_records ir
-       LEFT JOIN vehicles v ON ir.vehicle_id = v.id
+       JOIN vehicles v ON ir.vehicle_id = v.id
        WHERE ir.status = 'active'
+         AND v.status = 'active'
          AND ir.expiry_date <= CURRENT_DATE + $1::INTEGER
          AND ir.expiry_date >= CURRENT_DATE
        ORDER BY ir.expiry_date ASC`,
