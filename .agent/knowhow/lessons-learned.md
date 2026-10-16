@@ -5,6 +5,14 @@ description: Ghi lại các bài học kinh nghiệm, bug đã fix, và pitfalls
 # Lessons Learned — PhuPhatCorp
 
 ---
+## Bug: Temporal Dead Zone (TDZ) ReferenceError với biến derived trong React component
+- **Ngày:** 2026-10-16
+- **Feature:** Theo dõi hóa đơn (`DocumentViewerModal.tsx`)
+- **Mô tả:** Lỗi runtime `Uncaught ReferenceError: Cannot access 'isImage' before initialization` xảy ra khi mở modal xem ảnh. Nguyên nhân do biến `const isImage = ...` được khai báo bên dưới các `useCallback`, nhưng lại được đưa vào dependency array của `useCallback(handleDoubleClick)` ở phía trên.
+- **Giải pháp:** Luôn khai báo các biến tính toán / derived state từ props (`isImage`, `isPdf`, v.v.) ngay đầu thân component trước tất cả các hooks (`useCallback`, `useMemo`, `useEffect`) có phụ thuộc vào chúng.
+- **Files liên quan:** `frontend/src/components/invoice-tracking/DocumentViewerModal.tsx`.
+
+---
 ## Rule: Lọc xe active trong Quản lý bảo hiểm, Quản lý thay nhớt và Thống kê dầu
 - **Ngày:** 2026-10-16
 - **Feature:** Quản lý bảo hiểm, Quản lý thay nhớt, Thống kê dầu
@@ -44,6 +52,20 @@ description: Ghi lại các bài học kinh nghiệm, bug đã fix, và pitfalls
     - Tự động đặt lại góc xoay về $0^\circ$ khi chuyển qua ảnh khác (Next/Back) hoặc đổi tệp.
     - Hiệu ứng chuyển động mượt mà với CSS transition `transition-transform duration-200 ease-in-out`.
     - Tự động ẩn các nút xoay khi tệp đang xem là tài liệu PDF.
+- **Files:** `frontend/src/components/invoice-tracking/DocumentViewerModal.tsx`, `frontend/src/i18n/vi.json`, `frontend/src/i18n/en.json`.
+
+---
+## Feature: Zoom In, Zoom Out & Pan in DocumentViewerModal
+- **Ngày:** 2026-10-16
+- **Feature:** Theo dõi hóa đơn (`DocumentViewerModal`, Lightbox Image Viewer)
+- **Mô tả:** Bổ sung tính năng phóng to (Zoom In), thu nhỏ (Zoom Out), kéo di chuyển ảnh (Drag Pan), double-click nhanh để phóng to/về ban đầu và nút đặt lại mức thu phóng, giúp người dùng soi rõ chi tiết hóa đơn (chữ nhỏ, con dấu, số tiền).
+- **Thực hiện:**
+  - `DocumentViewerModal.tsx`:
+    - Thêm nút `ZoomIn` (bước 25%, tối đa 300%), `ZoomOut` (tối thiểu 50%) và nút huy hiệu hiển thị tỉ lệ thu phóng (ví dụ `125%`) để 1-click đặt lại về 100%.
+    - Hỗ trợ phím tắt: `+` / `=` để phóng to, `-` / `_` để thu nhỏ, `0` để đặt lại 100%.
+    - Hỗ trợ kéo chuột (mouse drag-to-pan) khi đang ở mức phóng to > 100% kèm con trỏ chuột `grab`/`grabbing`.
+    - Hỗ trợ click đúp (double-click) để nhanh chóng phóng to 200% hoặc quay lại 100%.
+    - Tự động reset zoom & pan về mặc định khi chuyển qua ảnh khác.
 - **Files:** `frontend/src/components/invoice-tracking/DocumentViewerModal.tsx`, `frontend/src/i18n/vi.json`, `frontend/src/i18n/en.json`.
 
 ---
