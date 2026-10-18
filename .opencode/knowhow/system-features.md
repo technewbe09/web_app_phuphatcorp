@@ -257,7 +257,7 @@ User upload file .xlsx ERP (Delivery Report)
       → Build output XLSX (8 sheets):
           Sheet "Sheet": dữ liệu thô gốc 100% nguyên bản từ file ERP
           Sheet "Processed": tất cả dòng (44 cols), header + data + separator xám giữa nhóm
-          Sheet "Processed v2": bản sao chuẩn hóa từ Processed, chuyển 5 nhà lên trước CLF (header #00B050), thêm cột Gạo, ép kiểu số thực (number) cho O, P, Q và các cột tải trọng. Tính lại Khung giá theo tải chuyến từ cột 5 nhà (tô #FFE599 + note nếu đổi), trừ khoảng (2,5–8] không Pallet thì giữ khung gốc. Khối `≤2.5 tấn` liền kề chuyến cùng xe cùng ngày nặng hơn 2,5 tấn được tô #F8CBAD để kế toán kiểm tra, không tự sửa. Dòng 1 luôn liệt kê số hóa đơn cần kiểm tra.
+          Sheet "Processed v2": bản sao từ Processed. Cột `5 nhà` và `Gạo` giữ nguyên vị trí, tiêu đề và giá trị. Không thêm cột `Gạo` khi Processed không có. Ép số O, P, Q và CLF, VFM, MCC, CLV, NDFC. Với `5 nhà` và `Gạo`, chỉ chữ đọc được thành số mới thành number format `#,##0.000`; ô đã là số giữ format; chữ khác giữ nguyên. Không thấy header `5 nhà` thì tải chuyến đọc cột 24. Tính lại Khung giá theo đúng số `5 nhà` trên dòng tổng, không cộng cột nhà và không lấy max với Round(MT). Dòng tổng trống hoặc bằng 0 thì lấy `5 nhà` của dòng chi tiết đầu, không có thì cộng `5 nhà` từng dòng, vẫn không có thì cộng Round(MT) từng dòng (tô #FFE599 + note nếu đổi), trừ khoảng (2,5–8] không Pallet thì giữ khung gốc. Một biển số là xe lớn khi trong file có chuyến khác nặng hơn 8 tấn hoặc chuyến Pallet. Chỉ khối khung gốc đúng `≤2.5 tấn` và tải không quá 2,5 tấn mới được kiểm tra. Cảnh báo khi biển số đó là xe lớn, kể cả khác ngày và không đứng kề: tô #F8CBAD, ghi chú `Cần kiểm tra tách chuyến`, không tự sửa. Nhãn khác không vào cảnh báo này. Khối gắn nhãn `≤2.5 tấn` nhưng tải nặng hơn 2,5 tấn vẫn tính lại khung, và vẫn là bằng chứng xe lớn khi tải hơn 8 tấn hoặc là Pallet. Dòng 1 liệt kê số hóa đơn của các chuyến bị cảnh báo.
           Sheet "CLF": chỉ dòng factory CLF (46 cols), thêm Tấn/Hóa đơn & Tấn/Chuyến
           Sheet "VFM": chỉ dòng factory VFM (46 cols)
           Sheet "MCC": chỉ dòng factory MCC (46 cols)
@@ -410,8 +410,8 @@ src/api/weightAdjustmentApi.ts     ← fetchAll() dùng để load masterdata
 
 ### 5.5 Access
 
-- Route: `/admin/delivery-data`
-- Guard: AuthGuard + AdminGuard (admin/manager role)
+- Route: `/delivery-data/5-houses` (xử lý Excel 5 nhà), `/delivery-data/bang-ke-tho` (lên bảng kê thô), `/delivery-data/rice` (xử lý data gạo)
+- Guard: đăng nhập. Sidebar nhóm "Xử lý Data Giao Hàng" hiện khi có `delivery_data.view` hoặc `delivery_data.manage`
 - Sidebar: "Xử lý Data Giao Hàng" / "Delivery Data Processing"
 
 ---
@@ -744,7 +744,7 @@ frontend/src/components/accounting-data/InvoiceNumbersPopup.tsx
 
 ---
 
-### 11.4 Lên bảng kê thô 5 nhà & Xử lý ND-MCC (/accounting-data/bang-ke-tho)
+### 11.4 Lên bảng kê thô 5 nhà & Xử lý ND-MCC (/delivery-data/bang-ke-tho)
 
 **Mục đích:** Lưu trữ các đợt file Excel sau bước xử lý dữ liệu giao hàng 5 nhà, tự động bóc tách sheet `MCC` và `NDFC` thành bảng kê thô 8 sheets cho MCC (`2000000007`) và NDFC (`2000000008`) kèm tra cứu khách hàng, giá cước và biểu phụ phí.
 
@@ -780,14 +780,31 @@ frontend/src/components/accounting-data/InvoiceNumbersPopup.tsx
 - Giá cước: Tra cứu `route_pricing` theo Điểm tính phí, Khung giá (`≤2.5 tấn`, `>8-16 tấn`, `>16-23 tấn`, `>23 tấn`), Ngày hóa đơn, ưu tiên Price Book theo nhà và slot. Để trống (`null`) nếu không tìm thấy.
 - Phụ phí: Tra cứu `customer_surcharge_rules` lấy phí bốc xếp, chuyển tải, ghép điểm. Để trống (`null`) nếu không tìm thấy.
 
+**Quy tắc sinh workbook CLV:**
+- Nguồn là sheet `CLV`, mã `CLV`. Thiếu sheet thì `MISSING_CLV_SHEET`.
+- Giữ `Sheet`, `Sheet1`, `Processed`, `CLV`. Xóa sheet nguồn còn lại. Thêm `clv tấn`, `clv tấn (2)`, `tn-aav-pa`, `clv chuyến+uni-clv`, `clv chuyến`, `uni-clv`.
+- Khung `≤2.5 tấn` vào nhóm chuyến (khu vực `ST`). Khung khác vào nhóm tấn (khu vực `TỈNH`). Slot trống của nhóm tấn ra trang bìa `tn-aav-pa`. Slot `GST01_Vinh Tuong` ra `uni-clv` (không dòng Tổng cộng). Slot `GST01_CLV HP` của nhóm chuyến ra `clv chuyến`.
+- Sổ giá đúng tên `CLV`, không fallback. Khung `Pallet` lấy `pallet_trip_price`. Phụ phí bốc xếp và chuyển tải; trang bìa gọi cột chuyển tải là `Phụ phí giao hàng`.
+- Trang bìa giữ hợp đồng WILMAR CLV. Tháng, số hóa đơn, ngày và số bảng kê để trống. Ô CLV trên UI có nút xử lý / tải / chạy lại như ND-MCC.
+
+**Quy tắc sinh workbook Calofic (CLF):**
+- Nguồn là bốn sheet `STHI`, `TINH`, `NPP`, `STHI (uni)`, mã nhà cung cấp `2000000001`. Thiếu sheet nào thì `MISSING_CLF_SHEET`.
+- Giữ `Sheet`, `Sheet1`, `Processed`. Xóa sheet nhà khác. Viết lại bốn sheet nguồn và thêm trang bìa `STHI (2)`, `TINH (2)`, `STHI (uni) (2)`, `NPP1`, `NPP1 (2)`, `tn-aav-pa`.
+- `STHI` và `STHI (uni)` dùng công thức chia theo tổng trọng lượng chuyến. Đơn giá `STHI` = cước + bốc xếp + phụ phí, cột ghép điểm ghi riêng và không cộng vào đơn giá. `TINH`, `NPP1` dùng công thức nhân tấn/chuyến. `NPP` chỉ giữ trọng lượng và 5 nhà.
+- Hóa đơn toàn số trên `NPP` ra trang bìa `NPP1 (2)`. Hóa đơn không toàn số (TN, PA, AV) ra `tn-aav-pa`.
+- SITE `CLF` trên STHI, TINH, NPP, NPP1. SITE `UNI-CLF` trên `STHI (uni)`. Khu vực `ST` trên STHI và STHI (uni), `TỈNH` trên TINH, theo khung trên NPP.
+- Sổ giá đúng tên `CLF`. Trang bìa Calofic giữ hợp đồng `CALOFIC-PPH/2025` và bên mua Calofic Hiệp Phước. Trang bìa `STHI (uni) (2)` giữ hợp đồng WILMAR CLV. Tháng, số hóa đơn, ngày và số bảng kê để trống. Ô Calofic có nút xử lý / tải / chạy lại.
+
 **API Endpoints:**
 ```
-GET    /api/bang-ke-tho/batches                     → Danh sách đợt (accounting_data.view)
-POST   /api/bang-ke-tho/batches                     → Upload đợt mới (accounting_data.manage)
-GET    /api/bang-ke-tho/batches/:id/files/input     → Tải file input gốc (accounting_data.view)
-POST   /api/bang-ke-tho/batches/:id/process-nd-mcc  → Kích hoạt xử lý bảng kê ND-MCC (accounting_data.manage)
-GET    /api/bang-ke-tho/batches/:id/files/:houseCode→ Tải file output nhà (accounting_data.view)
-DELETE /api/bang-ke-tho/batches/:id                 → Xóa đợt (accounting_data.manage)
+GET    /api/bang-ke-tho/batches                     → Danh sách đợt (delivery_data.view)
+POST   /api/bang-ke-tho/batches                     → Upload đợt mới (delivery_data.manage)
+GET    /api/bang-ke-tho/batches/:id/files/input     → Tải file input gốc (delivery_data.view)
+POST   /api/bang-ke-tho/batches/:id/process-nd-mcc  → Kích hoạt xử lý bảng kê ND-MCC (delivery_data.manage)
+POST   /api/bang-ke-tho/batches/:id/process-clv     → Kích hoạt xử lý bảng kê CLV (delivery_data.manage)
+POST   /api/bang-ke-tho/batches/:id/process-calofic → Kích hoạt xử lý bảng kê Calofic (delivery_data.manage)
+GET    /api/bang-ke-tho/batches/:id/files/:houseCode→ Tải file output nhà (delivery_data.view)
+DELETE /api/bang-ke-tho/batches/:id                 → Xóa đợt (delivery_data.manage)
 ```
 
 **Files:**
@@ -795,6 +812,8 @@ DELETE /api/bang-ke-tho/batches/:id                 → Xóa đợt (accounting_
 backend/src/constants/bangKeTho.ts
 backend/src/services/bangKeTho/index.ts
 backend/src/services/bangKeTho/ndMccEngine.ts
+backend/src/services/bangKeTho/clvEngine.ts
+backend/src/services/bangKeTho/clfEngine.ts
 backend/src/services/bangKeTho/pricingLookup.ts
 backend/src/utils/addressMatcher.ts
 backend/src/utils/routeMatcher.ts
@@ -810,8 +829,8 @@ frontend/src/components/bang-ke-tho/BangKeThoTable.tsx
 frontend/src/pages/admin/accounting-data/BangKeThoPage.tsx
 ```
 
-**Access:** Route `/accounting-data/bang-ke-tho`, sidebar menu "Dữ liệu kế toán" → "Lên bảng kê thô 5 nhà".  
-**Permissions:** `accounting_data.view` (xem/tải), `accounting_data.manage` (upload/xử lý/xóa).
+**Access:** Route `/delivery-data/bang-ke-tho`, sidebar "Xử lý Data Giao Hàng" → "Lên bảng kê thô 5 nhà" (ngay dưới "Xử lý data 5 nhà"). URL cũ `/accounting-data/bang-ke-tho` không còn route riêng.  
+**Permissions:** `delivery_data.view` (xem/tải), `delivery_data.manage` (upload/xử lý/xóa).
 
 ---
 

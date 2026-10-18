@@ -46,42 +46,56 @@ router.use(authenticateToken);
 
 router.get(
   '/batches',
-  requirePermission('accounting_data.view'),
+  requirePermission('delivery_data.view'),
   ...validate(listBangKeSchema),
   bangKeThoController.listBatches,
 );
 
 router.post(
   '/batches',
-  requirePermission('accounting_data.manage'),
+  requirePermission('delivery_data.manage'),
   uploadExcel,
   bangKeThoController.createBatch,
 );
 
 router.post(
   '/batches/:id/process-nd-mcc',
-  requirePermission('accounting_data.manage'),
+  requirePermission('delivery_data.manage'),
   ...validate(batchIdSchema),
   bangKeThoController.processNdMcc,
 );
 
+router.post(
+  '/batches/:id/process-clv',
+  requirePermission('delivery_data.manage'),
+  ...validate(batchIdSchema),
+  bangKeThoController.processClv,
+);
+
+router.post(
+  '/batches/:id/process-calofic',
+  requirePermission('delivery_data.manage'),
+  ...validate(batchIdSchema),
+  bangKeThoController.processCalofic,
+);
+
 router.get(
   '/batches/:id/files/input',
-  requirePermission('accounting_data.view'),
+  requirePermission('delivery_data.view'),
   ...validate(batchIdSchema),
   bangKeThoController.downloadInput,
 );
 
 router.get(
   '/batches/:id/files/:houseCode',
-  requirePermission('accounting_data.view'),
+  requirePermission('delivery_data.view'),
   ...validate(houseFileSchema),
   bangKeThoController.downloadOutput,
 );
 
 router.delete(
   '/batches/:id',
-  requirePermission('accounting_data.manage'),
+  requirePermission('delivery_data.manage'),
   ...validate(batchIdSchema),
   bangKeThoController.deleteBatch,
 );

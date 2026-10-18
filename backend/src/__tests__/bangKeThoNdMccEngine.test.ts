@@ -1069,5 +1069,128 @@ describe('bangKeThoService.processNdMcc', () => {
     expect(mccGoc.getRow(14).getCell(5).value).toBe('TỔNG CỘNG B');
     expect((mccGoc.getRow(14).getCell(23).value as any)?.formula).toBe('SUM(W13:W13)');
   });
+
+  it('rewrites the spaced hyphen in direct-delivery route names on MCC (tt) and NDFC (tt)', async () => {
+    const customers = [
+      ['An Giang Co', 'ADDR AN GIANG', 'An Giang - Châu Đốc', 'An Giang - Châu Đốc'],
+      ['Lam Dong Co', 'ADDR LAM DONG', 'Lâm Đồng - Lâm Viên-Đà Lạt', 'Lâm Đồng - Lâm Viên-Đà Lạt'],
+      ['Binh Loi Co', 'ADDR BINH LOI', 'TP, Hồ Chí Minh - Bình Lợi Trung', 'HCM - Bình Lợi Trung'],
+      ['Vung Tau Co', 'ADDR VUNG TAU', 'Bà Rịa - Vũng Tàu - Châu Đức', 'FEE-VT'],
+      ['Thu Duc Co', 'ADDR THU DUC', 'TP. Hồ Chí Minh - Thủ Đức', 'FEE-TD'],
+      ['Dong Nai Co', 'ADDR DONG NAI', 'Đồng Nai - Biên Hòa', 'Đồng Nai - Biên Hòa'],
+      ['Tay Ninh Co', 'ADDR TAY NINH', 'Tây Ninh - Đức Hòa', 'Tây Ninh - Đức Hòa'],
+    ].map(([name, addr, route, fee], idx) => ({
+      id: 5000 + idx,
+      ten_khach_hang: name,
+      dia_chi_giao_hang: addr,
+      diem_tra_hang: name,
+      tuyen_phuong: route,
+      diem_giao_hang_tinh_phi: fee,
+      supplier_code: 'default',
+    }));
+
+    mockPool.query.mockImplementation(async (queryOrConfig: any) => {
+      const sql = typeof queryOrConfig === 'string' ? queryOrConfig : queryOrConfig?.text || '';
+      if (sql.includes('FROM customers')) return { rows: customers } as any;
+      return { rows: [] } as any;
+    });
+
+    const wb = new ExcelJS.Workbook();
+    const ws = wb.addWorksheet('Processed');
+    ws.addRow([
+      'Mã nhà cung cấp', 'Số hóa đơn', 'Ngày hóa đơn', 'Số tàu', 'Mã khách hàng',
+      'Tên khách hàng', 'Địa chỉ giao hàng', 'Khung giá', 'Đơn vị tính', 'Mã hàng hóa',
+      'Tên hàng hóa (Vie)', 'Tên hàng hóa (En)', 'Mã liên hệ giao hàng', 'Mã DVT',
+      'Số lượng (DVT bán hàng)', 'SP Trọng lượng net', 'HĐ Trọng lượng (Net)', 'Round(MT)',
+      'CLF', 'VFM', 'MCC', 'CLV', 'NDFC', '', '',
+      'Tài xế', 'Thông tin bổ sung', 'Slot',
+    ]);
+
+    const line = (
+      supplier: string,
+      invoice: string,
+      date: string,
+      truck: string,
+      name: string,
+      addr: string,
+      khung: string,
+      slot: string,
+      net: number,
+    ) => [
+      supplier, invoice, date, truck, 'KH',
+      name, addr, khung, 'Tấn', 'SP',
+      'Hang', 'Item', '', 'CAR',
+      1, 1, net, net / 1000,
+      0, 0, supplier === '2000000007' ? net / 1000 : 0, 0, supplier === '2000000008' ? net / 1000 : 0, '', '',
+      'Tai xe', '', slot,
+    ];
+
+    const mcc = '2000000007';
+    const ndfc = '2000000008';
+    const big = '>8-16 tấn';
+    const small = '≤2.5 tấn';
+    ws.addRow(line(mcc, 'HD-A1', '2026-07-01', '51C-11111', 'An Giang Co', 'ADDR AN GIANG', big, 'UNI 1', 10000));
+    ws.addRow(line(mcc, 'HD-A2', '2026-07-01', '51C-11111', 'Lam Dong Co', 'ADDR LAM DONG', big, 'UNI 1', 10000));
+    ws.addRow(line(mcc, 'HD-A3', '2026-07-01', '51C-11111', 'Binh Loi Co', 'ADDR BINH LOI', big, 'UNI 1', 10000));
+    ws.addRow(line(mcc, 'HD-B1', '2026-07-01', '51C-11111', 'Vung Tau Co', 'ADDR VUNG TAU', small, 'UNI 1', 1500));
+    ws.addRow(line(mcc, 'HD-C1', '2026-07-01', '70C-1', 'Thu Duc Co', 'ADDR THU DUC', big, 'CALOFIC HP', 10000));
+    ws.addRow(line(ndfc, 'HD-N1', '2026-07-18', '60C-1', 'Dong Nai Co', 'ADDR DONG NAI', big, 'UNI 1', 10000));
+    ws.addRow(line(ndfc, 'HD-N3', '2026-07-18', '60C-1', 'Tay Ninh Co', 'ADDR TAY NINH', small, 'UNI 1', 1500));
+
+    attachFactoryCopies(wb);
+    const res = await processNdMccWorkbook(Buffer.from(await wb.xlsx.writeBuffer()));
+    const outWb = new ExcelJS.Workbook();
+    await outWb.xlsx.load(res.buffer as any);
+
+    const formulaOf = (row: ExcelJS.Row) => (row.getCell(8).value as { formula?: string } | null)?.formula;
+    const invoiceRow = (sheet: ExcelJS.Worksheet, invoice: string) => {
+      let found: ExcelJS.Row | undefined;
+      sheet.eachRow((row) => {
+        if (String(row.getCell(2).value ?? '') === invoice) found = row;
+      });
+      expect(found).toBeDefined();
+      return found!;
+    };
+
+    const mccTt = outWb.getWorksheet('MCC (tt)')!;
+    const a1 = invoiceRow(mccTt, 'HD-A1');
+    expect(a1.getCell(6).value).toBe('An Giang, Châu Đốc');
+    expect(a1.getCell(7).value).toBe('An Giang - Châu Đốc');
+    expect(formulaOf(a1)).toBe(`F${a1.number}&", ("&K${a1.number}&"), xe "&D${a1.number}`);
+    expect(invoiceRow(mccTt, 'HD-A2').getCell(6).value).toBe('Lâm Đồng, Lâm Viên-Đà Lạt');
+    expect(invoiceRow(mccTt, 'HD-A3').getCell(6).value).toBe('TP, Hồ Chí Minh, Bình Lợi Trung');
+    expect(invoiceRow(mccTt, 'HD-A3').getCell(7).value).toBe('HCM - Bình Lợi Trung');
+
+    const b1 = invoiceRow(mccTt, 'HD-B1');
+    expect(b1.getCell(6).value).toBe('Bà Rịa, Vũng Tàu, Châu Đức');
+    expect(b1.getCell(7).value).toBe('FEE-VT');
+    expect(formulaOf(b1)).toBe(`F${b1.number}&", ("&K${b1.number}&"), xe "&D${b1.number}`);
+
+    mccTt.eachRow((row) => {
+      const label = String(row.getCell(3).value ?? '');
+      const totalLabel = String(row.getCell(5).value ?? '');
+      if (label === 'Tổng cộng' || totalLabel === 'TỔNG CỘNG A' || totalLabel === 'TỔNG CỘNG B') {
+        expect(row.getCell(6).value).toBeNull();
+      }
+    });
+
+    const mccClv = outWb.getWorksheet('MCC-clv')!;
+    expect(invoiceRow(mccClv, 'HD-C1').getCell(6).value).toBe('TP. Hồ Chí Minh - Thủ Đức');
+
+    const mccGoc = outWb.getWorksheet('MCC (goc)')!;
+    expect(invoiceRow(mccGoc, 'HD-A1').getCell(7).value).toBe('An Giang - Châu Đốc');
+
+    const ndfcTt = outWb.getWorksheet('NDFC (tt)')!;
+    const n1 = invoiceRow(ndfcTt, 'HD-N1');
+    expect(n1.getCell(6).value).toBe('Đồng Nai, Biên Hòa');
+    expect(n1.getCell(7).value).toBe('Đồng Nai - Biên Hòa');
+    expect(formulaOf(n1)).toBe(`F${n1.number}&", ("&K${n1.number}&"), xe "&D${n1.number}`);
+    const n3 = invoiceRow(ndfcTt, 'HD-N3');
+    expect(n3.getCell(6).value).toBe('Tây Ninh, Đức Hòa');
+    expect(n3.getCell(7).value).toBe('Tây Ninh - Đức Hòa');
+    expect(formulaOf(n3)).toBe(
+      `F${n3.number}&" "&K${n3.number}&" ("&TEXT(C${n3.number},"dd/mm")&", "&D${n3.number}&")"`,
+    );
+  });
 });
 

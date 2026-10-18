@@ -252,15 +252,14 @@ export function determineKhungGia(weight: number, isPallet: boolean): string {
 
 const KHUNG_CHANGED_FILL = 'FFFFE599';
 const SPLIT_CHECK_FILL = 'FFF8CBAD';
+const SPLIT_CHECK_NOTE = 'Cần kiểm tra tách chuyến';
 
 interface TripBlock {
   rows: number[];
   weight: number;
   isPallet: boolean;
   originalKhung: string;
-  vehicle: string;
   vehicleKey: string;
-  date: string;
   invoices: string[];
 }
 
@@ -269,22 +268,29 @@ interface BlockCols {
   colKhungGia: number;
   colSoTau: number;
   colSoHd: number;
-  colNgay: number;
 }
 
 function normalizeVehicleKey(value: string): string {
   return value.trim().replace(/\s+/g, ' ').toUpperCase();
 }
 
-function formatTripTons(weight: number): string {
-  const rounded = Math.round(weight * 1000) / 1000;
-  const text = rounded.toFixed(3).replace(/0+$/, '').replace(/\.$/, '');
-  return text.replace('.', ',');
+function isLightSplitKhung(khung: string): boolean {
+  return khung.trim() === '≤2.5 tấn';
 }
 
-function isLightSplitKhung(khung: string): boolean {
-  const text = khung.trim();
-  return text === '≤2.5 tấn' || text === '<=2.5 tấn';
+function isLargeVehicleTrip(block: TripBlock): boolean {
+  return block.isPallet || block.weight > 8;
+}
+
+function isTripSeparator(
+  maNcc: string,
+  soHd: string,
+  soTau: string,
+  roundMt: number | null,
+  fiveNha: number | null,
+): boolean {
+  if (maNcc || soHd || soTau) return false;
+  return roundMt !== null || fiveNha !== null;
 }
 
 function sheetCellText(value: unknown): string {
@@ -330,7 +336,6 @@ function describeTripBlock(
   const invoices: string[] = [];
   const seenInvoices = new Set<string>();
   let vehicle = '';
-  let date = '';
 
   for (const rIdx of rows) {
     const row = sheet.getRow(rIdx);
@@ -340,10 +345,6 @@ function describeTripBlock(
       isPallet = true;
     }
     if (!vehicle && soTau) vehicle = soTau;
-    if (!date) {
-      const ngay = sheetCellText(row.getCell(cols.colNgay).value);
-      if (ngay) date = ngay;
-    }
     const invoice = sheetCellText(row.getCell(cols.colSoHd).value);
     if (invoice && !seenInvoices.has(invoice)) {
       seenInvoices.add(invoice);
@@ -356,19 +357,9 @@ function describeTripBlock(
     weight: resolveBlockWeight(sheet, rows, sepWeight, cols.col5Nha),
     isPallet,
     originalKhung: sheetCellText(sheet.getRow(rows[0]).getCell(cols.colKhungGia).value),
-    vehicle,
     vehicleKey: normalizeVehicleKey(vehicle),
-    date,
     invoices,
   };
-}
-
-function isSameDayHeavyNeighbor(block: TripBlock, neighbor: TripBlock | undefined): boolean {
-  if (!neighbor) return false;
-  if (!block.vehicleKey || !block.date) return false;
-  if (neighbor.vehicleKey !== block.vehicleKey) return false;
-  if (neighbor.date !== block.date) return false;
-  return neighbor.weight > 2.5;
 }
 
 function keepsSourceKhung(block: TripBlock, warned: boolean): boolean {
@@ -376,26 +367,12 @@ function keepsSourceKhung(block: TripBlock, warned: boolean): boolean {
   return !block.isPallet && block.weight > 2.5 && block.weight <= 8;
 }
 
-function displayedKhung(block: TripBlock, warned: boolean): string {
-  if (keepsSourceKhung(block, warned)) return block.originalKhung;
-  return determineKhungGia(block.weight, block.isPallet);
-}
-
-function splitCheckNote(
-  block: TripBlock,
-  above: TripBlock | undefined,
-  below: TripBlock | undefined,
-  aboveWarned: boolean,
-  belowWarned: boolean,
-): string {
-  const parts: string[] = [];
-  if (above && isSameDayHeavyNeighbor(block, above)) {
-    parts.push(`phía trên ${formatTripTons(above.weight)} tấn, khung ${displayedKhung(above, aboveWarned)}`);
-  }
-  if (below && isSameDayHeavyNeighbor(block, below)) {
-    parts.push(`phía dưới ${formatTripTons(below.weight)} tấn, khung ${displayedKhung(below, belowWarned)}`);
-  }
-  return `Cần kiểm tra tách chuyến. Xe ${block.vehicle} ngày ${block.date}, ${parts.join('; ')}.`;
+function hasOtherLargeTrip(blocks: TripBlock[], index: number): boolean {
+  const vehicleKey = blocks[index].vehicleKey;
+  if (!vehicleKey) return false;
+  return blocks.some((other, otherIndex) =>
+    otherIndex !== index && other.vehicleKey === vehicleKey && isLargeVehicleTrip(other),
+  );
 }
 
 function applyKhungGia(
@@ -479,19 +456,65 @@ function insertSplitCheckBanner(sheet: ExcelJS.Worksheet, invoices: string[]): v
   followHeaderFreeze(sheet);
 }
 
+function copySourceCell(
+  dstCell: ExcelJS.Cell,
+  srcCell: ExcelJS.Cell,
+  cloneStyle: (style: ExcelJS.Cell['style']) => ExcelJS.Cell['style'],
+): void {
+  dstCell.value = extractCellValue(srcCell.value);
+  if (srcCell.style) dstCell.style = cloneStyle(srcCell.style);
+  if (srcCell.numFmt) dstCell.numFmt = srcCell.numFmt;
+  if (srcCell.note) dstCell.note = srcCell.note;
+}
+
+/** O, P, Q, Round(MT): text số thành number. Ô không phải số giữ nguyên chữ. */
+function applyMeasuredNumber(dstCell: ExcelJS.Cell, srcVal: unknown, numFmt: string): void {
+  const numVal = parseCellToNumber(srcVal);
+  if (numVal !== null) {
+    dstCell.value = numVal;
+    dstCell.numFmt = numFmt;
+    return;
+  }
+  dstCell.value = srcVal !== null && srcVal !== undefined ? (srcVal as ExcelJS.CellValue) : '';
+}
+
+/** CLF, VFM, MCC, CLV, NDFC: ép number, ô không phải số thành ô trống. */
+function applySupplierWeight(dstCell: ExcelJS.Cell, srcVal: unknown): void {
+  const numVal = parseCellToNumber(srcVal);
+  if (numVal !== null) {
+    dstCell.value = numVal;
+    dstCell.numFmt = NUM_FMT_WEIGHT;
+    return;
+  }
+  dstCell.value = '';
+  dstCell.numFmt = NUM_FMT_WEIGHT;
+}
+
 /**
- * Duplicates the 'Processed' sheet into 'Processed v2' with:
- * - Columns 1..18 preserved
- * - Col 19: '5 nhà' (from old column X)
- * - Col 20: 'CLF' (from old CLF)
- * - Col 21: 'VFM' (from old VFM)
- * - Col 22: 'MCC' (from old MCC)
- * - Col 23: 'CLV' (from old CLV)
- * - Col 24: 'NDFC' (from old NDFC)
- * - Col 25: 'Gạo' (formatted as #,##0.000, empty)
- * - Col 26: 'Tài xế' (from old Tài xế)
- * - Col 27..: remaining columns after Tài xế
- * - Columns O (Qty), P/Q (Weights), and 19..25 (5 nhà, suppliers, Gạo) formatted as numeric.
+ * 5 nhà và Gạo: số sẵn có giữ giá trị và format.
+ * Chữ đọc được thành số thì ghi number với format tải trọng.
+ * Chữ khác giữ nguyên.
+ */
+function applySourceWeightColumn(dstCell: ExcelJS.Cell, srcVal: unknown): void {
+  if (typeof srcVal === 'number' && !Number.isNaN(srcVal)) {
+    dstCell.value = srcVal;
+    return;
+  }
+  if (typeof srcVal === 'string') {
+    const numVal = parseCellToNumber(srcVal);
+    if (numVal !== null) {
+      dstCell.value = numVal;
+      dstCell.numFmt = NUM_FMT_WEIGHT;
+      return;
+    }
+  }
+  dstCell.value = srcVal !== null && srcVal !== undefined ? (srcVal as ExcelJS.CellValue) : '';
+}
+
+/**
+ * Duplicates the 'Processed' sheet into 'Processed v2'.
+ * Column order, headers, and the 5 nhà / Gạo values stay on the same cells as Processed.
+ * Trip weight for Khung giá is the 5 nhà figure already on the separator row.
  */
 export function generateProcessedV2Sheet(workbook: ExcelJS.Workbook): ExcelJS.Worksheet {
   const sourceSheet =
@@ -513,50 +536,27 @@ export function generateProcessedV2Sheet(workbook: ExcelJS.Workbook): ExcelJS.Wo
 
   const srcMapping = detectAllSourceColumns(sourceSheet);
   const headerRowIdx = srcMapping.headerRowIdx;
+  const supplierCols = new Set([
+    srcMapping.colClf,
+    srcMapping.colVfm,
+    srcMapping.colMcc,
+    srcMapping.colClv,
+    srcMapping.colNdfc,
+  ]);
+  supplierCols.delete(srcMapping.col5Nha);
+  if (srcMapping.colGao !== null) supplierCols.delete(srcMapping.colGao);
 
-  // Build column mapping: dstCol -> srcCol (or null for new columns)
-  // Total columns:
-  // dst 1..18 -> src 1..18
-  // dst 19 -> srcMapping.col5Nha (src 24)
-  // dst 20 -> srcMapping.colClf (src 19)
-  // dst 21 -> srcMapping.colVfm (src 20)
-  // dst 22 -> srcMapping.colMcc (src 21)
-  // dst 23 -> srcMapping.colClv (src 22)
-  // dst 24 -> srcMapping.colNdfc (src 23)
-  // dst 25 -> srcMapping.colGao (src null or gao)
-  // dst 26 -> srcMapping.colTaiXe (src 26)
-  // dst 27.. -> src 27..
-  const maxSrcCols = Math.max(sourceSheet.columnCount, sourceSheet.columns?.length || 0, 44);
-  const dstToSrcMap = new Map<number, number | null>();
+  let maxSrcCols = sourceSheet.columnCount || 0;
+  sourceSheet.eachRow({ includeEmpty: false }, (row) => {
+    row.eachCell({ includeEmpty: false }, (_cell, colNumber) => {
+      if (colNumber > maxSrcCols) maxSrcCols = colNumber;
+    });
+  });
 
-  for (let c = 1; c <= 18; c++) {
-    dstToSrcMap.set(c, c);
-  }
-  dstToSrcMap.set(19, srcMapping.col5Nha);
-  dstToSrcMap.set(20, srcMapping.colClf);
-  dstToSrcMap.set(21, srcMapping.colVfm);
-  dstToSrcMap.set(22, srcMapping.colMcc);
-  dstToSrcMap.set(23, srcMapping.colClv);
-  dstToSrcMap.set(24, srcMapping.colNdfc);
-  dstToSrcMap.set(25, srcMapping.colGao);
-  dstToSrcMap.set(26, srcMapping.colTaiXe);
-
-  // Map remaining columns starting from after Tài xế in sourceSheet
-  let dstIdx = 27;
-  for (let c = srcMapping.colTaiXe + 1; c <= maxSrcCols; c++) {
-    dstToSrcMap.set(dstIdx, c);
-    dstIdx++;
-  }
-
-  // Copy column widths
-  for (const [dCol, sCol] of dstToSrcMap.entries()) {
-    if (sCol) {
-      const srcCol = sourceSheet.getColumn(sCol);
-      if (srcCol && srcCol.width) {
-        v2Ws.getColumn(dCol).width = srcCol.width;
-      }
-    } else {
-      v2Ws.getColumn(dCol).width = 12;
+  for (let c = 1; c <= maxSrcCols; c++) {
+    const srcCol = sourceSheet.getColumn(c);
+    if (srcCol && srcCol.width) {
+      v2Ws.getColumn(c).width = srcCol.width;
     }
   }
 
@@ -587,167 +587,46 @@ export function generateProcessedV2Sheet(workbook: ExcelJS.Workbook): ExcelJS.Wo
       dstRow.height = srcRow.height;
     }
 
-    if (r < headerRowIdx) {
-      // Rows before header (e.g. title or empty): direct copy
-      srcRow.eachCell({ includeEmpty: true }, (cell, c) => {
-        const dstCell = dstRow.getCell(c);
-        dstCell.value = extractCellValue(cell.value);
-        if (cell.style) dstCell.style = cloneStyle(cell.style);
-      });
-      continue;
+    srcRow.eachCell({ includeEmpty: false }, (cell, c) => {
+      copySourceCell(dstRow.getCell(c), cell, cloneStyle);
+    });
+
+    if (r <= headerRowIdx) continue;
+
+    const coerceColumn = (col: number, apply: (dstCell: ExcelJS.Cell, srcVal: unknown) => void) => {
+      const srcCell = srcRow.getCell(col);
+      apply(dstRow.getCell(col), extractCellValue(srcCell.value));
+    };
+
+    coerceColumn(srcMapping.colO, (dstCell, srcVal) => applyMeasuredNumber(dstCell, srcVal, NUM_FMT_QTY));
+    coerceColumn(srcMapping.colP, (dstCell, srcVal) => applyMeasuredNumber(dstCell, srcVal, NUM_FMT_WEIGHT));
+    coerceColumn(srcMapping.colQ, (dstCell, srcVal) => applyMeasuredNumber(dstCell, srcVal, NUM_FMT_WEIGHT));
+    coerceColumn(18, (dstCell, srcVal) => applyMeasuredNumber(dstCell, srcVal, NUM_FMT_WEIGHT));
+
+    for (const col of supplierCols) {
+      coerceColumn(col, applySupplierWeight);
     }
-
-    if (r === headerRowIdx) {
-      // Header row: apply mapped headers and standard names for 19..26
-      for (const [dCol, sCol] of dstToSrcMap.entries()) {
-        const dstCell = dstRow.getCell(dCol);
-        if (sCol) {
-          const srcCell = srcRow.getCell(sCol);
-          if (srcCell.style) dstCell.style = cloneStyle(srcCell.style);
-          dstCell.value = extractCellValue(srcCell.value);
-        }
-
-        // Standardize headers
-        if (dCol === 19) {
-          dstCell.value = '5 nhà';
-          // Format giống CLF: lấy style từ cột CLF
-          const refCell = srcRow.getCell(srcMapping.colClf);
-          if (refCell && refCell.style) {
-            dstCell.style = cloneStyle(refCell.style);
-          }
-          // Đảm bảo header màu xanh lá chuẩn (FF00B050) và chữ trắng bold giống CLF
-          if (!dstCell.fill || (dstCell.fill as any).type !== 'pattern') {
-            dstCell.fill = {
-              type: 'pattern',
-              pattern: 'solid',
-              fgColor: { argb: 'FF00B050' },
-            };
-          } else if ((dstCell.fill as any).fgColor?.argb !== 'FF00B050') {
-            (dstCell.fill as any).fgColor = { argb: 'FF00B050' };
-          }
-          if (!dstCell.font) {
-            dstCell.font = { bold: true, color: { argb: 'FFFFFFFF' } };
-          } else {
-            dstCell.font = {
-              ...dstCell.font,
-              bold: true,
-              color: { argb: 'FFFFFFFF' },
-            };
-          }
-        } else if (dCol === 20) {
-          dstCell.value = 'CLF';
-        } else if (dCol === 21) {
-          dstCell.value = 'VFM';
-        } else if (dCol === 22) {
-          dstCell.value = 'MCC';
-        } else if (dCol === 23) {
-          dstCell.value = 'CLV';
-        } else if (dCol === 24) {
-          dstCell.value = 'NDFC';
-        } else if (dCol === 25) {
-          dstCell.value = 'Gạo';
-          // Style like NDFC / CLV
-          const refCell = srcRow.getCell(srcMapping.colNdfc);
-          if (refCell.style) dstCell.style = cloneStyle(refCell.style);
-        } else if (dCol === 26) {
-          dstCell.value = 'Tài xế';
-        }
-      }
-      continue;
-    }
-
-    // Data rows (r > headerRowIdx)
-    for (const [dCol, sCol] of dstToSrcMap.entries()) {
-      const dstCell = dstRow.getCell(dCol);
-
-      let srcVal: any = null;
-      if (sCol) {
-        const srcCell = srcRow.getCell(sCol);
-        srcVal = extractCellValue(srcCell.value);
-        if (srcCell.style) dstCell.style = cloneStyle(srcCell.style);
-        if (srcCell.note) dstCell.note = srcCell.note;
-      } else {
-        // Gạo column (new column, style like NDFC)
-        const refCell = srcRow.getCell(srcMapping.colNdfc);
-        if (refCell.style) dstCell.style = cloneStyle(refCell.style);
-      }
-
-      // Formatting logic:
-      if (dCol === 15) {
-        // Col O: Số lượng (DVT bán hàng)
-        const numVal = parseCellToNumber(srcVal);
-        if (numVal !== null) {
-          dstCell.value = numVal;
-          dstCell.numFmt = NUM_FMT_QTY;
-        } else {
-          dstCell.value = srcVal !== null && srcVal !== undefined ? srcVal : '';
-        }
-      } else if (dCol === 16 || dCol === 17 || dCol === 18) {
-        // Col P (SP Net), Col Q (HD Net), Col R (Round MT)
-        const numVal = parseCellToNumber(srcVal);
-        if (numVal !== null) {
-          dstCell.value = numVal;
-          dstCell.numFmt = NUM_FMT_WEIGHT;
-        } else {
-          dstCell.value = srcVal !== null && srcVal !== undefined ? srcVal : '';
-        }
-      } else if (dCol >= 19 && dCol <= 25) {
-        // 5 nhà, CLF, VFM, MCC, CLV, NDFC, Gạo
-        const numVal = parseCellToNumber(srcVal);
-        if (numVal !== null) {
-          dstCell.value = numVal;
-          dstCell.numFmt = NUM_FMT_WEIGHT;
-        } else {
-          dstCell.value = '';
-          dstCell.numFmt = NUM_FMT_WEIGHT;
-        }
-      } else {
-        // Other columns: direct value
-        dstCell.value = srcVal !== null && srcVal !== undefined ? srcVal : '';
-      }
-    }
-
-    // Standardize '5 nhà' column on separator rows to prevent undercounted col 24 in raw input
-    const maNccVal = String(dstRow.getCell(srcMapping.colMaNcc).value || '').trim();
-    const soHdVal = String(dstRow.getCell(srcMapping.colSoHd).value || '').trim();
-    const soTauVal = String(dstRow.getCell(srcMapping.colSoTau).value || '').trim();
-    const numRoundMt = parseCellToNumber(dstRow.getCell(18).value);
-    const num5Nha = parseCellToNumber(dstRow.getCell(19).value);
-
-    const isSep = !maNccVal && !soHdVal && !soTauVal && ((num5Nha !== null && num5Nha > 0) || (numRoundMt !== null && numRoundMt > 0));
-    if (isSep) {
-      const cClf = parseCellToNumber(dstRow.getCell(20).value) || 0;
-      const cVfm = parseCellToNumber(dstRow.getCell(21).value) || 0;
-      const cMcc = parseCellToNumber(dstRow.getCell(22).value) || 0;
-      const cClv = parseCellToNumber(dstRow.getCell(23).value) || 0;
-      const cNdfc = parseCellToNumber(dstRow.getCell(24).value) || 0;
-      const cGao = parseCellToNumber(dstRow.getCell(25).value) || 0;
-      const sumH = Math.round((cClf + cVfm + cMcc + cClv + cNdfc + cGao) * 1000) / 1000;
-      const col25SrcNum = parseCellToNumber(srcRow.getCell(25).value);
-
-      const true5Nha = Math.round(Math.max(sumH, numRoundMt || 0, num5Nha || 0, col25SrcNum || 0) * 1000) / 1000;
-      if (true5Nha > 0) {
-        dstRow.getCell(19).value = true5Nha;
-        dstRow.getCell(19).numFmt = NUM_FMT_WEIGHT;
-      }
+    coerceColumn(srcMapping.col5Nha, applySourceWeightColumn);
+    if (srcMapping.colGao !== null) {
+      coerceColumn(srcMapping.colGao, applySourceWeightColumn);
     }
   }
 
-  // Update Khung giá based on trip subtotal in column '5 nhà' (col 19).
-  // Weight in (2.5, 8] keeps the source khung. A ≤2.5 block beside a heavier
-  // same-day trip of the same truck is flagged for the accountant.
-  const col5NhaDst = 19;
+  // Update Khung giá from the 5 nhà number copied off Processed.
+  // A missing header still reads column 24. Weight in (2.5, 8] keeps the source khung.
+  // A plate is large when another trip in this file is over 8 tons or Pallet.
+  // A block whose source khung is exactly '≤2.5 tấn' and whose weight is at most
+  // 2.5 tons is flagged when that plate is large. The flagged block keeps its khung.
+  const col5NhaDst = srcMapping.col5Nha;
   const colKhungGiaDst = srcMapping.colKhungGia;
   const colSoTauDst = srcMapping.colSoTau;
   const colSoHdDst = srcMapping.colSoHd;
   const colMaNccDst = srcMapping.colMaNcc;
-  const colNgayDst = srcMapping.colNgayHd;
   const blockCols: BlockCols = {
     col5Nha: col5NhaDst,
     colKhungGia: colKhungGiaDst,
     colSoTau: colSoTauDst,
     colSoHd: colSoHdDst,
-    colNgay: colNgayDst,
   };
 
   const blocks: TripBlock[] = [];
@@ -767,7 +646,7 @@ export function generateProcessedV2Sheet(workbook: ExcelJS.Workbook): ExcelJS.Wo
     const soTauVal = String(row.getCell(colSoTauDst).value || '').trim();
     const cell5NhaNum = parseCellToNumber(row.getCell(col5NhaDst).value);
     const roundMtNum = parseCellToNumber(row.getCell(18).value);
-    if (!maNccVal && !soHdVal && !soTauVal && ((cell5NhaNum !== null && cell5NhaNum > 0) || (roundMtNum !== null && roundMtNum > 0))) {
+    if (isTripSeparator(maNccVal, soHdVal, soTauVal, roundMtNum, cell5NhaNum)) {
       hasSeparatorRows = true;
       break;
     }
@@ -793,19 +672,10 @@ export function generateProcessedV2Sheet(workbook: ExcelJS.Workbook): ExcelJS.Wo
     }
 
     // Check if separator row:
-    const isSeparatorRow = !maNccVal && !soHdVal && !soTauVal && ((cell5NhaNum !== null && cell5NhaNum > 0) || (roundMtNum !== null && roundMtNum > 0));
+    const isSeparatorRow = isTripSeparator(maNccVal, soHdVal, soTauVal, roundMtNum, cell5NhaNum);
 
     if (isSeparatorRow) {
-      const cClf = parseCellToNumber(row.getCell(20).value) || 0;
-      const cVfm = parseCellToNumber(row.getCell(21).value) || 0;
-      const cMcc = parseCellToNumber(row.getCell(22).value) || 0;
-      const cClv = parseCellToNumber(row.getCell(23).value) || 0;
-      const cNdfc = parseCellToNumber(row.getCell(24).value) || 0;
-      const cGao = parseCellToNumber(row.getCell(25).value) || 0;
-      const sumH = Math.round((cClf + cVfm + cMcc + cClv + cNdfc + cGao) * 1000) / 1000;
-
-      const sepWeight = Math.round(Math.max(sumH, cell5NhaNum || 0, roundMtNum || 0) * 1000) / 1000;
-      pushBlock(currentBlockRows, sepWeight);
+      pushBlock(currentBlockRows, cell5NhaNum);
       currentBlockRows = [];
     } else {
       // Only split by truck change if the sheet does NOT use separator rows
@@ -826,8 +696,8 @@ export function generateProcessedV2Sheet(workbook: ExcelJS.Workbook): ExcelJS.Wo
   }
 
   const warnedFlags = blocks.map((block, index) => {
-    if (block.isPallet || !isLightSplitKhung(block.originalKhung)) return false;
-    return isSameDayHeavyNeighbor(block, blocks[index - 1]) || isSameDayHeavyNeighbor(block, blocks[index + 1]);
+    if (!isLightSplitKhung(block.originalKhung) || block.weight > 2.5) return false;
+    return hasOtherLargeTrip(blocks, index);
   });
 
   const pendingNotes: { row: number; text: string }[] = [];
@@ -841,16 +711,7 @@ export function generateProcessedV2Sheet(workbook: ExcelJS.Workbook): ExcelJS.Wo
   const seenBannerInvoices = new Set<string>();
   blocks.forEach((block, index) => {
     if (!warnedFlags[index]) return;
-    const above = blocks[index - 1];
-    const below = blocks[index + 1];
-    const note = splitCheckNote(
-      block,
-      above,
-      below,
-      above ? warnedFlags[index - 1] : false,
-      below ? warnedFlags[index + 1] : false,
-    );
-    markSplitCheck(v2Ws, block, note, colKhungGiaDst, pendingNotes);
+    markSplitCheck(v2Ws, block, SPLIT_CHECK_NOTE, colKhungGiaDst, pendingNotes);
     for (const invoice of block.invoices) {
       if (seenBannerInvoices.has(invoice)) continue;
       seenBannerInvoices.add(invoice);

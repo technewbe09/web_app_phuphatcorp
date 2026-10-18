@@ -439,6 +439,13 @@ Frontend: accordion **Quản lý giá cước vận tải** → `/route-pricing/
 | PUT | /dispatch-schedules/:id | JWT + dispatch.manage | `{ bien_so, tai_xe?, ma_chuyen?, diem_nhan, diem_tra, gio_nhan, ghi_chu?, vehicle_id?, trip_code_id? }` | `{ success, data: DispatchSchedule }` |
 | DELETE | /dispatch-schedules/:id | JWT + dispatch.manage | — | `{ success, message }` |
 
+### Bảng kê thô — /bang-ke-tho
+
+| Method | Path | Auth | Response |
+|--------|------|------|----------|
+| POST | /api/bang-ke-tho/batches/:id/process-clv | JWT + delivery_data.manage | `{ success, data: { house_code: 'clv', status: 'ready', stats } }`. Thiếu sheet `CLV`: 400 `MISSING_CLV_SHEET`. |
+| POST | /api/bang-ke-tho/batches/:id/process-calofic | JWT + delivery_data.manage | `{ success, data: { house_code: 'calofic', status: 'ready', stats } }`. Thiếu sheet CLF: 400 `MISSING_CLF_SHEET`. |
+
 ### Response Format Convention
 
 ```typescript
@@ -485,6 +492,7 @@ Frontend: accordion **Quản lý giá cước vận tải** → `/route-pricing/
 | /settings/workflows | MainLayout | Protected | WorkflowManagementPage |
 | /logs | MainLayout | Protected | AuditLogPage |
 | /delivery-data/5-houses | MainLayout | Protected | DeliveryDataPage |
+| /delivery-data/bang-ke-tho | MainLayout | Protected | BangKeThoPage |
 | /delivery-data/rice | MainLayout | Protected | RiceDeliveryDataPage |
 | /vehicle-data/driver-invoices | MainLayout | Protected | DriverInvoicesPage |
 | /vehicle-data/inspections | MainLayout | Protected | InspectionPage |
@@ -497,7 +505,6 @@ Frontend: accordion **Quản lý giá cước vận tải** → `/route-pricing/
 | /accounting-data/customers | MainLayout | Protected | CustomersPage |
 | /accounting-data/delivery-import | MainLayout | Protected | DeliveryImportPage |
 | /accounting-data/invoice-matching | MainLayout | Protected | InvoiceMatchingPage |
-| /accounting-data/bang-ke-tho | MainLayout | Protected | BangKeThoPage |
 | /accounting-data/reconcile-jobs | MainLayout | Protected | Redirect sang /jobs/reconcile |
 | /jobs/reconcile | MainLayout | Protected | ReconcileJobPage |
 | /fuel-data | MainLayout | Protected | FuelDataPage |

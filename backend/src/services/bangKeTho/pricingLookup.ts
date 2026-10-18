@@ -66,6 +66,16 @@ export function resolveTargetBook(params: ResolveTargetBookParams): string | und
   return undefined;
 }
 
+/** Price book for the CLV house statement. No slot fallback. */
+export function resolveClvBook(): string {
+  return 'CLV';
+}
+
+/** Price book for the Calofic / CLF house statement. No slot fallback. */
+export function resolveClfBook(): string {
+  return 'CLF';
+}
+
 function normalizeKey(str: string | null | undefined): string {
   return normalizeAddressKey(str);
 }

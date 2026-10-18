@@ -490,7 +490,7 @@ export async function processNdMccWorkbook(
   buildGocSheet(safeAddSheet('MCC (goc)'), mccRows);
   buildSummarySheet(safeAddSheet('MCC-clv'), mccClvRows);
   buildSummarySheet(safeAddSheet('MCC (uni)'), mccUniRows);
-  buildSummarySheet(safeAddSheet('MCC (tt)'), mccTtRows);
+  buildSummarySheet(safeAddSheet('MCC (tt)'), mccTtRows, { commaActualDest: true });
 
   const ndfcClvRows = ndfcRows.filter((r) => (r.slot || '').toUpperCase().includes('CALOFIC HP') || (r.slot || '').toUpperCase() === 'CLV');
   const ndfcUniRows = ndfcRows.filter((r) => (r.slot || '').toUpperCase().includes('UNI 3') || (r.slot || '').toUpperCase() === 'UNI');
@@ -499,7 +499,10 @@ export async function processNdMccWorkbook(
   buildGocSheet(safeAddSheet('NDFC (goc)'), ndfcRows);
   buildSummarySheet(safeAddSheet('NDFC-clv'), ndfcClvRows);
   buildSummarySheet(safeAddSheet('NDFC (uni)'), ndfcUniRows);
-  buildSummarySheet(safeAddSheet('NDFC (tt)'), ndfcTtRows);
+  buildSummarySheet(safeAddSheet('NDFC (tt)'), ndfcTtRows, {
+    commaActualDest: true,
+    smallTruckInvoiceFormula: true,
+  });
 
   const buffer = Buffer.from(await workbook.xlsx.writeBuffer());
   const mccInvoices = new Set(mccRows.map((r) => r.invoiceNo)).size;
@@ -846,7 +849,26 @@ function setSummaryColWidths(ws: ExcelJS.Worksheet): void {
   });
 }
 
-function buildSummarySheet(ws: ExcelJS.Worksheet, rows: ProcessedRow[]): void {
+interface SummarySheetOptions {
+  commaActualDest?: boolean;
+  smallTruckInvoiceFormula?: boolean;
+}
+
+function tripKeyOf(row: ProcessedRow): string {
+  return `${row.truckNo.trim()}___${row.invoiceDateIso}`;
+}
+
+/** Direct-delivery sheets show province and ward separated by a comma. */
+function displayActualDest(value: string, commaSeparator: boolean): string {
+  if (!commaSeparator) return value;
+  return value.split(' - ').join(', ');
+}
+
+function buildSummarySheet(
+  ws: ExcelJS.Worksheet,
+  rows: ProcessedRow[],
+  options: SummarySheetOptions = {},
+): void {
   const rowsA = rows.filter((r) => (r.khungGia || '').trim() !== '≤2.5 tấn');
   const rowsB = rows.filter((r) => (r.khungGia || '').trim() === '≤2.5 tấn');
 
@@ -869,12 +891,16 @@ function buildSummarySheet(ws: ExcelJS.Worksheet, rows: ProcessedRow[]): void {
 
   const seenTrips = new Set<string>();
 
-  const renderSummaryInvoiceRow = (invoiceNo: string, invRows: ProcessedRow[]) => {
+  const renderSummaryInvoiceRow = (
+    invoiceNo: string,
+    invRows: ProcessedRow[],
+    useSmallTruckFormula: boolean,
+  ) => {
     const rowIdx = ws.rowCount + 1;
     const first = invRows[0];
     const totalHdWeight = Math.round(invRows.reduce((sum, item) => sum + item.roundMt, 0) * 1000) / 1000;
 
-    const tripKey = `${first.truckNo.trim()}___${first.invoiceDateIso}`;
+    const tripKey = tripKeyOf(first);
     const isFirstInTrip = !seenTrips.has(tripKey);
     seenTrips.add(tripKey);
 
@@ -889,7 +915,10 @@ function buildSummarySheet(ws: ExcelJS.Worksheet, rows: ProcessedRow[]): void {
     const ndfcVal = showHouseTotals ? (summary?.ndfc ?? '') : '';
     const gaoVal = showHouseTotals ? (summary?.gao ?? '') : '';
 
-    const formulaHoaDon = { formula: `F${rowIdx}&", ("&K${rowIdx}&"), xe "&D${rowIdx}` };
+    const actualDest = displayActualDest(first.actualDest, options.commaActualDest === true);
+    const formulaHoaDon = useSmallTruckFormula
+      ? { formula: `F${rowIdx}&" "&K${rowIdx}&" ("&TEXT(C${rowIdx},"dd/mm")&", "&D${rowIdx}&")"` }
+      : { formula: `F${rowIdx}&", ("&K${rowIdx}&"), xe "&D${rowIdx}` };
     const formulaTongChuyen = showHouseTotals ? { formula: `AB${rowIdx}` } : '';
     const formulaThanhTienCheck = { formula: `ROUND(N${rowIdx}*SUM(P${rowIdx}:R${rowIdx}),0)` };
     const formulaThanhTienHd = { formula: `ROUND(N${rowIdx}*P${rowIdx},0)` };
@@ -903,7 +932,7 @@ function buildSummarySheet(ws: ExcelJS.Worksheet, rows: ProcessedRow[]): void {
       first.invoiceDate,            // C (3)
       first.truckNo,                // D (4)
       first.dealer,                 // E (5)
-      first.actualDest,             // F (6)
+      actualDest,                   // F (6)
       first.feeDest,                // G (7)
       formulaHoaDon,                // H (8)
       first.customerName,           // I (9)
@@ -1001,7 +1030,7 @@ function buildSummarySheet(ws: ExcelJS.Worksheet, rows: ProcessedRow[]): void {
     for (const invList of tripsA.values()) {
       const tripStartRow = ws.rowCount + 1;
       for (const { invoiceNo, invRows } of invList) {
-        renderSummaryInvoiceRow(invoiceNo, invRows);
+        renderSummaryInvoiceRow(invoiceNo, invRows, false);
       }
       const tripEndRow = ws.rowCount;
 
@@ -1062,7 +1091,7 @@ function buildSummarySheet(ws: ExcelJS.Worksheet, rows: ProcessedRow[]): void {
     }
 
     for (const [invoiceNo, invRows] of byInvoiceB.entries()) {
-      renderSummaryInvoiceRow(invoiceNo, invRows);
+      renderSummaryInvoiceRow(invoiceNo, invRows, options.smallTruckInvoiceFormula === true);
     }
     const tableBEndRow = ws.rowCount;
 

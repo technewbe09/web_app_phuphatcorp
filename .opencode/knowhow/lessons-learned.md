@@ -5,6 +5,41 @@ description: Ghi lại các bài học kinh nghiệm, bug đã fix, và pitfalls
 # Lessons Learned — PhuPhatCorp
 
 ---
+## Change: MCC (tt) và NDFC (tt) đổi dấu trong tên tuyến
+- **Ngày:** 2026-10-18
+- **Feature liên quan:** ND-MCC (`ndMccEngine.ts`)
+- **Mô tả:** Trên `MCC (tt)` và `NDFC (tt)`, cột Điểm giao hàng thực tế của mỗi dòng hóa đơn giữ một `tuyen_phuong` và đổi mọi cụm ` - ` thành `, `. `An Giang - Châu Đốc` thành `An Giang, Châu Đốc`. Gạch ngang dính chữ giữ nguyên. Dòng tổng để trống cột này. Cột tính phí và tra giá giữ chuỗi gốc. Công thức Hóa đơn `=F&" "&K&" ("&TEXT(C,"dd/mm")&", "&D&")"` chỉ ghi trên dòng hóa đơn bảng `≤2.5 tấn` của `NDFC (tt)`.
+- **File sửa:** `backend/src/services/bangKeTho/ndMccEngine.ts`
+- **Regression test:** `backend/src/__tests__/bangKeThoNdMccEngine.test.ts` — `rewrites the spaced hyphen in direct-delivery route names`
+
+---
+## Change: Processed v2 cảnh báo chuyến 2,5 tấn của xe lớn
+- **Ngày:** 2026-10-18
+- **Feature liên quan:** Processed v2 (`processedV2.ts`)
+- **Mô tả:** Kiểm tra tách chuyến không còn nhìn khối kề nhau. Xe lớn là biển số có chuyến khác trong cùng file nặng hơn 8 tấn hoặc là Pallet. Chuyến khung gốc đúng `≤2.5 tấn` và tải không quá 2,5 tấn của xe đó được tô `#F8CBAD`, giữ khung, và ghi chú đúng câu `Cần kiểm tra tách chuyến`.
+- **File sửa:** `frontend/src/utils/processedV2.ts`
+- **Regression test:** `frontend/tests/processedV2.splitCheck.test.ts` — `keeps the 2.5-8 band and flags a light trip when the same plate has a trip over 8 tons`
+
+---
+## Change: Processed v2 giữ nguyên cột 5 nhà và Gạo
+- **Ngày:** 2026-10-17
+- **Feature liên quan:** Processed v2 (`processedV2.ts`)
+- **Mô tả:** Sheet `Processed v2` copy đúng vị trí và giá trị `5 nhà` / `Gạo` từ `Processed`. Không kéo `5 nhà` lên trước `CLF`, không chèn cột `Gạo` trống, không ghi đè dòng tổng bằng max(tổng nhà + Gạo, Round(MT)). `Khung giá` đọc số `5 nhà` đã có trên dòng tổng.
+- **File sửa:** `frontend/src/utils/processedV2.ts`
+- **Regression test:** `frontend/tests/processedV2.splitCheck.test.ts` — `keeps 5 nhà and Gạo in place and prices the trip from the 5 nhà cell`
+
+---
+## Bug: Hóa đơn sau bị tô cảnh báo tách chuyến khi dòng tổng phía trước bằng 0
+- **Ngày:** 2026-10-17
+- **Severity:** Medium
+- **Feature liên quan:** Processed v2 (`processedV2.ts`)
+- **Triệu chứng:** Hóa đơn 16269 (03/10/2026, khung `>8-16 tấn`) bị tô `#F8CBAD` và ghi chú của hóa đơn 00178885 (12/10/2026, khung `≤2.5 tấn`).
+- **Root cause:** Dòng tổng chỉ được nhận là ranh giới chuyến khi Round(MT) hoặc cột 5 nhà lớn hơn 0. Chuyến 00178885 có tổng 0 nên dòng tổng bị bỏ qua, và hóa đơn kế tiếp nhập vào cùng khối `≤2.5 tấn`.
+- **Fix:** Dòng không có mã nhà cung cấp, số hóa đơn, số tàu, nhưng có số ở Round(MT) hoặc cột 5 nhà — kể cả 0 — là dòng tổng và cắt chuyến.
+- **File sửa:** `frontend/src/utils/processedV2.ts`
+- **Regression test:** `frontend/tests/processedV2.splitCheck.test.ts` — `does not pull the next trip into a light block when its separator weight is zero`
+
+---
 ## Change: Đổi ô nhập "Điểm nhận hàng" sang Text Input tự do trong Tạo/Sửa chuyến xe
 - **Ngày:** 2026-10-02
 - **Feature:** Bảng điều phối xe (`CreateScheduleModal.tsx`, `EditScheduleModal.tsx`)

@@ -132,6 +132,86 @@ export const bangKeThoApi = {
     return response.data.data;
   },
 
+  processClv: async (batchId: string): Promise<{
+    batch_id: string;
+    house_code: BangKeHouseCode;
+    status: BangKeHouseStatus;
+    download_filename: string;
+    generated_at: string;
+    stats: {
+      tan_rows: number;
+      chuyen_rows: number;
+      tan_invoices: number;
+      chuyen_invoices: number;
+      cover_tan_invoices: number;
+      cover_tn_invoices: number;
+      cover_chuyen_invoices: number;
+      cover_uni_invoices: number;
+    };
+  }> => {
+    const response = await axiosClient.post<{
+      data: {
+        batch_id: string;
+        house_code: BangKeHouseCode;
+        status: BangKeHouseStatus;
+        download_filename: string;
+        generated_at: string;
+        stats: {
+          tan_rows: number;
+          chuyen_rows: number;
+          tan_invoices: number;
+          chuyen_invoices: number;
+          cover_tan_invoices: number;
+          cover_tn_invoices: number;
+          cover_chuyen_invoices: number;
+          cover_uni_invoices: number;
+        };
+      };
+    }>(`/bang-ke-tho/batches/${batchId}/process-clv`);
+    return response.data.data;
+  },
+
+  processCalofic: async (batchId: string): Promise<{
+    batch_id: string;
+    house_code: BangKeHouseCode;
+    status: BangKeHouseStatus;
+    download_filename: string;
+    generated_at: string;
+    stats: {
+      sthi_rows: number;
+      tinh_rows: number;
+      npp_rows: number;
+      uni_rows: number;
+      cover_sthi_invoices: number;
+      cover_tinh_invoices: number;
+      cover_npp_invoices: number;
+      cover_uni_invoices: number;
+      cover_tn_invoices: number;
+    };
+  }> => {
+    const response = await axiosClient.post<{
+      data: {
+        batch_id: string;
+        house_code: BangKeHouseCode;
+        status: BangKeHouseStatus;
+        download_filename: string;
+        generated_at: string;
+        stats: {
+          sthi_rows: number;
+          tinh_rows: number;
+          npp_rows: number;
+          uni_rows: number;
+          cover_sthi_invoices: number;
+          cover_tinh_invoices: number;
+          cover_npp_invoices: number;
+          cover_uni_invoices: number;
+          cover_tn_invoices: number;
+        };
+      };
+    }>(`/bang-ke-tho/batches/${batchId}/process-calofic`);
+    return response.data.data;
+  },
+
   downloadOutput: async (id: string, houseCode: string, fallbackName: string): Promise<void> => {
     const response = await axiosClient.get(`/bang-ke-tho/batches/${id}/files/${houseCode}`, {
       responseType: 'blob',
