@@ -8,6 +8,7 @@ import {
   insuranceImageDeleteSchema,
 } from '../controllers/insuranceController';
 import { authenticateToken, requirePermission } from '../middleware/auth';
+import { resolveDataScope } from '../middleware/dataScope';
 import { validate } from '../middleware/validate';
 
 const router = Router();
@@ -20,6 +21,7 @@ const imageUpload = multer({
 router.get('/files/:filename', insuranceController.serveFile);
 
 router.use(authenticateToken);
+router.use(resolveDataScope('vehicle_data'));
 
 router.get('/', requirePermission('vehicle_data.view'), insuranceController.list);
 router.get('/summary', requirePermission('vehicle_data.view'), insuranceController.getVehicleSummary);

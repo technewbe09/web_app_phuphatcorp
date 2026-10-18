@@ -376,6 +376,8 @@ Giống sheet Processed, nhưng chèn thêm 2 cột giữa "Đơn vị tính" v�
 - **BR-012:** Lọc dòng trước khi xử lý: dòng có cột "Diễn giải" chứa "thay thế" hoặc "điều chỉnh" bị loại bỏ (filterExcludedRows). Đây là các hóa đơn chỉnh sửa, không phải giao hàng thực tế.
 - **BR-013:** Customer lookup cho tuyến: mặc định tra bằng `TEN_KH + DIA_CHI`. Nếu `MA_NCC = 2000000007` hoặc `2000000008` và `Slot = "UNI 1"` → ưu tiên tra bằng `TEN_KH + DIA_CHI + MA_NCC` (khớp `customers.supplier_code`), nếu không có thì fallback về key mặc định.
 - **BR-014:** Bypass group splitting cho KH không nội thành: nếu Tên KH **không** khớp với `customer_name` trong `inner_city_customers`, bỏ qua bước tách nhóm (Step 1b), giữ nguyên group key. Chỉ thực hiện tách nhóm cho KH nội thành khi tổng trọng lượng >= 13.
+- **BR-015:** Danh sách chi tiết dòng bị loại trừ: `filterExcludedRows()` trả về `excludedRows` gồm số dòng gốc, Số HĐ, Số xe, Khách hàng, Mã hàng, Tên hàng, Diễn giải, và lý do loại trừ. UI hiển thị số lượng và modal tra cứu chi tiết có tìm kiếm.
+- **BR-016:** Thống kê & hiển thị dòng có trọng lượng = 0: `detectZeroWeightRows()` rà soát các dòng có HĐ Net hoặc SP Net bằng 0 hoặc trống (`zeroWeightRows`), hiển thị thống kê số lượng trên card kết quả và banner cảnh báo, cho phép xem chi tiết trong modal.
 
 ### 5.4 Verify trọng lượng (Weight Adjustment Check)
 
@@ -402,9 +404,11 @@ User click "Xử lý"
 
 ```
 src/utils/processDeliveryData.ts   ← exports: parseDeliveryFile(), processDeliveryDataFromRows(),
+                                      filterExcludedRows(), detectZeroWeightRows(),
                                       processDeliveryData() (wrapper), COL, RawRow, ParsedFileData
-src/pages/admin/DeliveryDataPage.tsx ← UI page với verify flow
+src/pages/admin/DeliveryDataPage.tsx ← UI page với verify flow, metrics cards & inspect modal
 src/components/delivery-data/WeightAdjustmentConfirmDialog.tsx ← modal xác nhận điều chỉnh
+src/components/delivery-data/DeliveryDataInspectModal.tsx ← modal xem chi tiết dòng bị loại & trọng lượng = 0
 src/api/weightAdjustmentApi.ts     ← fetchAll() dùng để load masterdata
 ```
 
@@ -1256,6 +1260,21 @@ frontend/src/pages/dashboard/tabs/FuelTab.tsx
 ```
 
 **Access:** Route `/` (DashboardPage). Sidebar giữ nguyên 1 mục "Dashboard".
+
+---
+
+## 13. Phân hệ Dữ liệu xe & Nhiên liệu (Bảo hiểm, Thay nhớt, Thống kê dầu)
+
+### 13.1 Business Rules lọc trạng thái xe (Active Vehicles Only)
+- **Quản lý bảo hiểm (`/vehicle-data/insurances`):**
+  - Màn hình tổng hợp và danh sách bảo hiểm chỉ hiển thị các xe đang hoạt động (`v.status = 'active'`).
+  - Danh sách sắp hết hạn (`/vehicle-insurances/expiring`) và tạo mới bảo hiểm chỉ áp dụng cho xe đang hoạt động (`status = 'active'`).
+- **Quản lý thay nhớt (`/vehicle-data/oil-changes`):**
+  - Cả 2 tab "Lịch sử thay nhớt" và "Xe cần thay nhớt" chỉ hiển thị các xe đang hoạt động (`v.status = 'active'`).
+  - Tạo mới bản ghi thay nhớt chỉ cho phép chọn và lưu xe đang hoạt động (`status = 'active'`).
+- **Thống kê dữ liệu dầu (`/fuel-data/statistics`):**
+  - Dropdown chọn xe ở bộ lọc chỉ hiển thị danh sách xe active.
+  - Các thống kê tổng quan (Summary, Xu hướng theo tháng, Theo xe, Theo vị trí) và tab "Xe cần theo dõi", "Xe chưa đổ dầu" chỉ tổng hợp dữ liệu từ các xe đang hoạt động (`v.status = 'active'`).
 
 ---
 

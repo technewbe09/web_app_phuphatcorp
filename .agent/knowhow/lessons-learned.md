@@ -5,39 +5,19 @@ description: Ghi lại các bài học kinh nghiệm, bug đã fix, và pitfalls
 # Lessons Learned — PhuPhatCorp
 
 ---
-## Change: MCC (tt) và NDFC (tt) đổi dấu trong tên tuyến
-- **Ngày:** 2026-10-18
-- **Feature liên quan:** ND-MCC (`ndMccEngine.ts`)
-- **Mô tả:** Trên `MCC (tt)` và `NDFC (tt)`, cột Điểm giao hàng thực tế của mỗi dòng hóa đơn giữ một `tuyen_phuong` và đổi mọi cụm ` - ` thành `, `. `An Giang - Châu Đốc` thành `An Giang, Châu Đốc`. Gạch ngang dính chữ giữ nguyên. Dòng tổng để trống cột này. Cột tính phí và tra giá giữ chuỗi gốc. Công thức Hóa đơn `=F&" "&K&" ("&TEXT(C,"dd/mm")&", "&D&")"` chỉ ghi trên dòng hóa đơn bảng `≤2.5 tấn` của `NDFC (tt)`.
-- **File sửa:** `backend/src/services/bangKeTho/ndMccEngine.ts`
-- **Regression test:** `backend/src/__tests__/bangKeThoNdMccEngine.test.ts` — `rewrites the spaced hyphen in direct-delivery route names`
+## Bug: Temporal Dead Zone (TDZ) ReferenceError với biến derived trong React component
+- **Ngày:** 2026-10-16
+- **Feature:** Theo dõi hóa đơn (`DocumentViewerModal.tsx`)
+- **Mô tả:** Lỗi runtime `Uncaught ReferenceError: Cannot access 'isImage' before initialization` xảy ra khi mở modal xem ảnh. Nguyên nhân do biến `const isImage = ...` được khai báo bên dưới các `useCallback`, nhưng lại được đưa vào dependency array của `useCallback(handleDoubleClick)` ở phía trên.
+- **Giải pháp:** Luôn khai báo các biến tính toán / derived state từ props (`isImage`, `isPdf`, v.v.) ngay đầu thân component trước tất cả các hooks (`useCallback`, `useMemo`, `useEffect`) có phụ thuộc vào chúng.
+- **Files liên quan:** `frontend/src/components/invoice-tracking/DocumentViewerModal.tsx`.
 
 ---
-## Change: Processed v2 cảnh báo chuyến 2,5 tấn của xe lớn
-- **Ngày:** 2026-10-18
-- **Feature liên quan:** Processed v2 (`processedV2.ts`)
-- **Mô tả:** Kiểm tra tách chuyến không còn nhìn khối kề nhau. Xe lớn là biển số có chuyến khác trong cùng file nặng hơn 8 tấn hoặc là Pallet. Chuyến khung gốc đúng `≤2.5 tấn` và tải không quá 2,5 tấn của xe đó được tô `#F8CBAD`, giữ khung, và ghi chú đúng câu `Cần kiểm tra tách chuyến`.
-- **File sửa:** `frontend/src/utils/processedV2.ts`
-- **Regression test:** `frontend/tests/processedV2.splitCheck.test.ts` — `keeps the 2.5-8 band and flags a light trip when the same plate has a trip over 8 tons`
-
----
-## Change: Processed v2 giữ nguyên cột 5 nhà và Gạo
-- **Ngày:** 2026-10-17
-- **Feature liên quan:** Processed v2 (`processedV2.ts`)
-- **Mô tả:** Sheet `Processed v2` copy đúng vị trí và giá trị `5 nhà` / `Gạo` từ `Processed`. Không kéo `5 nhà` lên trước `CLF`, không chèn cột `Gạo` trống, không ghi đè dòng tổng bằng max(tổng nhà + Gạo, Round(MT)). `Khung giá` đọc số `5 nhà` đã có trên dòng tổng.
-- **File sửa:** `frontend/src/utils/processedV2.ts`
-- **Regression test:** `frontend/tests/processedV2.splitCheck.test.ts` — `keeps 5 nhà and Gạo in place and prices the trip from the 5 nhà cell`
-
----
-## Bug: Hóa đơn sau bị tô cảnh báo tách chuyến khi dòng tổng phía trước bằng 0
-- **Ngày:** 2026-10-17
-- **Severity:** Medium
-- **Feature liên quan:** Processed v2 (`processedV2.ts`)
-- **Triệu chứng:** Hóa đơn 16269 (03/10/2026, khung `>8-16 tấn`) bị tô `#F8CBAD` và ghi chú của hóa đơn 00178885 (12/10/2026, khung `≤2.5 tấn`).
-- **Root cause:** Dòng tổng chỉ được nhận là ranh giới chuyến khi Round(MT) hoặc cột 5 nhà lớn hơn 0. Chuyến 00178885 có tổng 0 nên dòng tổng bị bỏ qua, và hóa đơn kế tiếp nhập vào cùng khối `≤2.5 tấn`.
-- **Fix:** Dòng không có mã nhà cung cấp, số hóa đơn, số tàu, nhưng có số ở Round(MT) hoặc cột 5 nhà — kể cả 0 — là dòng tổng và cắt chuyến.
-- **File sửa:** `frontend/src/utils/processedV2.ts`
-- **Regression test:** `frontend/tests/processedV2.splitCheck.test.ts` — `does not pull the next trip into a light block when its separator weight is zero`
+## Rule: Lọc xe active trong Quản lý bảo hiểm, Quản lý thay nhớt và Thống kê dầu
+- **Ngày:** 2026-10-16
+- **Feature:** Quản lý bảo hiểm, Quản lý thay nhớt, Thống kê dầu
+- **Mô tả:** Các màn hình quản trị và API truy vấn dữ liệu theo xe (Bảo hiểm `insuranceService.listAll`, Thay nhớt `oilChangeService.listAll`, Thống kê dầu `fuelRecordService.getStatistics`, `getStatisticsByLocation`, `getVehiclesNeedingMonitoring`) và dropdown chọn xe trong Thống kê dầu (`FuelStatisticsPage.tsx`) phải luôn kèm điều kiện `v.status = 'active'`, tránh tình trạng hiển thị xe đã ngừng hoạt động (deactive).
+- **Files liên quan:** `backend/src/services/insuranceService.ts`, `backend/src/services/oilChangeService.ts`, `backend/src/services/fuelRecordService.ts`, `frontend/src/pages/admin/fuel-data/FuelStatisticsPage.tsx`.
 
 ---
 ## Change: Đổi ô nhập "Điểm nhận hàng" sang Text Input tự do trong Tạo/Sửa chuyến xe
@@ -72,6 +52,20 @@ description: Ghi lại các bài học kinh nghiệm, bug đã fix, và pitfalls
     - Tự động đặt lại góc xoay về $0^\circ$ khi chuyển qua ảnh khác (Next/Back) hoặc đổi tệp.
     - Hiệu ứng chuyển động mượt mà với CSS transition `transition-transform duration-200 ease-in-out`.
     - Tự động ẩn các nút xoay khi tệp đang xem là tài liệu PDF.
+- **Files:** `frontend/src/components/invoice-tracking/DocumentViewerModal.tsx`, `frontend/src/i18n/vi.json`, `frontend/src/i18n/en.json`.
+
+---
+## Feature: Zoom In, Zoom Out & Pan in DocumentViewerModal
+- **Ngày:** 2026-10-16
+- **Feature:** Theo dõi hóa đơn (`DocumentViewerModal`, Lightbox Image Viewer)
+- **Mô tả:** Bổ sung tính năng phóng to (Zoom In), thu nhỏ (Zoom Out), kéo di chuyển ảnh (Drag Pan), double-click nhanh để phóng to/về ban đầu và nút đặt lại mức thu phóng, giúp người dùng soi rõ chi tiết hóa đơn (chữ nhỏ, con dấu, số tiền).
+- **Thực hiện:**
+  - `DocumentViewerModal.tsx`:
+    - Thêm nút `ZoomIn` (bước 25%, tối đa 300%), `ZoomOut` (tối thiểu 50%) và nút huy hiệu hiển thị tỉ lệ thu phóng (ví dụ `125%`) để 1-click đặt lại về 100%.
+    - Hỗ trợ phím tắt: `+` / `=` để phóng to, `-` / `_` để thu nhỏ, `0` để đặt lại 100%.
+    - Hỗ trợ kéo chuột (mouse drag-to-pan) khi đang ở mức phóng to > 100% kèm con trỏ chuột `grab`/`grabbing`.
+    - Hỗ trợ click đúp (double-click) để nhanh chóng phóng to 200% hoặc quay lại 100%.
+    - Tự động reset zoom & pan về mặc định khi chuyển qua ảnh khác.
 - **Files:** `frontend/src/components/invoice-tracking/DocumentViewerModal.tsx`, `frontend/src/i18n/vi.json`, `frontend/src/i18n/en.json`.
 
 ---

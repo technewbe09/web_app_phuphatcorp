@@ -176,7 +176,7 @@ export const fuelRecordService = {
     byVehicle: VehicleFuelStat[];
     byMonth: MonthlyFuelStat[];
   }> {
-    const conditions: string[] = [];
+    const conditions: string[] = ["v.status = 'active'"];
     const params: unknown[] = [];
     let paramIndex = 0;
 
@@ -220,7 +220,9 @@ export const fuelRecordService = {
          CASE WHEN SUM(fr.gps_distance) > 0 THEN SUM(fr.gps_liters) * 100.0 / SUM(fr.gps_distance) ELSE NULL END as avg_gps_fuel_rate,
          COUNT(DISTINCT fr.vehicle_id)::int as vehicle_count,
          COUNT(*)::int as record_count
-       FROM fuel_records fr ${whereClause}`,
+       FROM fuel_records fr
+       JOIN vehicles v ON v.id = fr.vehicle_id
+       ${whereClause}`,
       params,
     );
 
@@ -272,7 +274,9 @@ export const fuelRecordService = {
          COALESCE(SUM(fr.total_cost), 0) as total_cost,
          CASE WHEN SUM(fr.distance) > 0 THEN SUM(fr.liters) * 100.0 / SUM(fr.distance) ELSE NULL END as avg_fuel_rate,
          COUNT(*)::int as record_count
-       FROM fuel_records fr ${whereClause}
+       FROM fuel_records fr
+       JOIN vehicles v ON v.id = fr.vehicle_id
+       ${whereClause}
        GROUP BY month
        ORDER BY month DESC`,
       params,
@@ -298,7 +302,7 @@ export const fuelRecordService = {
       record_count: number;
     }[];
   }> {
-    const conditions: string[] = [];
+    const conditions: string[] = ["v.status = 'active'"];
     const params: unknown[] = [];
     let paramIndex = 0;
 
@@ -321,7 +325,9 @@ export const fuelRecordService = {
          COALESCE(SUM(fr.total_cost), 0) as total_cost,
          CASE WHEN SUM(fr.distance) > 0 THEN SUM(fr.liters) * 100.0 / SUM(fr.distance) ELSE NULL END as avg_fuel_rate,
          COUNT(*)::int as record_count
-       FROM fuel_records fr ${whereClause}
+       FROM fuel_records fr
+       JOIN vehicles v ON v.id = fr.vehicle_id
+       ${whereClause}
        GROUP BY location, month
        ORDER BY month DESC, location ASC`,
       params,
@@ -334,8 +340,10 @@ export const fuelRecordService = {
 
   async getDistinctMonths(): Promise<string[]> {
     const result = await pool.query<{ month: string }>(
-      `SELECT DISTINCT to_char(record_date, 'YYYY-MM') as month
-       FROM fuel_records
+      `SELECT DISTINCT to_char(fr.record_date, 'YYYY-MM') as month
+       FROM fuel_records fr
+       JOIN vehicles v ON v.id = fr.vehicle_id
+       WHERE v.status = 'active'
        ORDER BY month DESC`,
     );
     return result.rows.map((r) => r.month);
@@ -409,6 +417,7 @@ export const fuelRecordService = {
         WHERE a.avg_rate > 0
           AND lr.fuel_rate > a.avg_rate
           AND (lr.fuel_rate - a.avg_rate) / a.avg_rate * 100 >= $1
+          AND v.status = 'active'
        ORDER BY diff_pct DESC`,
       [thresholdPct],
     );

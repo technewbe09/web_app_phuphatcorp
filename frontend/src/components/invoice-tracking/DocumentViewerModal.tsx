@@ -9,6 +9,8 @@ import {
   Copy,
   RotateCw,
   RotateCcw,
+  ZoomIn,
+  ZoomOut,
 } from 'lucide-react';
 import { type DocumentFile, invoiceTrackingApi } from '../../api/invoiceTrackingApi';
 import { useI18n } from '../../i18n/useI18n';
@@ -27,7 +29,16 @@ export function DocumentViewerModal({
   onNavigate,
 }: DocumentViewerModalProps) {
   const { t } = useI18n();
+  const isImage = !!doc?.mime_type?.startsWith('image/');
   const [rotation, setRotation] = useState<number>(0);
+  const [zoom, setZoom] = useState<number>(1);
+  const [pan, setPan] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+  const [isDragging, setIsDragging] = useState<boolean>(false);
+  const [dragStart, setDragStart] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+
+  const MIN_ZOOM = 0.5;
+  const MAX_ZOOM = 3.0;
+  const ZOOM_STEP = 0.25;
 
   const currentIndex =
     doc && documents.length > 0
@@ -43,9 +54,12 @@ export function DocumentViewerModal({
   const hasPrev = hasMultiple && currentIndex > 0;
   const hasNext = hasMultiple && currentIndex < documents.length - 1;
 
-  // Reset rotation when switching documents
+  // Reset rotation and zoom when switching documents
   useEffect(() => {
     setRotation(0);
+    setZoom(1);
+    setPan({ x: 0, y: 0 });
+    setIsDragging(false);
   }, [doc?.filename, doc?.original_filename, doc?.file_name]);
 
   const handlePrev = useCallback(() => {
@@ -72,9 +86,54 @@ export function DocumentViewerModal({
     setRotation(0);
   }, []);
 
-  const isImage = doc?.mime_type?.startsWith('image/');
+  const handleZoomIn = useCallback(() => {
+    setZoom((prev) => Math.min(MAX_ZOOM, Math.round((prev + ZOOM_STEP) * 100) / 100));
+  }, []);
 
-  // Handle Keyboard navigation (ESC, ArrowLeft, ArrowRight, R/L for rotate)
+  const handleZoomOut = useCallback(() => {
+    setZoom((prev) => {
+      const next = Math.max(MIN_ZOOM, Math.round((prev - ZOOM_STEP) * 100) / 100);
+      if (next === 1) setPan({ x: 0, y: 0 });
+      return next;
+    });
+  }, []);
+
+  const handleResetZoom = useCallback(() => {
+    setZoom(1);
+    setPan({ x: 0, y: 0 });
+  }, []);
+
+  const handleDoubleClick = useCallback(() => {
+    if (!isImage) return;
+    if (zoom === 1) {
+      setZoom(2);
+    } else {
+      setZoom(1);
+      setPan({ x: 0, y: 0 });
+    }
+  }, [isImage, zoom]);
+
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    if (zoom <= 1) return;
+    e.preventDefault();
+    setIsDragging(true);
+    setDragStart({ x: e.clientX - pan.x, y: e.clientY - pan.y });
+  }, [zoom, pan]);
+
+  const handleMouseMove = useCallback((e: React.MouseEvent) => {
+    if (!isDragging) return;
+    e.preventDefault();
+    setPan({
+      x: e.clientX - dragStart.x,
+      y: e.clientY - dragStart.y,
+    });
+  }, [isDragging, dragStart]);
+
+  const handleMouseUp = useCallback(() => {
+    setIsDragging(false);
+  }, []);
+
+  // Handle Keyboard navigation (ESC, ArrowLeft, ArrowRight, R/L for rotate, +/-/0 for zoom)
   useEffect(() => {
     if (!doc) return;
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -88,11 +147,17 @@ export function DocumentViewerModal({
         handleRotateRight();
       } else if (isImage && (e.key === 'l' || e.key === 'L')) {
         handleRotateLeft();
+      } else if (isImage && (e.key === '=' || e.key === '+')) {
+        handleZoomIn();
+      } else if (isImage && (e.key === '-' || e.key === '_')) {
+        handleZoomOut();
+      } else if (isImage && e.key === '0') {
+        handleResetZoom();
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [doc, onClose, handlePrev, handleNext, isImage, handleRotateRight, handleRotateLeft]);
+  }, [doc, onClose, handlePrev, handleNext, isImage, handleRotateRight, handleRotateLeft, handleZoomIn, handleZoomOut, handleResetZoom]);
 
   if (!doc) return null;
 
@@ -188,6 +253,40 @@ export function DocumentViewerModal({
                     {rotation}°
                   </button>
                 )}
+
+                {/* Zoom In / Zoom Out Controls */}
+                <div className="h-4 w-px bg-neutral-200 dark:bg-neutral-800 mx-0.5" />
+                <button
+                  type="button"
+                  onClick={handleZoomOut}
+                  disabled={zoom <= MIN_ZOOM}
+                  className="p-1.5 rounded-lg text-neutral-500 hover:text-neutral-700 dark:text-neutral-400 dark:hover:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
+                  title={t('invoice_tracking.viewer.zoomOut' as never) || 'Thu nhỏ (-)'}
+                  aria-label="Thu nhỏ"
+                >
+                  <ZoomOut className="h-4 w-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={handleZoomIn}
+                  disabled={zoom >= MAX_ZOOM}
+                  className="p-1.5 rounded-lg text-neutral-500 hover:text-neutral-700 dark:text-neutral-400 dark:hover:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
+                  title={t('invoice_tracking.viewer.zoomIn' as never) || 'Phóng to (+)'}
+                  aria-label="Phóng to"
+                >
+                  <ZoomIn className="h-4 w-4" />
+                </button>
+                {zoom !== 1 && (
+                  <button
+                    type="button"
+                    onClick={handleResetZoom}
+                    className="px-2 py-0.5 rounded-md bg-neutral-100 hover:bg-neutral-200 dark:bg-neutral-800 dark:hover:bg-neutral-700 text-neutral-700 dark:text-neutral-300 text-xs font-mono font-medium transition cursor-pointer"
+                    title={t('invoice_tracking.viewer.resetZoom' as never) || 'Đặt lại thu phóng (100%)'}
+                    aria-label="Đặt lại thu phóng"
+                  >
+                    {Math.round(zoom * 100)}%
+                  </button>
+                )}
               </>
             )}
 
@@ -249,10 +348,19 @@ export function DocumentViewerModal({
               <img
                 src={fileUrl || `data:${doc.mime_type};base64,${doc.file_data}`}
                 alt={fileName}
+                draggable={false}
+                onDoubleClick={handleDoubleClick}
+                onMouseDown={handleMouseDown}
+                onMouseMove={handleMouseMove}
+                onMouseUp={handleMouseUp}
+                onMouseLeave={handleMouseUp}
                 style={{
-                  transform: `rotate(${rotation}deg)`,
+                  transform: `translate(${pan.x}px, ${pan.y}px) rotate(${rotation}deg) scale(${zoom})`,
+                  cursor: zoom > 1 ? (isDragging ? 'grabbing' : 'grab') : 'default',
                 }}
-                className="max-h-[75vh] w-auto max-w-full object-contain rounded-lg transition-transform duration-200 ease-in-out select-none"
+                className={`max-h-[75vh] w-auto max-w-full object-contain rounded-lg select-none ${
+                  isDragging ? 'transition-none' : 'transition-transform duration-200 ease-in-out'
+                }`}
               />
             ) : (
               <div className="flex h-56 w-72 flex-col items-center justify-center gap-3 text-center p-4">

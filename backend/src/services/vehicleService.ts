@@ -461,4 +461,46 @@ export const vehicleService = {
 
     return { result: { imported, reactivated } };
   },
+
+  async getMyAssignedVehicles(userId: number, isAll: boolean = false, allowedIds?: number[]): Promise<any[]> {
+    let vehicleIds: number[] = [];
+
+    if (isAll) {
+      const allVehicles = await pool.query<{ id: number }>(
+        `SELECT id FROM vehicles WHERE status = 'active' ORDER BY plate_number ASC`
+      );
+      vehicleIds = allVehicles.rows.map((r) => r.id);
+    } else if (allowedIds && allowedIds.length > 0) {
+      vehicleIds = allowedIds;
+    } else {
+      // Find vehicles assigned to this driver
+      const assigned = await pool.query<{ vehicle_id: number }>(
+        `SELECT dv.vehicle_id
+         FROM driver_vehicles dv
+         JOIN drivers d ON d.id = dv.driver_id
+         JOIN vehicles v ON v.id = dv.vehicle_id
+         WHERE d.user_id = $1 AND d.status = 'active' AND v.status = 'active'
+         ORDER BY v.plate_number ASC`,
+        [userId]
+      );
+      vehicleIds = assigned.rows.map((r) => r.vehicle_id);
+    }
+
+    if (vehicleIds.length === 0) {
+      return [];
+    }
+
+    const summaries = await Promise.all(
+      vehicleIds.map(async (vId) => {
+        try {
+          return await this.getSummary(vId);
+        } catch {
+          return null;
+        }
+      })
+    );
+
+    return summaries.filter((s) => s !== null);
+  },
 };
+

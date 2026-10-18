@@ -1102,7 +1102,10 @@
     "viewer": {
       "rotateLeft": "Xoay trái 90° (L)",
       "rotateRight": "Xoay phải 90° (R)",
-      "resetRotation": "Đặt lại góc xoay (0°)"
+      "resetRotation": "Đặt lại góc xoay (0°)",
+      "zoomIn": "Phóng to (+)",
+      "zoomOut": "Thu nhỏ (-)",
+      "resetZoom": "Đặt lại thu phóng (100%)"
     },
     "action": {
       "upload": "Upload chứng từ",

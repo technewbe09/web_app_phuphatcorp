@@ -1089,7 +1089,10 @@
     "viewer": {
       "rotateLeft": "Rotate Left 90° (L)",
       "rotateRight": "Rotate Right 90° (R)",
-      "resetRotation": "Reset Rotation (0°)"
+      "resetRotation": "Reset Rotation (0°)",
+      "zoomIn": "Zoom In (+)",
+      "zoomOut": "Zoom Out (-)",
+      "resetZoom": "Reset Zoom (100%)"
     },
     "action": {
       "upload": "Upload Documents",

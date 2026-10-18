@@ -49,7 +49,22 @@ export const insuranceController = {
       const page = parseInt(req.query.page as string, 10) || 1;
       const limit = parseInt(req.query.limit as string, 10) || 20;
 
-      const data = await insuranceService.listAll({ vehicle_id: vehicleId, status, search, page, limit });
+      const scope = req.dataScope;
+      let allowedVehicleIds: number[] | undefined;
+      if (scope?.type === 'entity' && scope.entityType === 'vehicle') {
+        allowedVehicleIds = scope.entityIds;
+      } else if (scope?.type === 'none') {
+        allowedVehicleIds = [];
+      }
+
+      const data = await insuranceService.listAll({
+        vehicle_id: vehicleId,
+        status,
+        search,
+        page,
+        limit,
+        allowedVehicleIds,
+      });
       sendSuccess(res, data, 'Danh sách bảo hiểm');
     } catch (err) {
       const error = err instanceof Error ? err.message : 'Unknown error';
@@ -199,7 +214,15 @@ export const insuranceController = {
       const page = parseInt(req.query.page as string, 10) || 1;
       const limit = parseInt(req.query.limit as string, 10) || 20;
 
-      const data = await insuranceService.getVehicleSummary({ search, status, page, limit });
+      const scope = req.dataScope;
+      let allowedVehicleIds: number[] | undefined;
+      if (scope?.type === 'entity' && scope.entityType === 'vehicle') {
+        allowedVehicleIds = scope.entityIds;
+      } else if (scope?.type === 'none') {
+        allowedVehicleIds = [];
+      }
+
+      const data = await insuranceService.getVehicleSummary({ search, status, page, limit, allowedVehicleIds });
       sendSuccess(res, data, 'Danh sách xe');
     } catch (err) {
       const error = err instanceof Error ? err.message : 'Unknown error';

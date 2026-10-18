@@ -6,6 +6,9 @@ import {
   CheckCircle2,
   FileSpreadsheet,
   Loader2,
+  Eye,
+  FilterX,
+  Scale,
 } from 'lucide-react';
 import { Button } from '../../components/ui/Button';
 import { Card, CardContent, CardHeader } from '../../components/ui/Card';
@@ -18,8 +21,11 @@ import {
   type RawRow,
   buildAdjustments,
   filterExcludedRows,
+  detectZeroWeightRows,
   applyAdjustments,
   type AdjustmentRow,
+  type ExcludedRowDetail,
+  type ZeroWeightRowDetail,
 } from '../../utils/processDeliveryData';
 import { weightAdjustmentApi } from '../../api/weightAdjustmentApi';
 import { customersApi, type Customer } from '../../api/customersApi';
@@ -28,6 +34,9 @@ import { promoItemApi, type PromoItem } from '../../api/promoItemApi';
 import {
   WeightAdjustmentConfirmDialog,
 } from '../../components/delivery-data/WeightAdjustmentConfirmDialog';
+import {
+  DeliveryDataInspectModal,
+} from '../../components/delivery-data/DeliveryDataInspectModal';
 
 type PageState = 'idle' | 'verifying' | 'awaiting_confirmation' | 'processing' | 'success' | 'error';
 
@@ -38,6 +47,10 @@ export function DeliveryDataPage() {
   const [result, setResult] = useState<ProcessResult | null>(null);
   const [errorMessage, setErrorMessage] = useState<string>('');
   const [excludedRowCount, setExcludedRowCount] = useState<number>(0);
+  const [excludedRows, setExcludedRows] = useState<ExcludedRowDetail[]>([]);
+  const [zeroWeightRows, setZeroWeightRows] = useState<ZeroWeightRowDetail[]>([]);
+  const [inspectModalOpen, setInspectModalOpen] = useState(false);
+  const [inspectModalTab, setInspectModalTab] = useState<'excluded' | 'zero_weight'>('excluded');
   const [parsedFileData, setParsedFileData] = useState<ParsedFileData | null>(null);
   const [adjustments, setAdjustments] = useState<AdjustmentRow[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -67,9 +80,17 @@ export function DeliveryDataPage() {
   const rawSheetDataRef = useRef<RawRow[]>([]);
   const sourceBufferRef = useRef<ArrayBuffer | undefined>(undefined);
 
+  const openInspectModal = useCallback((tab: 'excluded' | 'zero_weight') => {
+    setInspectModalTab(tab);
+    setInspectModalOpen(true);
+  }, []);
+
   const runProcess = useCallback(async (rows: RawRow[], nums: number[]) => {
     setPageState('processing');
     try {
+      const detectedZero = detectZeroWeightRows(rows, nums);
+      setZeroWeightRows(detectedZero);
+
       const processResult = await processDeliveryDataFromRows(
         rows,
         nums,
@@ -98,11 +119,12 @@ export function DeliveryDataPage() {
       sourceBufferRef.current = parsed.sourceBuffer;
 
       // BƯỚC 1.5 — Lọc dòng có Diễn giải chứa "thay thế" hoặc "điều chỉnh"
-      const { filteredRows, filteredSourceRowNums, excludedCount } = filterExcludedRows(
+      const { filteredRows, filteredSourceRowNums, excludedCount, excludedRows: detectedExcluded } = filterExcludedRows(
         parsed.rawRows,
         parsed.sourceRowNums
       );
       setExcludedRowCount(excludedCount);
+      setExcludedRows(detectedExcluded);
       const effectiveParsed = { rawRows: filteredRows, sourceRowNums: filteredSourceRowNums };
 
       const [masterdata, customers, innerCityCustomers, promoItemData] = await Promise.all([
@@ -162,6 +184,9 @@ export function DeliveryDataPage() {
     setResult(null);
     setErrorMessage('');
     setExcludedRowCount(0);
+    setExcludedRows([]);
+    setZeroWeightRows([]);
+    setInspectModalOpen(false);
     setParsedFileData(null);
     setAdjustments([]);
     if (fileInputRef.current) fileInputRef.current.value = '';
@@ -171,7 +196,7 @@ export function DeliveryDataPage() {
   const spinnerText = pageState === 'verifying' ? 'Đang kiểm tra dữ liệu...' : 'Đang xử lý...';
 
   return (
-    <div className="p-8 max-w-3xl">
+    <div className="p-8 max-w-4xl">
       {/* Header */}
       <div className="mb-6">
         <h1 className="text-2xl font-semibold text-neutral-900 dark:text-neutral-100">Xử lý Data Giao Hàng</h1>
@@ -312,38 +337,128 @@ export function DeliveryDataPage() {
               </div>
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+              {/* Metrics Grid */}
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-6">
                 <div className="p-3 rounded-lg bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700">
-                  <p className="text-xs text-neutral-500 dark:text-neutral-400 mb-1">Số dòng</p>
+                  <p className="text-xs text-neutral-500 dark:text-neutral-400 mb-1">Số dòng xử lý</p>
                   <p className="text-xl font-semibold text-neutral-900 dark:text-neutral-100">
                     {result.processedRows.toLocaleString()}
                   </p>
                 </div>
+
                 <div className="p-3 rounded-lg bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700">
-                  <p className="text-xs text-neutral-500 dark:text-neutral-400 mb-1">Số nhóm</p>
+                  <p className="text-xs text-neutral-500 dark:text-neutral-400 mb-1">Số nhóm chuyến</p>
                   <p className="text-xl font-semibold text-neutral-900 dark:text-neutral-100">
                     {result.groupCount.toLocaleString()}
                   </p>
                 </div>
-                {excludedRowCount > 0 && (
-                  <div className="p-3 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800">
-                    <p className="text-xs text-amber-600 dark:text-amber-400 mb-1">Dòng bị loại</p>
-                    <p className="text-xl font-semibold text-amber-700 dark:text-amber-300">
-                      {excludedRowCount.toLocaleString()}
+
+                {/* Excluded Rows Card */}
+                <div
+                  className={cn(
+                    'p-3 rounded-lg border transition-all',
+                    excludedRowCount > 0
+                      ? 'bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800 cursor-pointer hover:border-amber-400 dark:hover:border-amber-600'
+                      : 'bg-neutral-50 dark:bg-neutral-800 border-neutral-200 dark:border-neutral-700'
+                  )}
+                  onClick={() => excludedRowCount > 0 && openInspectModal('excluded')}
+                >
+                  <div className="flex items-center justify-between">
+                    <p className={cn('text-xs mb-1', excludedRowCount > 0 ? 'text-amber-700 dark:text-amber-400 font-medium' : 'text-neutral-500 dark:text-neutral-400')}>
+                      Dòng bị loại
                     </p>
-                    <p className="text-xs text-amber-500 dark:text-amber-500 mt-0.5">thay thế / điều chỉnh</p>
+                    {excludedRowCount > 0 && (
+                      <span className="text-[11px] text-amber-600 dark:text-amber-400 flex items-center gap-0.5 hover:underline">
+                        <Eye className="w-3 h-3" /> Xem
+                      </span>
+                    )}
                   </div>
-                )}
-                <div className={cn(
-                  'p-3 rounded-lg bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700',
-                  excludedRowCount > 0 ? '' : 'col-span-2'
-                )}>
-                  <p className="text-xs text-neutral-500 dark:text-neutral-400 mb-1">Khoảng ngày</p>
-                  <p className="text-sm font-medium text-neutral-900 dark:text-neutral-100">
+                  <p className={cn('text-xl font-semibold', excludedRowCount > 0 ? 'text-amber-800 dark:text-amber-300' : 'text-neutral-900 dark:text-neutral-100')}>
+                    {excludedRowCount.toLocaleString()}
+                  </p>
+                  <p className="text-xs text-neutral-400 dark:text-neutral-500 mt-0.5">
+                    {excludedRowCount > 0 ? 'thay thế / điều chỉnh' : 'Không có dòng bị loại'}
+                  </p>
+                </div>
+
+                {/* Zero Weight Rows Card */}
+                <div
+                  className={cn(
+                    'p-3 rounded-lg border transition-all',
+                    zeroWeightRows.length > 0
+                      ? 'bg-orange-50 dark:bg-orange-900/20 border-orange-200 dark:border-orange-800 cursor-pointer hover:border-orange-400 dark:hover:border-orange-600'
+                      : 'bg-neutral-50 dark:bg-neutral-800 border-neutral-200 dark:border-neutral-700'
+                  )}
+                  onClick={() => zeroWeightRows.length > 0 && openInspectModal('zero_weight')}
+                >
+                  <div className="flex items-center justify-between">
+                    <p className={cn('text-xs mb-1', zeroWeightRows.length > 0 ? 'text-orange-700 dark:text-orange-400 font-medium' : 'text-neutral-500 dark:text-neutral-400')}>
+                      Trọng lượng = 0
+                    </p>
+                    {zeroWeightRows.length > 0 && (
+                      <span className="text-[11px] text-orange-600 dark:text-orange-400 flex items-center gap-0.5 hover:underline">
+                        <Eye className="w-3 h-3" /> Xem
+                      </span>
+                    )}
+                  </div>
+                  <p className={cn('text-xl font-semibold', zeroWeightRows.length > 0 ? 'text-orange-800 dark:text-orange-300' : 'text-neutral-900 dark:text-neutral-100')}>
+                    {zeroWeightRows.length.toLocaleString()}
+                  </p>
+                  <p className="text-xs text-neutral-400 dark:text-neutral-500 mt-0.5">
+                    {zeroWeightRows.length > 0 ? 'dòng HĐ/SP = 0 kg' : 'Đầy đủ trọng lượng'}
+                  </p>
+                </div>
+
+                {/* Date Range Card */}
+                <div className="p-3 rounded-lg bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 col-span-2 sm:col-span-1">
+                  <p className="text-xs text-neutral-500 dark:text-neutral-400 mb-1">Khoảng ngày HĐ</p>
+                  <p className="text-sm font-medium text-neutral-900 dark:text-neutral-100 truncate" title={`${result.dateRange.from} → ${result.dateRange.to}`}>
                     {result.dateRange.from} → {result.dateRange.to}
                   </p>
                 </div>
               </div>
+
+              {/* Data Attention Banner */}
+              {(excludedRows.length > 0 || zeroWeightRows.length > 0) && (
+                <div className="mb-6 p-3.5 rounded-lg bg-amber-50/70 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800/60 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="flex items-start gap-2.5">
+                    <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400 mt-0.5 shrink-0" />
+                    <div>
+                      <p className="text-xs font-semibold text-amber-900 dark:text-amber-200">
+                        Phát hiện dữ liệu cần lưu ý:
+                      </p>
+                      <p className="text-xs text-amber-700 dark:text-amber-400 mt-0.5">
+                        {excludedRows.length > 0 && `${excludedRows.length} dòng bị loại trừ do diễn giải. `}
+                        {zeroWeightRows.length > 0 && `${zeroWeightRows.length} dòng có trọng lượng bằng 0 hoặc trống.`}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    {excludedRows.length > 0 && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => openInspectModal('excluded')}
+                        className="text-xs h-8 border-amber-300 dark:border-amber-700 text-amber-800 dark:text-amber-200 hover:bg-amber-100 dark:hover:bg-amber-900/40"
+                      >
+                        <FilterX className="w-3.5 h-3.5 mr-1 text-amber-600 dark:text-amber-400" />
+                        Xem dòng bị loại ({excludedRows.length})
+                      </Button>
+                    )}
+                    {zeroWeightRows.length > 0 && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => openInspectModal('zero_weight')}
+                        className="text-xs h-8 border-orange-300 dark:border-orange-700 text-orange-800 dark:text-orange-200 hover:bg-orange-100 dark:hover:bg-orange-900/40"
+                      >
+                        <Scale className="w-3.5 h-3.5 mr-1 text-orange-600 dark:text-orange-400" />
+                        Xem TL = 0 ({zeroWeightRows.length})
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              )}
 
               <div className="flex items-center justify-between p-4 bg-neutral-50 dark:bg-neutral-800 rounded-lg border border-neutral-200 dark:border-neutral-700">
                 <div className="flex items-center gap-3">
@@ -386,6 +501,15 @@ export function DeliveryDataPage() {
           </div>
         </div>
       )}
+
+      {/* Excluded and Zero Weight Inspection Modal */}
+      <DeliveryDataInspectModal
+        isOpen={inspectModalOpen}
+        onClose={() => setInspectModalOpen(false)}
+        initialTab={inspectModalTab}
+        excludedRows={excludedRows}
+        zeroWeightRows={zeroWeightRows}
+      />
     </div>
   );
 }

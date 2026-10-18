@@ -62,13 +62,23 @@ export const oilChangeService = {
     vehicle_id?: number;
     page?: number;
     limit?: number;
+    allowedVehicleIds?: number[];
   }): Promise<OilChangeListResult> {
+    if (params.allowedVehicleIds !== undefined && params.allowedVehicleIds.length === 0) {
+      return { records: [], total: 0, page: params.page || 1, limit: params.limit || 20 };
+    }
+
     const page = params.page || 1;
     const limit = params.limit || 20;
     const offset = (page - 1) * limit;
-    const conditions: string[] = ["ocr.status != 'deleted'"];
+    const conditions: string[] = ["ocr.status != 'deleted'", "v.status = 'active'"];
     const queryParams: unknown[] = [];
     let paramIdx = 1;
+
+    if (params.allowedVehicleIds && params.allowedVehicleIds.length > 0) {
+      conditions.push(`ocr.vehicle_id = ANY($${paramIdx++})`);
+      queryParams.push(params.allowedVehicleIds);
+    }
 
     if (params.vehicle_id) {
       conditions.push(`ocr.vehicle_id = $${paramIdx++}`);
@@ -79,7 +89,7 @@ export const oilChangeService = {
 
     const countResult = await pool.query<{ count: string }>(
       `SELECT COUNT(*) as count FROM oil_change_records ocr
-       LEFT JOIN vehicles v ON ocr.vehicle_id = v.id
+       JOIN vehicles v ON ocr.vehicle_id = v.id
        ${whereClause}`,
       queryParams,
     );
@@ -87,7 +97,7 @@ export const oilChangeService = {
 
     const dataResult = await pool.query<OilChangeRecord>(
       `SELECT ${SELECT_COLS} FROM oil_change_records ocr
-       LEFT JOIN vehicles v ON ocr.vehicle_id = v.id
+       JOIN vehicles v ON ocr.vehicle_id = v.id
        ${whereClause}
        ORDER BY ocr.change_date DESC
        LIMIT $${paramIdx++} OFFSET $${paramIdx++}`,
@@ -108,6 +118,21 @@ export const oilChangeService = {
   },
 
   async create(input: CreateOilChangeInput, userId: number): Promise<OilChangeRecord> {
+    const vehicleCheck = await pool.query<{ plate_number: string; driver_name: string; status: string }>(
+      `SELECT plate_number, driver_name, status FROM vehicles WHERE id = $1`,
+      [input.vehicle_id],
+    );
+    if (!vehicleCheck.rows[0]) {
+      throw { code: 'NOT_FOUND', message: 'Không tìm thấy xe' };
+    }
+    if (vehicleCheck.rows[0].status !== 'active') {
+      throw {
+        code: 'VALIDATION_ERROR',
+        message: 'Chỉ cho phép tạo bản ghi thay nhớt cho xe đang hoạt động (active)',
+        status: 400,
+      };
+    }
+
     const result = await pool.query<OilChangeRecord>(
       `INSERT INTO oil_change_records (vehicle_id, change_date, odometer_at, oil_type, notes, created_by)
        VALUES ($1, $2, $3, $4, $5, $6)
@@ -117,15 +142,10 @@ export const oilChangeService = {
 
     const row = result.rows[0];
 
-    const vehicleResult = await pool.query<{ plate_number: string; driver_name: string }>(
-      `SELECT plate_number, driver_name FROM vehicles WHERE id = $1`,
-      [input.vehicle_id],
-    );
-
     return {
       ...row,
-      plate_number: vehicleResult.rows[0]?.plate_number,
-      driver_name: vehicleResult.rows[0]?.driver_name,
+      plate_number: vehicleCheck.rows[0].plate_number,
+      driver_name: vehicleCheck.rows[0].driver_name,
     };
   },
 
@@ -180,7 +200,16 @@ export const oilChangeService = {
     );
   },
 
-  async getDueVehicles(): Promise<OilChangeDueVehicle[]> {
+  async getDueVehicles(allowedVehicleIds?: number[]): Promise<OilChangeDueVehicle[]> {
+    if (allowedVehicleIds !== undefined && allowedVehicleIds.length === 0) {
+      return [];
+    }
+
+    const whereClause = (allowedVehicleIds && allowedVehicleIds.length > 0)
+      ? `WHERE v.status = 'active' AND v.id = ANY($1)`
+      : `WHERE v.status = 'active'`;
+    const params = (allowedVehicleIds && allowedVehicleIds.length > 0) ? [allowedVehicleIds] : [];
+
     const result = await pool.query<OilChangeDueVehicle>(`
       WITH
         last_oil_change AS (
@@ -233,7 +262,7 @@ export const oilChangeService = {
       FROM vehicles v
       LEFT JOIN last_oil_change loc ON v.id = loc.vehicle_id
       LEFT JOIN last_fuel lf ON v.id = lf.vehicle_id
-      WHERE v.status = 'active'
+      ${whereClause}
       ORDER BY
         CASE
           WHEN lf.odometer_new IS NULL THEN 3
