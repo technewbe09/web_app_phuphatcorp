@@ -65,7 +65,7 @@ Phase 7: FE-01 → FE-02 → FE-03 → FE-04
 Phase 8: Regression
 
 ## Coding Standards
-Đọc `.opencode/knowhow/coding_convention.md` trước khi viết bất kỳ dòng code nào.
+Đọc `.agents/knowhow/coding-convention.md` trước khi viết bất kỳ dòng code nào.
 
 ## ⚠️ Lưu ý kỹ thuật
 - [Điểm cần chú ý khi implement]

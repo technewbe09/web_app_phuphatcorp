@@ -189,7 +189,7 @@ Không refactor code xung quanh, không tự thêm task ngoài task list. Nếu 
 
 ## Bước 7 — Document
 
-Cập nhật các file trong `.opencode/knowhow/`:
+Cập nhật các file trong `.agents/knowhow/`:
 
 | Thay đổi | File |
 |----------|------|

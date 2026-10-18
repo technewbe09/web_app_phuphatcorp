@@ -16,8 +16,8 @@ Skill này giúp bạn phát triển giao diện và xử lý logic ở tầng f
 ## Cách sử dụng
 
 **Bước 0 — Đọc context (bắt buộc trước khi viết code)**
-- `.opencode/knowhow/know-how.md` → biết project structure, API endpoints đang có
-- `.opencode/knowhow/system-features.md` → biết business logic, role access
+- `.agents/knowhow/know-how.md` → biết project structure, API endpoints đang có
+- `.agents/knowhow/system-features.md` → biết business logic, role access
 
 1. Đọc yêu cầu từ Tech Lead hoặc task list từ `docs/tasks/`
 2. Đọc API contract từ BA Analysis để biết endpoint và response format
@@ -27,4 +27,4 @@ Skill này giúp bạn phát triển giao diện và xử lý logic ở tầng f
 6. Xử lý loading state, empty state, error state
 
 ## Coding Standards
-Đọc `.opencode/knowhow/coding_convention.md` trước khi viết bất kỳ dòng code nào.
+Đọc `.agents/knowhow/coding-convention.md` trước khi viết bất kỳ dòng code nào.

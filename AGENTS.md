@@ -67,7 +67,7 @@ web_app_phuphatcorp/
 ## Database Configuration
 
 - **Database Engine:** PostgreSQL (driver: `pg`)
-- **Schema:** Danh sách bảng đang sống nằm ở `.opencode/knowhow/know-how.md`.
+- **Schema:** Danh sách bảng đang sống nằm ở `.agents/knowhow/know-how.md`.
 - **Migration Policy:** All migrations must be idempotent (using `CREATE TABLE IF NOT EXISTS`, `ALTER TABLE ... ADD COLUMN IF NOT EXISTS`).
 
 ---
@@ -118,21 +118,25 @@ Error responses:
 2. **Context Provider Order:** `AuthProvider` must be wrapped within `BrowserRouter`. Navigation redirects should happen at page/route level.
 3. **Forms:** Use `react-hook-form` with `yup` schema validation.
 4. **State Management:** Zustand for global state (`authStore.ts`), React Context for auth/theme sessions, TanStack Query for server state.
-5. **UI & Styling:** Tailwind CSS v3 with `clsx`/`tailwind-merge` (`cn` utility), Lucide React icons.
+5. **HTTP:** Axios client together with TanStack Query.
+6. **UI & Styling:** Tailwind CSS v3 with `clsx`/`tailwind-merge` (`cn` utility), Lucide React icons.
 
 ### Backend Architecture Rules
 1. **Layered Pattern:** Controllers handle request parsing and response delivery. Services encapsulate business rules. Database queries reside in services/models.
 2. **Async/Await:** Avoid `.then()/.catch()` chaining; use standard `try/catch` and early returns.
 3. **Validation:** Validate incoming request payloads with `express-validator` middleware before processing.
+4. **Service shape:** One function does one job. Keep services thin and testable.
 
 ---
 
-## Project Knowledge Base (`.opencode/knowhow/`)
+## Project Knowledge Base (`.agents/knowhow/`)
 
-Before implementing features, APIs, migrations, or UI changes, always read the relevant knowhow docs under `.opencode/knowhow/`:
+Before implementing features, APIs, migrations, or UI changes, always read the relevant knowhow docs under `.agents/knowhow/`:
 - **`know-how.md`**: DB schema, active API endpoints, project structure.
 - **`system-features.md`**: Business logic, roles/permissions, feature flows.
 - **`coding-convention.md`**: Detailed coding conventions for Frontend and Backend.
 - **`decisions.md`**: Architectural decisions (do not violate without explicit discussion).
 - **`lessons-learned.md`**: Past bug fixes, pitfalls, and preventative patterns.
 - **`codebase-exploration.md`**: Delivery data flows and component relationships.
+
+When you change schema, APIs, or an established pattern, update the matching file under `.agents/knowhow/`.

@@ -18,7 +18,7 @@ Skill này chuyển BA Analysis (mô tả logic nghiệp vụ) thành UI Spec (m
 
 - BA Analysis: `docs/ba/YYYYMMDD_[feature]-analysis.md`
 - Design guideline: `web-design-guidelines` skill (fetch từ Vercel)
-- Context hệ thống: `.opencode/knowhow/system-features.md`
+- Context hệ thống: `.agents/knowhow/system-features.md`
 
 ---
 

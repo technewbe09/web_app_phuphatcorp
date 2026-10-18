@@ -52,6 +52,5 @@ backups/
 .cursor/
 graphify-out/
 
-.agents/
 .agy/
 AGENTS.local.md

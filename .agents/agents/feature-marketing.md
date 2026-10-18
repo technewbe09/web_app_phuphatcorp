@@ -33,7 +33,7 @@ Lưu file + xuất kết quả
 
 1. `docs/ba/` — BA Analysis: business rules, luồng, điều kiện
 2. `docs/ui/` — UI Spec: actions, states, kết quả user thấy
-3. `.opencode/knowhow/system-features.md` — bối cảnh feature
+3. `.agents/knowhow/system-features.md` — bối cảnh feature
 4. Source code FE (`pages/`, `components/`) — hành động & label thực tế
 5. Source code BE (`services/`, `validators/`) — rule & giới hạn thực tế
 

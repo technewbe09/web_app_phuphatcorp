@@ -51,9 +51,9 @@ Nếu chưa rõ, hỏi tối đa 2 câu:
 ### Thực hiện
 
 **Bước 0 — Đọc context**
-- `.opencode/knowhow/know-how.md` → project structure, hiểu vị trí file trong hệ thống
-- `.opencode/knowhow/coding_convention.md` → target state sau refactor phải đạt convention này
-- `.opencode/knowhow/lessons-learned.md` → tránh lặp lại vấn đề đã gặp
+- `.agents/knowhow/know-how.md` → project structure, hiểu vị trí file trong hệ thống
+- `.agents/knowhow/coding-convention.md` → target state sau refactor phải đạt convention này
+- `.agents/knowhow/lessons-learned.md` → tránh lặp lại vấn đề đã gặp
 
 **Bước 1 — Đọc code hiện tại**
 
@@ -205,7 +205,7 @@ Nếu lint/build fail → fix ngay bước đó, không chuyển bước tiếp 
 - Không thêm feature mới dù thấy cơ hội
 - Không sửa bug gặp phải trong quá trình — ghi note lại để dùng `bug-fix` sau
 - Giữ nguyên behavior: cùng input → cùng output
-- Tuân thủ `.opencode/knowhow/coding_convention.md`
+- Tuân thủ `.agents/knowhow/coding-convention.md`
 
 **Nếu phát hiện cần thay đổi ngoài scope đã confirm:**
 → Dừng, hỏi user trước khi tiếp tục. Không tự mở rộng scope.

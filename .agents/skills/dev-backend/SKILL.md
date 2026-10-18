@@ -17,9 +17,9 @@ Skill này giúp bạn xây dựng API và xử lý business logic ở tầng ba
 ## Cách sử dụng
 
 **Bước 0 — Đọc context (bắt buộc trước khi viết code)**
-- `.opencode/knowhow/know-how.md` → DB schema đang có, API endpoints hiện tại
-- `.opencode/knowhow/system-features.md` → business logic, role access, feature flows
-- `.opencode/knowhow/coding_convention.md` → naming, patterns, security conventions
+- `.agents/knowhow/know-how.md` → DB schema đang có, API endpoints hiện tại
+- `.agents/knowhow/system-features.md` → business logic, role access, feature flows
+- `.agents/knowhow/coding-convention.md` → naming, patterns, security conventions
 
 **Thứ tự implement:**
 1. Migration (nếu cần thay đổi schema)

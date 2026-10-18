@@ -103,8 +103,8 @@ User yêu cầu: "xây dựng kế hoạch marketing cho tôi trong [N] ngày"
 
 **Đọc theo thứ tự:**
 
-1. `.opencode/knowhow/system-features.md` — tất cả features, business logic, pricing, target audience
-2. `.opencode/knowhow/know-how.md` — tech stack, USPs, điểm khác biệt so với đối thủ
+1. `.agents/knowhow/system-features.md` — tất cả features, business logic, pricing, target audience
+2. `.agents/knowhow/know-how.md` — tech stack, USPs, điểm khác biệt so với đối thủ
 3. Public pages (landing, rooms, booking flow) — hiểu customer experience thực tế
 
 **Thu thập:**
