@@ -15,11 +15,14 @@ import {
   truncateFilename,
   type HouseCode,
 } from '../../constants/bangKeTho';
-import { processNdMccWorkbook, type NdMccStats, type ProcessNdMccResult } from './ndMccEngine';
+import { processNdMccWorkbook, type NdMccStats } from './ndMccEngine';
+import { processClvWorkbook, type ClvStats } from './clvEngine';
+import { processClfWorkbook, type ClfStats } from './clfEngine';
 
 export * from './ndMccEngine';
+export * from './clvEngine';
+export * from './clfEngine';
 export * from './pricingLookup';
-export * from './processedV2';
 
 async function streamToBuffer(stream: NodeJS.ReadableStream): Promise<Buffer> {
   const chunks: Buffer[] = [];
@@ -556,14 +559,220 @@ export const bangKeThoService = {
         [errorMsg, batchId, houseCode],
       );
 
-      if (errorMsg === 'MISSING_PROCESSED_SHEET') {
-        throw new BangKeError(
-          'Không tìm thấy sheet Processed trong file input của đợt',
-          400,
-          'MISSING_PROCESSED_SHEET',
-        );
+      const missingSheetMessage: Record<string, string> = {
+        MISSING_MCC_SHEET: 'File input thiếu sheet MCC',
+        MISSING_NDFC_SHEET: 'File input thiếu sheet NDFC',
+        MISSING_MCC_NDFC_SHEETS: 'File input thiếu sheet MCC và NDFC',
+      };
+      if (missingSheetMessage[errorMsg]) {
+        throw new BangKeError(missingSheetMessage[errorMsg], 400, errorMsg);
       }
       throw new BangKeError(errorMsg, 500, 'PROCESS_ND_MCC_FAILED');
+    }
+  },
+
+  async processClv(
+    batchId: string,
+    _userId: number,
+  ): Promise<{
+    batch_id: string;
+    house_code: HouseCode;
+    status: 'ready';
+    download_filename: string;
+    generated_at: string;
+    stats: ClvStats;
+  }> {
+    const { rows: batchRows } = await pool.query<{
+      id: string;
+      original_filename: string;
+      input_object_key: string;
+    }>(
+      `SELECT id, original_filename, input_object_key FROM bang_ke_tho_batches WHERE id = $1`,
+      [batchId],
+    );
+    if (!batchRows[0]) {
+      throw new BangKeError('Không tìm thấy đợt', 404, 'NOT_FOUND');
+    }
+
+    const inputKey = batchRows[0].input_object_key;
+    const houseCode: HouseCode = 'clv';
+    const outputKey = outputObjectKey(batchId, houseCode);
+    const targetFilename = downloadFilename(houseCode, batchRows[0].original_filename);
+
+    let inputBuffer: Buffer;
+    try {
+      const { stream } = await storageService.getStream(
+        inputKey,
+        env.minio.bangKeBucket,
+      );
+      inputBuffer = await streamToBuffer(stream);
+    } catch {
+      throw new BangKeError('Không đọc được file input từ lưu trữ', 500, 'STORAGE_READ_ERROR');
+    }
+
+    try {
+      const result = await processClvWorkbook(inputBuffer);
+
+      await storageService.upload(
+        result.buffer,
+        targetFilename,
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        env.minio.bangKeBucket,
+        outputKey,
+      );
+
+      const { rows: updatedRows } = await pool.query<{
+        generated_at: string;
+        download_filename: string;
+      }>(
+        `
+        UPDATE bang_ke_tho_outputs
+        SET status = 'ready',
+            object_key = $1,
+            download_filename = $2,
+            error_message = NULL,
+            generated_at = NOW(),
+            updated_at = NOW()
+        WHERE batch_id = $3 AND house_code = $4
+        RETURNING generated_at, download_filename
+        `,
+        [outputKey, targetFilename, batchId, houseCode],
+      );
+
+      return {
+        batch_id: batchId,
+        house_code: houseCode,
+        status: 'ready',
+        download_filename: updatedRows[0]?.download_filename || targetFilename,
+        generated_at: updatedRows[0]?.generated_at || new Date().toISOString(),
+        stats: result.stats,
+      };
+    } catch (err) {
+      const missing = err instanceof Error && err.message === 'MISSING_CLV_SHEET';
+      const errorMsg = missing
+        ? 'File input thiếu sheet CLV'
+        : err instanceof Error
+          ? err.message
+          : 'Lỗi xử lý file CLV';
+      await pool.query(
+        `
+        UPDATE bang_ke_tho_outputs
+        SET status = 'failed',
+            error_message = $1,
+            generated_at = NOW(),
+            updated_at = NOW()
+        WHERE batch_id = $2 AND house_code = $3
+        `,
+        [errorMsg, batchId, houseCode],
+      );
+      if (missing) {
+        throw new BangKeError(errorMsg, 400, 'MISSING_CLV_SHEET');
+      }
+      throw new BangKeError(errorMsg, 500, 'PROCESS_CLV_FAILED');
+    }
+  },
+
+  async processCalofic(
+    batchId: string,
+    _userId: number,
+  ): Promise<{
+    batch_id: string;
+    house_code: HouseCode;
+    status: 'ready';
+    download_filename: string;
+    generated_at: string;
+    stats: ClfStats;
+  }> {
+    const { rows: batchRows } = await pool.query<{
+      id: string;
+      original_filename: string;
+      input_object_key: string;
+    }>(
+      `SELECT id, original_filename, input_object_key FROM bang_ke_tho_batches WHERE id = $1`,
+      [batchId],
+    );
+    if (!batchRows[0]) {
+      throw new BangKeError('Không tìm thấy đợt', 404, 'NOT_FOUND');
+    }
+
+    const inputKey = batchRows[0].input_object_key;
+    const houseCode: HouseCode = 'calofic';
+    const outputKey = outputObjectKey(batchId, houseCode);
+    const targetFilename = downloadFilename(houseCode, batchRows[0].original_filename);
+
+    let inputBuffer: Buffer;
+    try {
+      const { stream } = await storageService.getStream(
+        inputKey,
+        env.minio.bangKeBucket,
+      );
+      inputBuffer = await streamToBuffer(stream);
+    } catch {
+      throw new BangKeError('Không đọc được file input từ lưu trữ', 500, 'STORAGE_READ_ERROR');
+    }
+
+    try {
+      const result = await processClfWorkbook(inputBuffer);
+
+      await storageService.upload(
+        result.buffer,
+        targetFilename,
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        env.minio.bangKeBucket,
+        outputKey,
+      );
+
+      const { rows: updatedRows } = await pool.query<{
+        generated_at: string;
+        download_filename: string;
+      }>(
+        `
+        UPDATE bang_ke_tho_outputs
+        SET status = 'ready',
+            object_key = $1,
+            download_filename = $2,
+            error_message = NULL,
+            generated_at = NOW(),
+            updated_at = NOW()
+        WHERE batch_id = $3 AND house_code = $4
+        RETURNING generated_at, download_filename
+        `,
+        [outputKey, targetFilename, batchId, houseCode],
+      );
+
+      return {
+        batch_id: batchId,
+        house_code: houseCode,
+        status: 'ready',
+        download_filename: updatedRows[0]?.download_filename || targetFilename,
+        generated_at: updatedRows[0]?.generated_at || new Date().toISOString(),
+        stats: result.stats,
+      };
+    } catch (err) {
+      const missing = err instanceof Error && err.message === 'MISSING_CLF_SHEET';
+      const missingNames = missing
+        ? ((err as Error & { missing?: string[] }).missing || []).join(', ')
+        : '';
+      const errorMsg = missing
+        ? `File input thiếu sheet ${missingNames}`
+        : err instanceof Error
+          ? err.message
+          : 'Lỗi xử lý file Calofic';
+      await pool.query(
+        `
+        UPDATE bang_ke_tho_outputs
+        SET status = 'failed',
+            error_message = $1,
+            generated_at = NOW(),
+            updated_at = NOW()
+        WHERE batch_id = $2 AND house_code = $3
+        `,
+        [errorMsg, batchId, houseCode],
+      );
+      if (missing) {
+        throw new BangKeError(errorMsg, 400, 'MISSING_CLF_SHEET');
+      }
+      throw new BangKeError(errorMsg, 500, 'PROCESS_CALOFIC_FAILED');
     }
   },
 };

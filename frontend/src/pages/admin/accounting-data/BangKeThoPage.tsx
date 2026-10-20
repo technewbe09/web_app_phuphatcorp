@@ -14,6 +14,8 @@ import {
   useDeleteBangKeTho,
   useUploadBangKeTho,
   useProcessNdMcc,
+  useProcessClv,
+  useProcessCalofic,
 } from '../../../hooks/useBangKeTho';
 import { bangKeThoApi, type BangKeBatch } from '../../../api/bangKeThoApi';
 import { useAuth } from '../../../hooks/useAuth';
@@ -44,7 +46,7 @@ function isDuplicate(err: unknown): boolean {
 export function BangKeThoPage() {
   const { t } = useI18n();
   const { hasPermission, user } = useAuth();
-  const canManage = hasPermission('accounting_data.manage') || user?.role === 'ADMIN';
+  const canManage = hasPermission('delivery_data.manage') || user?.role === 'ADMIN';
 
   const [searchParams, setSearchParams] = useSearchParams();
   const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10) || 1);
@@ -72,12 +74,16 @@ export function BangKeThoPage() {
   const uploadMutation = useUploadBangKeTho();
   const deleteMutation = useDeleteBangKeTho();
   const processNdMccMutation = useProcessNdMcc();
+  const processClvMutation = useProcessClv();
+  const processCaloficMutation = useProcessCalofic();
 
   const [file, setFile] = useState<File | null>(null);
   const [overwriteOpen, setOverwriteOpen] = useState(false);
   const [deleteRow, setDeleteRow] = useState<BangKeBatch | null>(null);
   const [downloadingIds, setDownloadingIds] = useState<Set<string>>(() => new Set());
   const [processingBatchIds, setProcessingBatchIds] = useState<Set<string>>(() => new Set());
+  const [processingClvIds, setProcessingClvIds] = useState<Set<string>>(() => new Set());
+  const [processingCaloficIds, setProcessingCaloficIds] = useState<Set<string>>(() => new Set());
   const [downloadingOutputKeys, setDownloadingOutputKeys] = useState<Set<string>>(() => new Set());
   const [toasts, setToasts] = useState<Toast[]>([]);
 
@@ -149,6 +155,54 @@ export function BangKeThoPage() {
       showToast(apiMessage(err, t('bangKeTho.message.error.processNdMcc')), 'error');
     } finally {
       setProcessingBatchIds((prev) => {
+        const next = new Set(prev);
+        next.delete(batchId);
+        return next;
+      });
+    }
+  };
+
+  const handleProcessClv = async (batchId: string) => {
+    if (processingClvIds.has(batchId)) return;
+    setProcessingClvIds((prev) => new Set(prev).add(batchId));
+    try {
+      const result = await processClvMutation.mutateAsync(batchId);
+      showToast(
+        t('bangKeTho.message.success.processClv', { filename: result.download_filename }),
+        'success',
+      );
+    } catch (err) {
+      if (isAxiosError(err) && err.response?.status === 403) {
+        showToast(t('bangKeTho.message.error.forbidden'), 'error');
+        return;
+      }
+      showToast(apiMessage(err, t('bangKeTho.message.error.processClv')), 'error');
+    } finally {
+      setProcessingClvIds((prev) => {
+        const next = new Set(prev);
+        next.delete(batchId);
+        return next;
+      });
+    }
+  };
+
+  const handleProcessCalofic = async (batchId: string) => {
+    if (processingCaloficIds.has(batchId)) return;
+    setProcessingCaloficIds((prev) => new Set(prev).add(batchId));
+    try {
+      const result = await processCaloficMutation.mutateAsync(batchId);
+      showToast(
+        t('bangKeTho.message.success.processCalofic', { filename: result.download_filename }),
+        'success',
+      );
+    } catch (err) {
+      if (isAxiosError(err) && err.response?.status === 403) {
+        showToast(t('bangKeTho.message.error.forbidden'), 'error');
+        return;
+      }
+      showToast(apiMessage(err, t('bangKeTho.message.error.processCalofic')), 'error');
+    } finally {
+      setProcessingCaloficIds((prev) => {
         const next = new Set(prev);
         next.delete(batchId);
         return next;
@@ -285,10 +339,14 @@ export function BangKeThoPage() {
                   canManage={canManage}
                   downloadingIds={downloadingIds}
                   processingBatchIds={processingBatchIds}
+                  processingClvIds={processingClvIds}
+                  processingCaloficIds={processingCaloficIds}
                   downloadingOutputKeys={downloadingOutputKeys}
                   onDownload={handleDownload}
                   onDelete={setDeleteRow}
                   onProcessNdMcc={handleProcessNdMcc}
+                  onProcessClv={handleProcessClv}
+                  onProcessCalofic={handleProcessCalofic}
                   onDownloadOutput={handleDownloadOutput}
                 />
               </div>

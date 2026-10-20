@@ -97,6 +97,7 @@ export function Router() {
             <Route path="/logs" element={<AuditLogPage />} />
             {/* Delivery Data */}
             <Route path="/delivery-data/5-houses" element={<DeliveryDataPage />} />
+            <Route path="/delivery-data/bang-ke-tho" element={<BangKeThoPage />} />
             <Route path="/delivery-data/rice" element={<RiceDeliveryDataPage />} />
             {/* Vehicle Data */}
             <Route path="/vehicle-data/driver-invoices" element={<DriverInvoicesPage />} />
@@ -112,7 +113,6 @@ export function Router() {
             <Route path="/accounting-data/customers" element={<CustomersPage />} />
             <Route path="/accounting-data/delivery-import" element={<DeliveryImportPage />} />
             <Route path="/accounting-data/invoice-matching" element={<InvoiceMatchingPage />} />
-            <Route path="/accounting-data/bang-ke-tho" element={<BangKeThoPage />} />
             {/* Jobs */}
             <Route path="/accounting-data/reconcile-jobs" element={<Navigate to="/jobs/reconcile" replace />} />
             <Route path="/jobs/reconcile" element={<ReconcileJobPage />} />

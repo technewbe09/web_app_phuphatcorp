@@ -1,0 +1,21 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+    "instructions": [
+    ".agents/skills/dev-backend/SKILL.md",
+    ".agents/skills/dev-frontend/SKILL.md",
+    ".agents/skills/test-qa/SKILL.md",
+    ".agents/skills/business-analyst/SKILL.md",
+    ".agents/skills/tech-lead/SKILL.md",
+    ".agents/skills/ui-ux-design/SKILL.md",
+    ".agents/skills/perf-review/SKILL.md",
+    ".agents/skills/business-analyst/SKILL.md"
+  ],
+  "permission": {
+    "skill": {
+      "*": "allow",
+      "pr-review": "allow",
+      "internal-*": "deny",
+      "experimental-*": "ask"
+    }
+  }
+}
