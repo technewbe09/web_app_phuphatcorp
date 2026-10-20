@@ -1352,6 +1352,14 @@
       "reprocessNdMcc": "Re-run ND-MCC statements",
       "retryNdMcc": "Retry ND-MCC processing",
       "downloadNdMcc": "Download ND-MCC statements",
+      "processClv": "Process CLV statements",
+      "reprocessClv": "Re-run CLV statements",
+      "retryClv": "Retry CLV processing",
+      "downloadClv": "Download CLV statements",
+      "processCalofic": "Process Calofic statements",
+      "reprocessCalofic": "Re-run Calofic statements",
+      "retryCalofic": "Retry Calofic processing",
+      "downloadCalofic": "Download Calofic statements",
       "downloadInput": "Download original input",
       "delete": "Delete batch"
     },
@@ -1372,7 +1380,9 @@
         "save": "Raw statement file saved successfully",
         "overwrite": "Raw statement file overwritten successfully",
         "delete": "Batch deleted successfully",
-        "processNdMcc": "Processed ND-MCC statement \"{filename}\" successfully"
+        "processNdMcc": "Processed ND-MCC statement \"{filename}\" successfully",
+        "processClv": "Processed CLV statement \"{filename}\" successfully",
+        "processCalofic": "Processed Calofic statement \"{filename}\" successfully"
       },
       "error": {
         "type": "Only Excel files (.xlsx) are accepted",
@@ -1381,7 +1391,9 @@
         "delete": "Failed to delete batch",
         "download": "Failed to download file",
         "forbidden": "You do not have permission to perform this action",
-        "processNdMcc": "Failed to process ND-MCC statement"
+        "processNdMcc": "Failed to process ND-MCC statement",
+        "processClv": "Failed to process CLV statement",
+        "processCalofic": "Failed to process Calofic statement"
       }
     }
   }

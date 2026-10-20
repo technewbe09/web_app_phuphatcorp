@@ -1397,6 +1397,14 @@
       "reprocessNdMcc": "Chạy lại bảng kê ND-MCC",
       "retryNdMcc": "Thử lại xử lý ND-MCC",
       "downloadNdMcc": "Tải bảng kê ND-MCC",
+      "processClv": "Xử lý bảng kê CLV",
+      "reprocessClv": "Chạy lại bảng kê CLV",
+      "retryClv": "Thử lại xử lý CLV",
+      "downloadClv": "Tải bảng kê CLV",
+      "processCalofic": "Xử lý bảng kê Calofic",
+      "reprocessCalofic": "Chạy lại bảng kê Calofic",
+      "retryCalofic": "Thử lại xử lý Calofic",
+      "downloadCalofic": "Tải bảng kê Calofic",
       "downloadInput": "Tải file input gốc",
       "delete": "Xóa đợt"
     },
@@ -1417,7 +1425,9 @@
         "save": "Đã lưu file bảng kê thô thành công",
         "overwrite": "Đã ghi đè file bảng kê thô thành công",
         "delete": "Đã xóa đợt bảng kê thành công",
-        "processNdMcc": "Xử lý bảng kê ND-MCC \"{filename}\" thành công"
+        "processNdMcc": "Xử lý bảng kê ND-MCC \"{filename}\" thành công",
+        "processClv": "Xử lý bảng kê CLV \"{filename}\" thành công",
+        "processCalofic": "Xử lý bảng kê Calofic \"{filename}\" thành công"
       },
       "error": {
         "type": "Chỉ chấp nhận file định dạng Excel (.xlsx)",
@@ -1426,7 +1436,9 @@
         "delete": "Không xóa được đợt bảng kê",
         "download": "Không tải được file",
         "forbidden": "Bạn không có quyền thực hiện thao tác này",
-        "processNdMcc": "Xử lý bảng kê ND-MCC thất bại"
+        "processNdMcc": "Xử lý bảng kê ND-MCC thất bại",
+        "processClv": "Xử lý bảng kê CLV thất bại",
+        "processCalofic": "Xử lý bảng kê Calofic thất bại"
       }
     }
   }

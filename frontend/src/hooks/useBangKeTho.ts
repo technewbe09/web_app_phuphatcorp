@@ -42,4 +42,24 @@ export function useProcessNdMcc() {
   });
 }
 
+export function useProcessClv() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (batchId: string) => bangKeThoApi.processClv(batchId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [BANG_KE_KEY] });
+    },
+  });
+}
+
+export function useProcessCalofic() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (batchId: string) => bangKeThoApi.processCalofic(batchId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [BANG_KE_KEY] });
+    },
+  });
+}
+
 export type { BangKeBatch };

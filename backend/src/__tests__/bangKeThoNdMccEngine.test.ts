@@ -1,5 +1,3 @@
-import fs from 'fs';
-import path from 'path';
 import ExcelJS from 'exceljs';
 import { pool } from '../config/database';
 import { storageService } from '../services/storageService';
@@ -24,6 +22,56 @@ beforeEach(() => {
   mockPool.query.mockReset();
 });
 
+const FACTORY_HEADERS = [
+  'Mã nhà cung cấp', 'Số hóa đơn', 'Ngày hóa đơn', 'Số tàu', 'Mã khách hàng',
+  'Tên khách hàng', 'Địa chỉ giao hàng', 'Khung giá', 'Đơn vị tính', 'Mã hàng hóa',
+  'Tên hàng hóa (Vie)', 'Tên hàng hóa (En)', 'Mã liên hệ giao hàng', 'Mã DVT',
+  'Số lượng (DVT bán hàng)', 'SP Trọng lượng net', 'HĐ Trọng lượng (Net)', 'Round(MT)',
+  'Tấn/ Hóa đơn', 'Tấn/ Chuyến', 'CLF', 'VFM', 'MCC', 'CLV', 'NDFC', 'GẠO', '',
+  'Tài xế', 'Thông tin bổ sung', 'Slot', 'Diễn giải', 'Channel',
+  'SubChannel', 'SlotNo', 'user tạo HĐ', 'User tạo PXK', 'PO number',
+  'Warehouse No', 'Warehouse Name', 'Phiếu XK', 'Chứng từ ghi sổ', 'Số seri',
+  'Loại hàng', 'Tuyến cũ', 'Tuyến mới', 'Tuyến lên hóa đơn',
+];
+
+/** Map a legacy Processed-layout row onto the MCC/NDFC factory layout. */
+function toFactoryRow(oldRow: any[]): any[] {
+  const row = new Array(FACTORY_HEADERS.length).fill('');
+  for (let i = 0; i < 18 && i < oldRow.length; i++) row[i] = oldRow[i] ?? '';
+  for (let k = 0; k < 5; k++) row[20 + k] = oldRow[18 + k] ?? '';
+  row[26] = oldRow[23] ?? '';
+  for (let i = 25; i < oldRow.length; i++) row[i + 2] = oldRow[i] ?? '';
+  return row;
+}
+
+function addFactorySheet(wb: ExcelJS.Workbook, name: string, rows: any[][]): void {
+  const ws = wb.addWorksheet(name);
+  ws.addRow(FACTORY_HEADERS);
+  for (const r of rows) ws.addRow(toFactoryRow(r));
+}
+
+function attachFactoryCopies(wb: ExcelJS.Workbook): void {
+  const src = wb.getWorksheet('Processed');
+  if (!src) return;
+  const rows: any[][] = [];
+  src.eachRow((row, n) => {
+    if (n === 1) return;
+    const vals: any[] = [];
+    for (let c = 1; c <= 46; c++) vals.push(row.getCell(c).value ?? '');
+    const supplier = String(vals[0] ?? '').trim();
+    const invoice = String(vals[1] ?? '').trim();
+    const truck = String(vals[3] ?? '').trim();
+    if (supplier || invoice || truck) rows.push(vals);
+  });
+  addFactorySheet(wb, 'MCC', rows.filter((r) => String(r[0]) !== '2000000008'));
+  addFactorySheet(wb, 'NDFC', rows.filter((r) => String(r[0]) === '2000000008'));
+}
+
+const OUTPUT_SHEETS = [
+  'MCC (goc)', 'MCC-clv', 'MCC (uni)', 'MCC (tt)',
+  'NDFC (goc)', 'NDFC-clv', 'NDFC (uni)', 'NDFC (tt)',
+];
+
 describe('bangKeThoPricingLookup helpers', () => {
   it('maps khungGia to vehicle class correctly', () => {
     expect(bangKeThoPricingLookup.mapKhungGiaToVehicleClass('≤2.5 tấn')).toBe('le_2_5');
@@ -47,8 +95,8 @@ describe('bangKeThoPricingLookup helpers', () => {
 
   describe('resolveTargetBook', () => {
     it('resolves MCC books correctly by slot and trip composition', () => {
-      expect(resolveTargetBook({ supplierCode: '2000000007', slot: 'CALOFIC HP' })).toBe('CLV');
-      expect(resolveTargetBook({ supplierCode: '2000000007', slot: 'CLV' })).toBe('CLV');
+      expect(resolveTargetBook({ supplierCode: '2000000007', slot: 'CALOFIC HP' })).toBe('MCC GH');
+      expect(resolveTargetBook({ supplierCode: '2000000007', slot: 'CLV' })).toBe('MCC GH');
       expect(resolveTargetBook({ supplierCode: '2000000007', slot: 'WH UNIDEPOT' })).toBe('MCC GH');
       expect(resolveTargetBook({ supplierCode: '2000000007', slot: 'UNI' })).toBe('MCC GH');
       expect(resolveTargetBook({ supplierCode: '2000000007', slot: 'UNI 1', hasNdfcInTrip: false })).toBe('MCC (tt)');
@@ -61,8 +109,9 @@ describe('bangKeThoPricingLookup helpers', () => {
     it('resolves NDFC books correctly by slot', () => {
       expect(resolveTargetBook({ supplierCode: '2000000008', slot: 'UNI 1' })).toBe('NDFC (TT)');
       expect(resolveTargetBook({ supplierCode: '2000000008', slot: 'TT' })).toBe('NDFC (TT)');
-      expect(resolveTargetBook({ supplierCode: '2000000008', slot: 'UNI 3' })).toBe('NDFC-naic');
-      expect(resolveTargetBook({ supplierCode: '2000000008', slot: 'WH UNIDEPOT' })).toBe('NDFC-naic');
+      expect(resolveTargetBook({ supplierCode: '2000000008', slot: 'UNI 3' })).toBe('CLF');
+      expect(resolveTargetBook({ supplierCode: '2000000008', slot: 'WH UNIDEPOT' })).toBe('CLF');
+      expect(resolveTargetBook({ supplierCode: '2000000008', slot: 'CALOFIC HP' })).toBe('CLF');
     });
 
     it('returns undefined for non-MCC and non-NDFC supplier codes', () => {
@@ -76,6 +125,16 @@ describe('bangKeThoPricingLookup.lookupTransportRate', () => {
   const sampleTiers = [
     {
       route_name: 'Lâm Đồng - Lâm Viên - Đà Lạt/ Xuân Hương - Đà Lạt/ Đơn Dương',
+      book_name: 'CLV',
+      price: '660000',
+      pricing_unit: 'tan',
+      range_from: '8.000',
+      range_to: '16.000',
+      tier_label: null,
+      set_label: null,
+    },
+    {
+      route_name: 'Tuyen chi co CLV',
       book_name: 'CLV',
       price: '660000',
       pricing_unit: 'tan',
@@ -134,9 +193,29 @@ describe('bangKeThoPricingLookup.lookupTransportRate', () => {
       tier_label: null,
       set_label: null,
     },
+    {
+      route_name: 'Hồ Chí Minh',
+      book_name: 'CLF',
+      price: '510000',
+      pricing_unit: 'tan',
+      range_from: '8.000',
+      range_to: '16.000',
+      tier_label: null,
+      set_label: null,
+    },
+    {
+      route_name: 'Hồ Chí Minh',
+      book_name: 'NDFC-naic',
+      price: '111000',
+      pricing_unit: 'tan',
+      range_from: '8.000',
+      range_to: '16.000',
+      tier_label: null,
+      set_label: null,
+    },
   ];
 
-  it('MCC-clv picks price from CLV book', async () => {
+  it('MCC-clv picks price from MCC GH book', async () => {
     mockPool.query.mockResolvedValueOnce({ rows: sampleTiers } as never);
     const rate = await bangKeThoPricingLookup.lookupTransportRate({
       diemTinhPhi: 'Lâm Đồng - Lâm Viên-Đà Lạt/ Xuân Hương-Đà Lạt/ Đơn Dương',
@@ -145,10 +224,10 @@ describe('bangKeThoPricingLookup.lookupTransportRate', () => {
       supplierCode: '2000000007',
       slot: 'CALOFIC HP',
     });
-    expect(rate).toBe(660000);
+    expect(rate).toBe(861000);
   });
 
-  it('MCC-clv picks price from CLV book when diemTinhPhi is sub-route Xuan Huong-Da Lat', async () => {
+  it('MCC-clv picks price from MCC GH book when diemTinhPhi is sub-route Xuan Huong-Da Lat', async () => {
     mockPool.query.mockResolvedValueOnce({ rows: sampleTiers } as never);
     const rate = await bangKeThoPricingLookup.lookupTransportRate({
       diemTinhPhi: 'Xuân Hương-Đà Lạt',
@@ -157,10 +236,10 @@ describe('bangKeThoPricingLookup.lookupTransportRate', () => {
       supplierCode: '2000000007',
       slot: 'CALOFIC HP',
     });
-    expect(rate).toBe(660000);
+    expect(rate).toBe(861000);
   });
 
-  it('MCC-clv picks price from CLV book when diemTinhPhi is Don Duong', async () => {
+  it('MCC-clv picks price from MCC GH book when diemTinhPhi is Don Duong', async () => {
     mockPool.query.mockResolvedValueOnce({ rows: sampleTiers } as never);
     const rate = await bangKeThoPricingLookup.lookupTransportRate({
       diemTinhPhi: 'Đơn Dương',
@@ -169,7 +248,7 @@ describe('bangKeThoPricingLookup.lookupTransportRate', () => {
       supplierCode: '2000000007',
       slot: 'CALOFIC HP',
     });
-    expect(rate).toBe(660000);
+    expect(rate).toBe(861000);
   });
 
   it('MCC (uni) picks price from MCC GH book', async () => {
@@ -222,42 +301,106 @@ describe('bangKeThoPricingLookup.lookupTransportRate', () => {
     });
     expect(rate).toBeNull();
   });
+
+  it('MCC-clv does not fall back to CLV when MCC GH has no matching route', async () => {
+    mockPool.query.mockResolvedValueOnce({ rows: sampleTiers } as never);
+    const rate = await bangKeThoPricingLookup.lookupTransportRate({
+      diemTinhPhi: 'Tuyen chi co CLV',
+      khungGia: '>8-16 tấn',
+      invoiceDateIso: '2026-07-01',
+      supplierCode: '2000000007',
+      slot: 'CALOFIC HP',
+    });
+    expect(rate).toBeNull();
+  });
+
+  it('NDFC-clv and NDFC (uni) pick price from CLF book', async () => {
+    mockPool.query.mockResolvedValueOnce({ rows: sampleTiers } as never);
+    const clvRate = await bangKeThoPricingLookup.lookupTransportRate({
+      diemTinhPhi: 'Hồ Chí Minh',
+      khungGia: '>8-16 tấn',
+      invoiceDateIso: '2026-07-01',
+      supplierCode: '2000000008',
+      slot: 'CALOFIC HP',
+    });
+    expect(clvRate).toBe(510000);
+
+    mockPool.query.mockResolvedValueOnce({ rows: sampleTiers } as never);
+    const uniRate = await bangKeThoPricingLookup.lookupTransportRate({
+      diemTinhPhi: 'Hồ Chí Minh',
+      khungGia: '>8-16 tấn',
+      invoiceDateIso: '2026-07-01',
+      supplierCode: '2000000008',
+      slot: 'UNI 3',
+    });
+    expect(uniRate).toBe(510000);
+  });
+
+  it('Pallet khung uses pallet_trip_price of the target book', async () => {
+    mockPool.query.mockResolvedValueOnce({
+      rows: [
+        { route_name: 'Hồ Chí Minh', book_name: 'MCC GH', pallet_trip_price: '1500000' },
+        { route_name: 'Hồ Chí Minh', book_name: 'CLV', pallet_trip_price: '900000' },
+      ],
+    } as never);
+    const mccRate = await bangKeThoPricingLookup.lookupTransportRate({
+      diemTinhPhi: 'Hồ Chí Minh',
+      khungGia: 'Pallet',
+      invoiceDateIso: '2026-07-01',
+      supplierCode: '2000000007',
+      slot: 'CALOFIC HP',
+    });
+    expect(mccRate).toBe(1500000);
+
+    mockPool.query.mockResolvedValueOnce({
+      rows: [
+        { route_name: 'Hồ Chí Minh', book_name: 'CLF', pallet_trip_price: '1200000' },
+        { route_name: 'Hồ Chí Minh', book_name: 'MCC GH', pallet_trip_price: '1500000' },
+      ],
+    } as never);
+    const ndfcRate = await bangKeThoPricingLookup.lookupTransportRate({
+      diemTinhPhi: 'Hồ Chí Minh',
+      khungGia: 'Pallet',
+      invoiceDateIso: '2026-07-01',
+      supplierCode: '2000000008',
+      slot: 'UNI 3',
+    });
+    expect(ndfcRate).toBe(1200000);
+  });
 });
 
 describe('bangKeThoNdMccEngine', () => {
   async function createTestWorkbook(rows: any[][]): Promise<Buffer> {
     const wb = new ExcelJS.Workbook();
     wb.addWorksheet('Sheet1');
+    const processed = wb.addWorksheet('Processed');
+    processed.getCell('A1').value = 'giu-nguyen';
     wb.addWorksheet('VFM');
     wb.addWorksheet('CLV');
     wb.addWorksheet('STHI');
-    const ws = wb.addWorksheet('Processed');
-
-    const headers = [
-      'Mã nhà cung cấp', 'Số hóa đơn', 'Ngày hóa đơn', 'Số tàu', 'Mã khách hàng',
-      'Tên khách hàng', 'Địa chỉ giao hàng', 'Khung giá', 'Đơn vị tính', 'Mã hàng hóa',
-      'Tên hàng hóa (Vie)', 'Tên hàng hóa (En)', 'Mã liên hệ giao hàng', 'Mã DVT',
-      'Số lượng (DVT bán hàng)', 'SP Trọng lượng net', 'HĐ Trọng lượng (Net)', 'Round(MT)',
-      'CLF', 'VFM', 'MCC', 'CLV', 'NDFC', '', '',
-      'Tài xế', 'Thông tin bổ sung', 'Slot', 'Diễn giải', 'Channel',
-      'SubChannel', 'SlotNo', 'user tạo HĐ', 'User tạo PXK', 'PO number',
-      'Warehouse No', 'Warehouse Name', 'Phiếu XK', 'Chứng từ ghi sổ', 'Số seri',
-      'Loại hàng', 'Tuyến cũ', 'Tuyến mới', 'Tuyến lên hóa đơn'
-    ];
-
-    ws.addRow(headers);
-    for (const r of rows) {
-      ws.addRow(r);
-    }
+    addFactorySheet(wb, 'MCC', rows.filter((r) => String(r[0]) !== '2000000008'));
+    addFactorySheet(wb, 'NDFC', rows.filter((r) => String(r[0]) === '2000000008'));
     return Buffer.from(await wb.xlsx.writeBuffer());
   }
 
-  it('throws MISSING_PROCESSED_SHEET if Processed sheet is absent', async () => {
-    const wb = new ExcelJS.Workbook();
-    wb.addWorksheet('Sheet1');
-    const buf = Buffer.from(await wb.xlsx.writeBuffer());
+  it('throws when MCC or NDFC sheet is absent', async () => {
+    const neither = new ExcelJS.Workbook();
+    neither.addWorksheet('Sheet1');
+    await expect(processNdMccWorkbook(Buffer.from(await neither.xlsx.writeBuffer()))).rejects.toThrow(
+      'MISSING_MCC_NDFC_SHEETS',
+    );
 
-    await expect(processNdMccWorkbook(buf)).rejects.toThrow('MISSING_PROCESSED_SHEET');
+    const onlyNdfc = new ExcelJS.Workbook();
+    onlyNdfc.addWorksheet('NDFC');
+    await expect(processNdMccWorkbook(Buffer.from(await onlyNdfc.xlsx.writeBuffer()))).rejects.toThrow(
+      'MISSING_MCC_SHEET',
+    );
+
+    const onlyMcc = new ExcelJS.Workbook();
+    onlyMcc.addWorksheet('MCC');
+    await expect(processNdMccWorkbook(Buffer.from(await onlyMcc.xlsx.writeBuffer()))).rejects.toThrow(
+      'MISSING_NDFC_SHEET',
+    );
   });
 
   it('generates 8 sheets with formulas and aggregates invoices correctly', async () => {
@@ -337,53 +480,35 @@ describe('bangKeThoNdMccEngine', () => {
     const outWb = new ExcelJS.Workbook();
     await outWb.xlsx.load(res.buffer as any);
 
-    const expectedSheets = [
-      'NCC',
+    expect(outWb.worksheets.map((w) => w.name)).toEqual([
       'Sheet1',
       'Processed',
-      'Processed v2',
-      'MCC (goc)',
-      'MCC-clv',
-      'MCC (uni)',
-      'MCC (tt)',
-      'NDFC (goc)',
-      'NDFC-clv',
-      'NDFC (uni)',
-      'NDFC (tt)',
-    ];
-    expect(outWb.worksheets.map((w) => w.name)).toEqual(expectedSheets);
-
-    // Verify Processed v2 exists and has numeric format on O, P, Q
-    const outV2 = outWb.getWorksheet('Processed v2')!;
-    expect(outV2).toBeDefined();
-    expect(outV2.getRow(2).getCell(15).numFmt).toBe('#,##0');
-    expect(outV2.getRow(2).getCell(16).numFmt).toBe('#,##0.000');
-    expect(outV2.getRow(2).getCell(17).numFmt).toBe('#,##0.000');
-
-    // Verify non-scope sheets (VFM, CLV, STHI) are stripped out
+      'MCC',
+      'NDFC',
+      ...OUTPUT_SHEETS,
+    ]);
+    expect(outWb.getWorksheet('Processed')!.getCell('A1').value).toBe('giu-nguyen');
+    expect(outWb.getWorksheet('Processed v2')).toBeUndefined();
     expect(outWb.getWorksheet('VFM')).toBeUndefined();
     expect(outWb.getWorksheet('CLV')).toBeUndefined();
     expect(outWb.getWorksheet('STHI')).toBeUndefined();
 
-    // Verify MCC (goc) has 3 data rows + 2 header rows + 1 TỔNG CỘNG B row = 6 rows (all <=2.5t)
     const mccGoc = outWb.getWorksheet('MCC (goc)')!;
-    expect(mccGoc.rowCount).toBe(6);
-    expect(mccGoc.getRow(6).getCell(5).value).toBe('TỔNG CỘNG B');
+    expect(mccGoc.rowCount).toBe(8);
+    expect(mccGoc.getRow(8).getCell(5).value).toBe('TỔNG CỘNG A');
+    expect(mccGoc.getRow(3).getCell(12).value).toBe('>8-16 tấn');
 
     // Row 3 should have formula for Hóa đơn and Round MT
     const row3 = mccGoc.getRow(3);
     expect((row3.getCell(9).value as any)?.formula).toBe('G3&", ("&L3&"), xe "&D3');
     expect((row3.getCell(22).value as any)?.formula).toBe('ROUND(U3/1000,3)');
 
-    // Verify MCC-clv summary sheet has 1 invoice (HD001) + 1 TỔNG CỘNG B row = 4 rows
     const mccClv = outWb.getWorksheet('MCC-clv')!;
-    // Row 1 empty, Row 2 header, Row 3 invoice HD001, Row 4 TỔNG CỘNG B
-    expect(mccClv.rowCount).toBe(4);
+    expect(mccClv.rowCount).toBe(5);
     const clvRow3 = mccClv.getRow(3);
     expect(clvRow3.getCell(2).value).toBe('HD001');
-    // Total weight for HD001 = 0.1 + 0.2 = 0.3
     expect(clvRow3.getCell(13).value).toBe(0.3);
-    expect(mccClv.getRow(4).getCell(5).value).toBe('TỔNG CỘNG B');
+    expect(mccClv.getRow(5).getCell(5).value).toBe('TỔNG CỘNG A');
   });
 
   it('preserves existing NCC sheet content and keeps exact sheet order', async () => {
@@ -409,7 +534,7 @@ describe('bangKeThoNdMccEngine', () => {
       'Loại hàng', 'Tuyến cũ', 'Tuyến mới', 'Tuyến lên hóa đơn'
     ];
     ws.addRow(headers);
-    ws.addRow([
+    const dataRow = [
       '2000000007', 'HD001', '2026-07-01', '51C 12345', 'KH01',
       'CÔNG TY TNHH ABC', '123 ĐƯỜNG ABC, TP.HCM', '>8-16 tấn', 'Tấn', 'SP01',
       'Bột chiên giòn', 'Frying mix', '', 'CAR',
@@ -419,31 +544,25 @@ describe('bangKeThoNdMccEngine', () => {
       'PDS', '', '', '', '',
       '', '', '', '', '',
       '', '', '', ''
-    ]);
-
+    ];
+    ws.addRow(dataRow);
+    attachFactoryCopies(wb);
     const inputBuf = Buffer.from(await wb.xlsx.writeBuffer());
     const res = await processNdMccWorkbook(inputBuf);
 
     const outWb = new ExcelJS.Workbook();
     await outWb.xlsx.load(res.buffer as any);
 
-    const expectedSheets = [
-      'NCC',
+    expect(outWb.worksheets.map((w) => w.name)).toEqual([
       'Sheet1',
+      'ncc',
       'Processed',
-      'Processed v2',
-      'MCC (goc)',
-      'MCC-clv',
-      'MCC (uni)',
-      'MCC (tt)',
-      'NDFC (goc)',
-      'NDFC-clv',
-      'NDFC (uni)',
-      'NDFC (tt)',
-    ];
-    expect(outWb.worksheets.map((w) => w.name)).toEqual(expectedSheets);
+      'MCC',
+      'NDFC',
+      ...OUTPUT_SHEETS,
+    ]);
 
-    const outNcc = outWb.getWorksheet('NCC')!;
+    const outNcc = outWb.getWorksheet('ncc')!;
     expect(outNcc.getRow(1).getCell(1).value).toBe('Mã NCC');
     expect(outNcc.getRow(2).getCell(1).value).toBe('2000000007');
     expect(outNcc.getRow(2).getCell(2).value).toBe('MCC');
@@ -496,6 +615,7 @@ describe('bangKeThoService.processNdMcc', () => {
       0, 0, 0.1, 0, 0, '', '',
       '', '', 'CALOFIC HP', '', 'RETAIL'
     ]);
+    attachFactoryCopies(wb);
     const inputBuf = Buffer.from(await wb.xlsx.writeBuffer());
 
     // Readable stream mock
@@ -574,26 +694,14 @@ describe('bangKeThoService.processNdMcc', () => {
       '', '', 'CLV', '', 'RETAIL'
     ]);
 
+    attachFactoryCopies(wb);
     const inBuf = Buffer.from(await wb.xlsx.writeBuffer());
     const { buffer } = await processNdMccWorkbook(inBuf);
     const outWb = new ExcelJS.Workbook();
     await outWb.xlsx.load(buffer as any);
 
-    // Check Processed sheet
     const procSheet = outWb.getWorksheet('Processed')!;
-    const addrCellProc = procSheet.getRow(2).getCell(7);
-    expect(addrCellProc.fill).toMatchObject({
-      fgColor: { argb: 'FFFFEB9C' },
-    });
-    expect(addrCellProc.note).toBe(tuanHanCust.dia_chi_giao_hang);
-
-    // Check Processed v2 sheet
-    const procV2Sheet = outWb.getWorksheet('Processed v2')!;
-    const addrCellV2 = procV2Sheet.getRow(2).getCell(7);
-    expect(addrCellV2.fill).toMatchObject({
-      fgColor: { argb: 'FFFFEB9C' },
-    });
-    expect(addrCellV2.note).toBe(tuanHanCust.dia_chi_giao_hang);
+    expect(procSheet.getRow(2).getCell(7).note).toBeUndefined();
 
     // Check MCC (goc) sheet
     const gocSheet = outWb.getWorksheet('MCC (goc)')!;
@@ -643,7 +751,7 @@ describe('bangKeThoService.processNdMcc', () => {
       'Khách 1', 'Địa chỉ 1', '>8-16 tấn', 'Tấn', 'SP01',
       'Bột', 'Flour', '', 'CAR',
       10, 10, 1000, 1.0,
-      '', '', '', '', '', '', '',
+      8.0, '', 3.5, '', 3.5, 15.0, '',
       'Tài xế 1', '', 'CALOFIC HP', '', 'RETAIL'
     ]);
     // HD01 - Row 2 (same invoice HD01)
@@ -675,6 +783,7 @@ describe('bangKeThoService.processNdMcc', () => {
       'Tài xế 1'
     ]);
 
+    attachFactoryCopies(wb);
     const inputBuf = Buffer.from(await wb.xlsx.writeBuffer());
     const res = await processNdMccWorkbook(inputBuf);
 
@@ -705,13 +814,13 @@ describe('bangKeThoService.processNdMcc', () => {
     expect(r4.getCell(41).value).toBe('');
     expect(r4.getCell(43).value).toBe('');
 
-    // Row 5: First row of HD02 -> must ALSO have formulas and 5 nhà trip values!
     const r5 = mccGoc.getRow(5);
-    expect((r5.getCell(25).value as any)?.formula).toBe('AL5');
-    expect((r5.getCell(38).value as any)?.formula).toBe('SUBTOTAL(9,AM5:AR5)');
-    expect(r5.getCell(39).value).toBe(8.0); // CLF
-    expect(r5.getCell(41).value).toBe(3.5); // MCC
-    expect(r5.getCell(43).value).toBe(3.5); // NDFC
+    expect(r5.getCell(2).value).toBe('HD02');
+    expect(r5.getCell(25).value).toBe('');
+    expect(r5.getCell(38).value).toBe('');
+    expect(r5.getCell(39).value).toBe('');
+    expect(r5.getCell(41).value).toBe('');
+    expect(r5.getCell(43).value).toBe('');
 
     // 2. Verify MCC-clv summary sheet
     const mccClv = outWb.getWorksheet('MCC-clv')!;
@@ -730,78 +839,13 @@ describe('bangKeThoService.processNdMcc', () => {
     expect(sumR3.getCell(31).value).toBe(3.5); // MCC
     expect(sumR3.getCell(33).value).toBe(3.5); // NDFC
 
-    // Invoice HD02 in MCC-clv (Row 4) -> must ALSO have full 5 nhà info!
     const sumR4 = mccClv.getRow(4);
     expect(sumR4.getCell(2).value).toBe('HD02');
-    expect((sumR4.getCell(15).value as any)?.formula).toBe('AB4');
-    expect((sumR4.getCell(28).value as any)?.formula).toBe('SUBTOTAL(9,AC4:AH4)');
-    expect(sumR4.getCell(29).value).toBe(8.0); // CLF
-    expect(sumR4.getCell(31).value).toBe(3.5); // MCC
-    expect(sumR4.getCell(33).value).toBe(3.5); // NDFC
-  });
-
-  it('verifies real-world reference file ND-MCC 30.6.xlsx applies 5 nhà to multiple invoices in same trip', async () => {
-    mockPool.query.mockResolvedValue({ rows: [] } as never);
-
-    const refPath = path.resolve(__dirname, '../../../reference/xu_ly_du_lieu_ke_toan/ND-MCC 30.6.xlsx');
-    if (!fs.existsSync(refPath)) return; // Skip if ref file not present
-
-    const buf = fs.readFileSync(refPath);
-    const res = await processNdMccWorkbook(buf);
-
-    expect(res.stats.mcc_rows).toBeGreaterThan(0);
-    expect(res.stats.ndfc_rows).toBeGreaterThan(0);
-
-    const outWb = new ExcelJS.Workbook();
-    await outWb.xlsx.load(res.buffer as any);
-
-    const goc = outWb.getWorksheet('MCC (goc)')!;
-    expect(goc).toBeDefined();
-
-    // In 30.6.xlsx, truck 50E 65434 has two invoices: 00106522 (row 3..9) and 00106524 (row 10)
-    // Row 3: First row of invoice 00106522
-    const r3 = goc.getRow(3);
-    expect(r3.getCell(2).value).toBe('00106522');
-    expect((r3.getCell(25).value as any)?.formula).toBe('AL3');
-    expect((r3.getCell(38).value as any)?.formula).toBe('SUBTOTAL(9,AM3:AR3)');
-    expect(r3.getCell(39).value).toBe(2.673); // CLF
-    expect(r3.getCell(41).value).toBe(2.232); // MCC
-    expect(r3.getCell(43).value).toBe(3.492); // NDFC
-
-    // Row 4: Second row of invoice 00106522 -> empty
-    const r4 = goc.getRow(4);
-    expect(r4.getCell(2).value).toBe('00106522');
-    expect(r4.getCell(25).value).toBe('');
-    expect(r4.getCell(38).value).toBe('');
-
-    // Row 10: First row of invoice 00106524 (second invoice in same trip!)
-    const r10 = goc.getRow(10);
-    expect(r10.getCell(2).value).toBe('00106524');
-    expect((r10.getCell(25).value as any)?.formula).toBe('AL10');
-    expect((r10.getCell(38).value as any)?.formula).toBe('SUBTOTAL(9,AM10:AR10)');
-    expect(r10.getCell(39).value).toBe(2.673); // CLF
-    expect(r10.getCell(41).value).toBe(2.232); // MCC
-    expect(r10.getCell(43).value).toBe(3.492); // NDFC
-
-    // Verify summary sheet MCC (tt)
-    const tt = outWb.getWorksheet('MCC (tt)')!;
-    expect(tt).toBeDefined();
-    // In MCC (tt), row 3 is 00106522, row 4 is 00106524
-    const ttR3 = tt.getRow(3);
-    expect(ttR3.getCell(2).value).toBe('00106522');
-    expect((ttR3.getCell(15).value as any)?.formula).toBe('AB3');
-    expect((ttR3.getCell(28).value as any)?.formula).toBe('SUBTOTAL(9,AC3:AH3)');
-    expect(ttR3.getCell(29).value).toBe(2.673); // CLF
-    expect(ttR3.getCell(31).value).toBe(2.232); // MCC
-    expect(ttR3.getCell(33).value).toBe(3.492); // NDFC
-
-    const ttR4 = tt.getRow(4);
-    expect(ttR4.getCell(2).value).toBe('00106524');
-    expect((ttR4.getCell(15).value as any)?.formula).toBe('AB4');
-    expect((ttR4.getCell(28).value as any)?.formula).toBe('SUBTOTAL(9,AC4:AH4)');
-    expect(ttR4.getCell(29).value).toBe(2.673); // CLF
-    expect(ttR4.getCell(31).value).toBe(2.232); // MCC
-    expect(ttR4.getCell(33).value).toBe(3.492); // NDFC
+    expect(sumR4.getCell(15).value).toBe('');
+    expect(sumR4.getCell(28).value).toBe('');
+    expect(sumR4.getCell(29).value).toBe('');
+    expect(sumR4.getCell(31).value).toBe('');
+    expect(sumR4.getCell(33).value).toBe('');
   });
 
   it('converts Khung giá containing Pallet to Pallet with original note on summary sheets (clv, uni, tt) while preserving full bracket on goc sheet', async () => {
@@ -862,6 +906,7 @@ describe('bangKeThoService.processNdMcc', () => {
       '', '', '', ''
     ]);
 
+    attachFactoryCopies(wb);
     const inputBuf = Buffer.from(await wb.xlsx.writeBuffer());
     const res = await processNdMccWorkbook(inputBuf);
 
@@ -872,7 +917,7 @@ describe('bangKeThoService.processNdMcc', () => {
     const mccGoc = outWb.getWorksheet('MCC (goc)')!;
     expect(mccGoc).toBeDefined();
     const gocR3 = mccGoc.getRow(3); // HD_PALLET_MCC (Truck 50E 77777)
-    expect(gocR3.getCell(12).value).toBe('>8-16 tấn + Pallet'); // Col L (12)
+    expect(gocR3.getCell(12).value).toBe('Pallet');
     // Row 4 is trip total for 50E 77777
     expect(mccGoc.getRow(4).getCell(3).value).toBe('Tổng cộng');
     const gocR5 = mccGoc.getRow(5); // HD_NORMAL_MCC (Truck 50E 99999)
@@ -883,8 +928,8 @@ describe('bangKeThoService.processNdMcc', () => {
     expect(mccClv).toBeDefined();
     const clvR3 = mccClv.getRow(3); // HD_PALLET_MCC
     expect(clvR3.getCell(2).value).toBe('HD_PALLET_MCC');
-    expect(clvR3.getCell(11).value).toBe('Pallet'); // Col K (11)
-    expect(clvR3.getCell(11).note).toBe('>8-16 tấn + Pallet');
+    expect(clvR3.getCell(11).value).toBe('Pallet');
+    expect(clvR3.getCell(11).note).toBeUndefined();
     expect((clvR3.getCell(8).value as any)?.formula).toBe('F3&", ("&K3&"), xe "&D3');
     // Row 4 is trip total for 50E 77777
     expect(mccClv.getRow(4).getCell(3).value).toBe('Tổng cộng');
@@ -898,7 +943,7 @@ describe('bangKeThoService.processNdMcc', () => {
     const ndfcGoc = outWb.getWorksheet('NDFC (goc)')!;
     expect(ndfcGoc).toBeDefined();
     const ndfcGocR3 = ndfcGoc.getRow(3);
-    expect(ndfcGocR3.getCell(12).value).toBe('>16-23 tấn + Pallet');
+    expect(ndfcGocR3.getCell(12).value).toBe('Pallet');
 
     // 4. Verify NDFC (tt) summary sheet converts Pallet to 'Pallet' with note
     const ndfcTt = outWb.getWorksheet('NDFC (tt)')!;
@@ -906,7 +951,7 @@ describe('bangKeThoService.processNdMcc', () => {
     const ttR3 = ndfcTt.getRow(3);
     expect(ttR3.getCell(2).value).toBe('HD_PALLET_NDFC');
     expect(ttR3.getCell(11).value).toBe('Pallet');
-    expect(ttR3.getCell(11).note).toBe('>16-23 tấn + Pallet');
+    expect(ttR3.getCell(11).note).toBeUndefined();
     expect((ttR3.getCell(8).value as any)?.formula).toBe('F3&", ("&K3&"), xe "&D3');
   });
 
@@ -968,6 +1013,7 @@ describe('bangKeThoService.processNdMcc', () => {
       'Tài xế 2'
     ]);
 
+    attachFactoryCopies(wb);
     const inputBuf = Buffer.from(await wb.xlsx.writeBuffer());
     const res = await processNdMccWorkbook(inputBuf);
 
@@ -1022,6 +1068,129 @@ describe('bangKeThoService.processNdMcc', () => {
     expect(mccGoc.getRow(13).getCell(2).value).toBe('HD_TRIP2');
     expect(mccGoc.getRow(14).getCell(5).value).toBe('TỔNG CỘNG B');
     expect((mccGoc.getRow(14).getCell(23).value as any)?.formula).toBe('SUM(W13:W13)');
+  });
+
+  it('rewrites the spaced hyphen in direct-delivery route names on MCC (tt) and NDFC (tt)', async () => {
+    const customers = [
+      ['An Giang Co', 'ADDR AN GIANG', 'An Giang - Châu Đốc', 'An Giang - Châu Đốc'],
+      ['Lam Dong Co', 'ADDR LAM DONG', 'Lâm Đồng - Lâm Viên-Đà Lạt', 'Lâm Đồng - Lâm Viên-Đà Lạt'],
+      ['Binh Loi Co', 'ADDR BINH LOI', 'TP, Hồ Chí Minh - Bình Lợi Trung', 'HCM - Bình Lợi Trung'],
+      ['Vung Tau Co', 'ADDR VUNG TAU', 'Bà Rịa - Vũng Tàu - Châu Đức', 'FEE-VT'],
+      ['Thu Duc Co', 'ADDR THU DUC', 'TP. Hồ Chí Minh - Thủ Đức', 'FEE-TD'],
+      ['Dong Nai Co', 'ADDR DONG NAI', 'Đồng Nai - Biên Hòa', 'Đồng Nai - Biên Hòa'],
+      ['Tay Ninh Co', 'ADDR TAY NINH', 'Tây Ninh - Đức Hòa', 'Tây Ninh - Đức Hòa'],
+    ].map(([name, addr, route, fee], idx) => ({
+      id: 5000 + idx,
+      ten_khach_hang: name,
+      dia_chi_giao_hang: addr,
+      diem_tra_hang: name,
+      tuyen_phuong: route,
+      diem_giao_hang_tinh_phi: fee,
+      supplier_code: 'default',
+    }));
+
+    mockPool.query.mockImplementation(async (queryOrConfig: any) => {
+      const sql = typeof queryOrConfig === 'string' ? queryOrConfig : queryOrConfig?.text || '';
+      if (sql.includes('FROM customers')) return { rows: customers } as any;
+      return { rows: [] } as any;
+    });
+
+    const wb = new ExcelJS.Workbook();
+    const ws = wb.addWorksheet('Processed');
+    ws.addRow([
+      'Mã nhà cung cấp', 'Số hóa đơn', 'Ngày hóa đơn', 'Số tàu', 'Mã khách hàng',
+      'Tên khách hàng', 'Địa chỉ giao hàng', 'Khung giá', 'Đơn vị tính', 'Mã hàng hóa',
+      'Tên hàng hóa (Vie)', 'Tên hàng hóa (En)', 'Mã liên hệ giao hàng', 'Mã DVT',
+      'Số lượng (DVT bán hàng)', 'SP Trọng lượng net', 'HĐ Trọng lượng (Net)', 'Round(MT)',
+      'CLF', 'VFM', 'MCC', 'CLV', 'NDFC', '', '',
+      'Tài xế', 'Thông tin bổ sung', 'Slot',
+    ]);
+
+    const line = (
+      supplier: string,
+      invoice: string,
+      date: string,
+      truck: string,
+      name: string,
+      addr: string,
+      khung: string,
+      slot: string,
+      net: number,
+    ) => [
+      supplier, invoice, date, truck, 'KH',
+      name, addr, khung, 'Tấn', 'SP',
+      'Hang', 'Item', '', 'CAR',
+      1, 1, net, net / 1000,
+      0, 0, supplier === '2000000007' ? net / 1000 : 0, 0, supplier === '2000000008' ? net / 1000 : 0, '', '',
+      'Tai xe', '', slot,
+    ];
+
+    const mcc = '2000000007';
+    const ndfc = '2000000008';
+    const big = '>8-16 tấn';
+    const small = '≤2.5 tấn';
+    ws.addRow(line(mcc, 'HD-A1', '2026-07-01', '51C-11111', 'An Giang Co', 'ADDR AN GIANG', big, 'UNI 1', 10000));
+    ws.addRow(line(mcc, 'HD-A2', '2026-07-01', '51C-11111', 'Lam Dong Co', 'ADDR LAM DONG', big, 'UNI 1', 10000));
+    ws.addRow(line(mcc, 'HD-A3', '2026-07-01', '51C-11111', 'Binh Loi Co', 'ADDR BINH LOI', big, 'UNI 1', 10000));
+    ws.addRow(line(mcc, 'HD-B1', '2026-07-01', '51C-11111', 'Vung Tau Co', 'ADDR VUNG TAU', small, 'UNI 1', 1500));
+    ws.addRow(line(mcc, 'HD-C1', '2026-07-01', '70C-1', 'Thu Duc Co', 'ADDR THU DUC', big, 'CALOFIC HP', 10000));
+    ws.addRow(line(ndfc, 'HD-N1', '2026-07-18', '60C-1', 'Dong Nai Co', 'ADDR DONG NAI', big, 'UNI 1', 10000));
+    ws.addRow(line(ndfc, 'HD-N3', '2026-07-18', '60C-1', 'Tay Ninh Co', 'ADDR TAY NINH', small, 'UNI 1', 1500));
+
+    attachFactoryCopies(wb);
+    const res = await processNdMccWorkbook(Buffer.from(await wb.xlsx.writeBuffer()));
+    const outWb = new ExcelJS.Workbook();
+    await outWb.xlsx.load(res.buffer as any);
+
+    const formulaOf = (row: ExcelJS.Row) => (row.getCell(8).value as { formula?: string } | null)?.formula;
+    const invoiceRow = (sheet: ExcelJS.Worksheet, invoice: string) => {
+      let found: ExcelJS.Row | undefined;
+      sheet.eachRow((row) => {
+        if (String(row.getCell(2).value ?? '') === invoice) found = row;
+      });
+      expect(found).toBeDefined();
+      return found!;
+    };
+
+    const mccTt = outWb.getWorksheet('MCC (tt)')!;
+    const a1 = invoiceRow(mccTt, 'HD-A1');
+    expect(a1.getCell(6).value).toBe('An Giang, Châu Đốc');
+    expect(a1.getCell(7).value).toBe('An Giang - Châu Đốc');
+    expect(formulaOf(a1)).toBe(`F${a1.number}&", ("&K${a1.number}&"), xe "&D${a1.number}`);
+    expect(invoiceRow(mccTt, 'HD-A2').getCell(6).value).toBe('Lâm Đồng, Lâm Viên-Đà Lạt');
+    expect(invoiceRow(mccTt, 'HD-A3').getCell(6).value).toBe('TP, Hồ Chí Minh, Bình Lợi Trung');
+    expect(invoiceRow(mccTt, 'HD-A3').getCell(7).value).toBe('HCM - Bình Lợi Trung');
+
+    const b1 = invoiceRow(mccTt, 'HD-B1');
+    expect(b1.getCell(6).value).toBe('Bà Rịa, Vũng Tàu, Châu Đức');
+    expect(b1.getCell(7).value).toBe('FEE-VT');
+    expect(formulaOf(b1)).toBe(`F${b1.number}&", ("&K${b1.number}&"), xe "&D${b1.number}`);
+
+    mccTt.eachRow((row) => {
+      const label = String(row.getCell(3).value ?? '');
+      const totalLabel = String(row.getCell(5).value ?? '');
+      if (label === 'Tổng cộng' || totalLabel === 'TỔNG CỘNG A' || totalLabel === 'TỔNG CỘNG B') {
+        expect(row.getCell(6).value).toBeNull();
+      }
+    });
+
+    const mccClv = outWb.getWorksheet('MCC-clv')!;
+    expect(invoiceRow(mccClv, 'HD-C1').getCell(6).value).toBe('TP. Hồ Chí Minh - Thủ Đức');
+
+    const mccGoc = outWb.getWorksheet('MCC (goc)')!;
+    expect(invoiceRow(mccGoc, 'HD-A1').getCell(7).value).toBe('An Giang - Châu Đốc');
+
+    const ndfcTt = outWb.getWorksheet('NDFC (tt)')!;
+    const n1 = invoiceRow(ndfcTt, 'HD-N1');
+    expect(n1.getCell(6).value).toBe('Đồng Nai, Biên Hòa');
+    expect(n1.getCell(7).value).toBe('Đồng Nai - Biên Hòa');
+    expect(formulaOf(n1)).toBe(`F${n1.number}&", ("&K${n1.number}&"), xe "&D${n1.number}`);
+    const n3 = invoiceRow(ndfcTt, 'HD-N3');
+    expect(n3.getCell(6).value).toBe('Tây Ninh, Đức Hòa');
+    expect(n3.getCell(7).value).toBe('Tây Ninh - Đức Hòa');
+    expect(formulaOf(n3)).toBe(
+      `F${n3.number}&" "&K${n3.number}&" ("&TEXT(C${n3.number},"dd/mm")&", "&D${n3.number}&")"`,
+    );
   });
 });
 

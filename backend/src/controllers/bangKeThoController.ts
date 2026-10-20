@@ -169,4 +169,52 @@ export const bangKeThoController = {
       handleServiceError(res, err, 'Xử lý bảng kê ND-MCC thất bại');
     }
   },
+
+  async processClv(req: AuthRequest, res: Response): Promise<void> {
+    const userId = req.user?.userId;
+    if (!userId) {
+      sendError(res, 'Unauthorized', 401);
+      return;
+    }
+    const batchId = req.params.id;
+    try {
+      const result = await bangKeThoService.processClv(batchId, userId);
+      sendSuccess(res, result, 'Xử lý bảng kê thô CLV thành công');
+      auditService.logAudit({
+        userId,
+        username: req.user!.email,
+        action: 'UPDATE',
+        entityType: 'bang_ke_tho_clv',
+        entityLabel: result.download_filename,
+        ipAddress: req.ip,
+        details: { batchId, stats: result.stats },
+      });
+    } catch (err) {
+      handleServiceError(res, err, 'Xử lý bảng kê CLV thất bại');
+    }
+  },
+
+  async processCalofic(req: AuthRequest, res: Response): Promise<void> {
+    const userId = req.user?.userId;
+    if (!userId) {
+      sendError(res, 'Unauthorized', 401);
+      return;
+    }
+    const batchId = req.params.id;
+    try {
+      const result = await bangKeThoService.processCalofic(batchId, userId);
+      sendSuccess(res, result, 'Xử lý bảng kê thô Calofic thành công');
+      auditService.logAudit({
+        userId,
+        username: req.user!.email,
+        action: 'UPDATE',
+        entityType: 'bang_ke_tho_calofic',
+        entityLabel: result.download_filename,
+        ipAddress: req.ip,
+        details: { batchId, stats: result.stats },
+      });
+    } catch (err) {
+      handleServiceError(res, err, 'Xử lý bảng kê Calofic thất bại');
+    }
+  },
 };

@@ -20,6 +20,10 @@ interface BangKeThoTableProps {
   onDownload: (row: BangKeBatch) => void;
   onDelete: (row: BangKeBatch) => void;
   onProcessNdMcc?: (batchId: string) => void;
+  onProcessClv?: (batchId: string) => void;
+  processingClvIds?: Set<string>;
+  onProcessCalofic?: (batchId: string) => void;
+  processingCaloficIds?: Set<string>;
   onDownloadOutput?: (batchId: string, houseCode: string, fallbackName: string) => void;
 }
 
@@ -44,6 +48,10 @@ export function BangKeThoTable({
   onDownload,
   onDelete,
   onProcessNdMcc = () => undefined,
+  onProcessClv = () => undefined,
+  processingClvIds,
+  onProcessCalofic = () => undefined,
+  processingCaloficIds,
   onDownloadOutput = () => undefined,
 }: BangKeThoTableProps) {
   const { t } = useI18n();
@@ -80,10 +88,13 @@ export function BangKeThoTable({
               </TableCell>
               {HOUSE_ORDER.map((code) => {
                 const isProcessing =
-                  code === 'nd_mcc' &&
-                  (processingBatchIds
-                    ? processingBatchIds.has(row.id)
-                    : processingBatchId === row.id);
+                  code === 'nd_mcc'
+                    ? (processingBatchIds
+                      ? processingBatchIds.has(row.id)
+                      : processingBatchId === row.id)
+                    : code === 'clv'
+                      ? (processingClvIds?.has(row.id) ?? false)
+                      : code === 'calofic' && (processingCaloficIds?.has(row.id) ?? false);
                 const outputKey = `${row.id}-${code}`;
                 const isDownloading = downloadingOutputKeys
                   ? downloadingOutputKeys.has(outputKey)
@@ -97,7 +108,9 @@ export function BangKeThoTable({
                       canManage={canManage}
                       isProcessing={isProcessing}
                       isDownloading={isDownloading}
-                      onProcess={onProcessNdMcc}
+                      onProcess={
+                        code === 'clv' ? onProcessClv : code === 'calofic' ? onProcessCalofic : onProcessNdMcc
+                      }
                       onDownloadOutput={onDownloadOutput}
                     />
                   </TableCell>

@@ -24,9 +24,28 @@ export function BangKeThoHouseCell({
   onDownloadOutput,
 }: BangKeThoHouseCellProps) {
   const { t } = useI18n();
+  const labelByHouse: Record<string, { process: string; reprocess: string; retry: string; download: string }> = {
+    clv: {
+      process: 'bangKeTho.action.processClv',
+      reprocess: 'bangKeTho.action.reprocessClv',
+      retry: 'bangKeTho.action.retryClv',
+      download: 'bangKeTho.action.downloadClv',
+    },
+    calofic: {
+      process: 'bangKeTho.action.processCalofic',
+      reprocess: 'bangKeTho.action.reprocessCalofic',
+      retry: 'bangKeTho.action.retryCalofic',
+      download: 'bangKeTho.action.downloadCalofic',
+    },
+  };
+  const labels = labelByHouse[house.house_code] ?? {
+    process: 'bangKeTho.action.processNdMcc',
+    reprocess: 'bangKeTho.action.reprocessNdMcc',
+    retry: 'bangKeTho.action.retryNdMcc',
+    download: 'bangKeTho.action.downloadNdMcc',
+  };
 
-  // For houses other than ND-MCC (clv, calofic), keep standard badge
-  if (house.house_code !== 'nd_mcc') {
+  if (house.house_code !== 'nd_mcc' && house.house_code !== 'clv' && house.house_code !== 'calofic') {
     return <BangKeThoHouseBadge house={house} />;
   }
 
@@ -50,9 +69,9 @@ export function BangKeThoHouseCell({
           type="button"
           variant="ghost"
           size="sm"
-          title={t('bangKeTho.action.downloadNdMcc')}
-          aria-label={t('bangKeTho.action.downloadNdMcc')}
-          onClick={() => onDownloadOutput(batchId, 'nd_mcc', house.download_filename)}
+          title={t(labels.download)}
+          aria-label={t(labels.download)}
+          onClick={() => onDownloadOutput(batchId, house.house_code, house.download_filename)}
           disabled={isDownloading}
         >
           {isDownloading ? (
@@ -66,8 +85,8 @@ export function BangKeThoHouseCell({
             type="button"
             variant="ghost"
             size="sm"
-            title={t('bangKeTho.action.reprocessNdMcc')}
-            aria-label={t('bangKeTho.action.reprocessNdMcc')}
+            title={t(labels.reprocess)}
+            aria-label={t(labels.reprocess)}
             onClick={() => onProcess(batchId)}
           >
             <RefreshCw className="h-4 w-4" aria-hidden="true" />
@@ -86,8 +105,8 @@ export function BangKeThoHouseCell({
             type="button"
             variant="ghost"
             size="sm"
-            title={t('bangKeTho.action.reprocessNdMcc')}
-            aria-label={t('bangKeTho.action.retryNdMcc')}
+            title={t(labels.reprocess)}
+            aria-label={t(labels.retry)}
             onClick={() => onProcess(batchId)}
           >
             <RefreshCw className="h-4 w-4" aria-hidden="true" />
@@ -142,7 +161,7 @@ export function BangKeThoHouseCell({
         variant="outline"
         size="sm"
         className="h-[34px] px-3 text-xs gap-1.5 font-medium text-emerald-700 hover:text-emerald-800 hover:bg-emerald-50 dark:text-emerald-400 dark:hover:bg-emerald-950/50 border-emerald-300 dark:border-emerald-800 rounded-lg"
-        aria-label={t('bangKeTho.action.processNdMcc')}
+        aria-label={t(labels.process)}
         onClick={() => onProcess(batchId)}
       >
         <Play className="w-4 h-4 fill-current" aria-hidden="true" />

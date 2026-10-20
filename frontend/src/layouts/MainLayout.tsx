@@ -115,6 +115,7 @@ export function MainLayout() {
 
   const deliveryDataSubItems = [
     { to: '/delivery-data/5-houses', icon: Truck, label: t('deliveryData.process5Houses' as never) },
+    { to: '/delivery-data/bang-ke-tho', icon: FileSpreadsheet, label: t('bangKeTho.nav' as never) },
     { to: '/delivery-data/rice', icon: FileSpreadsheet, label: t('deliveryData.processRice' as never) },
   ];
 
@@ -206,7 +207,6 @@ export function MainLayout() {
     { to: '/accounting-data/weight-adjustments', icon: Scale, label: t('accountingData.weightAdjustment' as never) },
     { to: '/accounting-data/customers', icon: Users, label: t('customers.title' as never) },
     { to: '/accounting-data/delivery-import', icon: Upload, label: 'Import 5 nhà' },
-    { to: '/accounting-data/bang-ke-tho', icon: FileSpreadsheet, label: t('bangKeTho.nav' as never) },
     { to: '/accounting-data/invoice-matching', icon: FileSearch, label: 'Đối chiếu HĐ' },
   ];
 
