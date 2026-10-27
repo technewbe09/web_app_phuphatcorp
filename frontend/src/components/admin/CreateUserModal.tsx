@@ -24,7 +24,7 @@ const schema = yup.object({
     .min(3, 'validation.minLength')
     .matches(/^[a-zA-Z0-9_]+$/, 'validation.usernameFormat'),
   email: yup.string().required('validation.required').email('validation.email'),
-  password: yup.string().required('validation.required').min(6, 'validation.minLength'),
+  password: yup.string().required('validation.required'),
   role_id: yup.string().required('validation.required'),
 });
 
@@ -108,7 +108,7 @@ export function CreateUserModal({ isOpen, onClose, onSuccess }: Props) {
         <Input
           label={t('createUser.password')}
           type="password"
-          error={errors.password?.message ? t(errors.password.message, { min: 6 }) : undefined}
+          error={errors.password?.message ? t(errors.password.message) : undefined}
           {...register('password')}
         />
 
