@@ -9,8 +9,8 @@ export const createUserSchema: ValidationChain[] = [
     .matches(/^[a-zA-Z0-9_]+$/).withMessage('Tên đăng nhập chỉ được chứa chữ cái, số và dấu gạch dưới'),
   body('email').isEmail().withMessage('Email không hợp lệ'),
   body('password')
-    .isLength({ min: 6 })
-    .withMessage('Mật khẩu phải có ít nhất 6 ký tự'),
+    .notEmpty()
+    .withMessage('Mật khẩu là bắt buộc'),
   // Support both legacy role (string) and new role_id (number)
   body('role')
     .optional()
