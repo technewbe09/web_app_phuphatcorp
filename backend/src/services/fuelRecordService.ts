@@ -523,12 +523,34 @@ export const fuelRecordService = {
       // Detect where the header row is: check row 0 vs row 1
       let startRow = 2; // Default: row 0 is Title, row 1 is Header, row 2 is Data
       if (rawRows.length > 0) {
-        const r0Str = JSON.stringify(rawRows[0] || '').toUpperCase();
-        const r1Str = rawRows.length > 1 ? JSON.stringify(rawRows[1] || '').toUpperCase() : '';
-        if (r0Str.includes('NGÀY') && r0Str.includes('SỐ XE')) {
-          // Row 0 is header -> Data starts at row 1
+        const isHeader = (row: unknown[] | undefined): boolean => {
+          if (!row || row.length === 0) return false;
+          const str = JSON.stringify(row).toUpperCase();
+          const hasPlateCol = str.includes('SỐ XE');
+          const hasOtherFuelCol =
+            str.includes('NGÀY') ||
+            str.includes('SỐ KM') ||
+            str.includes('LÍT') ||
+            str.includes('T.CỘNG') ||
+            str.includes('THÀNH TIỀN') ||
+            str.includes('ĐỊNH VỊ');
+          return hasPlateCol && hasOtherFuelCol;
+        };
+
+        const isDataRow = (row: unknown[] | undefined): boolean => {
+          if (!row || row.length === 0) return false;
+          const plateNum = String(row[1] ?? '').trim();
+          return /^\d{2}[A-Za-z]/.test(plateNum);
+        };
+
+        const r0IsHeader = isHeader(rawRows[0] as unknown[]);
+        const r1IsHeader = isHeader(rawRows[1] as unknown[]);
+        const r1IsData = isDataRow(rawRows[1] as unknown[]);
+
+        if (r1IsData || (r0IsHeader && !r1IsHeader)) {
+          // Row 0 is header (or row 1 is already vehicle data) -> Data starts at row 1
           startRow = 1;
-        } else if (r1Str.includes('NGÀY') && r1Str.includes('SỐ XE')) {
+        } else if (r1IsHeader) {
           // Row 1 is header -> Data starts at row 2
           startRow = 2;
         }
