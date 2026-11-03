@@ -4,7 +4,7 @@ description: Workflow cải thiện code quality cho Web App mà không thay
   đổi behavior. Invoke khi user muốn "clean up code", "tách function quá dài",
   "cải thiện readability", "giảm duplication", hoặc "tối ưu performance".
   KHÔNG dùng khi có thay đổi business logic — dùng feature-dev thay thế.
-  Dừng 2 lần: sau khi xác định scope và sau khi lên plan.
+  Dừng 2 lần sau khi xác định scope và sau khi lên plan.
 mode: subagent
 temperature: 0.1
 steps: 7

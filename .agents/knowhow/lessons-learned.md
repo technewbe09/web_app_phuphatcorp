@@ -5,6 +5,16 @@ description: Ghi lại các bài học kinh nghiệm, bug đã fix, và pitfalls
 # Lessons Learned — PhuPhatCorp
 
 ---
+## Bug: Nhận diện thiếu dòng dữ liệu đầu tiên khi upload Excel dữ liệu dầu
+- **Ngày:** 2026-11-03
+- **Feature:** Quản lý dữ liệu dầu (`fuelRecordService.uploadFromExcel`)
+- **Mô tả:** Khi upload file thống kê dầu (như sheet `10-2026`), tổng tiền bị thiếu đúng 1 bản ghi của dòng 2 trong file Excel (1,336,950 VNĐ) do logic cũ yêu cầu bắt buộc có cả chữ "NGÀY" và "SỐ XE" ở dòng 0 mới tính `startRow = 1`. Nếu ô A1 để trống (chỉ có "SỐ XE" ở B1), hệ thống rơi vào mặc định `startRow = 2` và bỏ qua dòng 1 (vốn là dòng dữ liệu thực tế).
+- **Giải pháp:** Cải tiến hàm phát hiện header:
+  1. Kiểm tra dòng 1 (`rawRows[1]`): nếu cột biển số đã khớp định dạng biển số xe (`/^\d{2}[A-Za-z]/`) thì chắc chắn dòng 1 là data, do đó dòng 0 là header (`startRow = 1`).
+  2. Nới lỏng kiểm tra header: chỉ cần chứa `SỐ XE` và một trong các cột dầu khác (`NGÀY`, `SỐ KM`, `LÍT`, `T.CỘNG`, `THÀNH TIỀN`, `ĐỊNH VỊ`) mà không bắt buộc có chữ `NGÀY`.
+- **Files liên quan:** `backend/src/services/fuelRecordService.ts`, `backend/src/__tests__/fuelRecordUpload.test.ts`.
+
+---
 ## Bug: Temporal Dead Zone (TDZ) ReferenceError với biến derived trong React component
 - **Ngày:** 2026-10-16
 - **Feature:** Theo dõi hóa đơn (`DocumentViewerModal.tsx`)
